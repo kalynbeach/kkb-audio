@@ -163,6 +163,9 @@ mod prepared_kernel {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+mod worklet_wasm;
+
 #[cfg(test)]
 mod tests {
     use super::prepared_kernel::{

@@ -10,17 +10,30 @@ The project is in focused render-engine validation. Milestone 1 implements a pri
 mono sine oscillator -> linked scalar gain -> mono or semantic L/R planar output
 ```
 
-Its tests establish frame and phase semantics, partition-independent output, bounded capacity behavior, checked clock handling, and no observed allocator calls in the exercised render path. There is no public engine API or playback application yet.
+Its tests establish frame and phase semantics, partition-independent output, bounded capacity behavior, checked clock handling, and no observed allocator calls in the exercised render path.
+
+Milestone 2 Checkpoint A now has an unshared, fixed-memory Wasm `AudioWorklet` proof around the same private kernel seam. The required current-stable Chrome, Firefox, macOS Safari, and physical iOS Safari matrix has not run, so the checkpoint remains open. CPAL work has not begun. See the [Checkpoint A evidence](docs/2026-08-29-milestone-2-dual-host-kernel-evidence.md) for exact claims and limitations. There is no public engine API or playback application yet.
 
 See the canonical [system architecture](docs/2026-08-28-kkb-audio-system-architecture.md) and [initial validation plan](docs/2026-08-29-initial-render-engine-validation-plan.md).
 
 ## Development
 
-The repository pins stable Rust 1.98.
+The repository pins stable Rust 1.98 and Bun 1.4.0. The worklet build also requires the matching pinned `wasm-bindgen` CLI.
 
 ```sh
+rustup target add wasm32-unknown-unknown
+cargo install wasm-bindgen-cli --version 0.2.127 --locked
+bun install --frozen-lockfile
+
 cargo fmt --check
 cargo test --all-targets --all-features
 cargo test --release --all-targets --all-features
 cargo clippy --all-targets --all-features -- -D warnings
+bun run check
+```
+
+Run the local proof after `bun run build:worklet`:
+
+```sh
+bun run serve:proof
 ```

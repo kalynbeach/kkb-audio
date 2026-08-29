@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KKB AudioWorklet proof</title>
+    <style>
+      body { font: 16px/1.5 system-ui, sans-serif; margin: 2rem; max-width: 48rem; }
+      button { margin: 0 0.5rem 0.5rem 0; padding: 0.5rem 0.75rem; }
+      pre { background: #f2f2f2; min-height: 10rem; overflow: auto; padding: 1rem; }
+    </style>
+  </head>
+  <body>
+    <h1>KKB AudioWorklet proof</h1>
+    <p>The node stays disconnected and the context stays suspended until preparation reports ready.</p>
+    <button id="prepare" type="button">Prepare stereo proof</button>
+    <button id="activate" type="button" disabled>Activate muted proof</button>
+    <button id="failure" type="button">Inject preparation failure</button>
+    <button id="close" type="button">Close</button>
+    <pre id="result" aria-live="polite">idle</pre>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
