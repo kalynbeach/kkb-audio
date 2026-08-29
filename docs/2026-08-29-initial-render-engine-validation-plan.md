@@ -1,0 +1,423 @@
+# Initial render-engine validation plan
+
+Date: 2026-08-29
+Status: Working validation plan
+
+## Purpose and authority
+
+This document defines the implementation order, scope, required evidence, pivot criteria, and
+explicit non-goals for the first KKB audio render-engine work.
+
+[KKB audio system architecture](./2026-08-28-kkb-audio-system-architecture.md) is the sole authority
+for architecture, terminology, enduring invariants, and decision gates. This validation plan cannot
+override it. If implementation evidence contradicts the architecture, update the architecture first
+and then adjust this plan.
+
+The first four milestones test one claim at a time:
+
+1. a prepared offline oscillator-and-gain kernel is correct across callback partitions
+2. the same kernel interface runs in an `AudioWorklet`, through CPAL, and offline
+3. native and browser workers can supply bounded PCM through one host-neutral input seam
+4. a private compiled plan earns its place through static fan-in, observations, and sample-timed
+   automation
+
+Catalog, storage, authentication, analysis jobs, microphone input, broad playback behavior, and
+production networking do not block these milestones.
+
+## Evidence rules
+
+- Stable Rust 1.98 is the pinned baseline for the initial milestones.
+- A numeric capacity used in a fixture is not a permanent product limit.
+- Same-build partition comparisons may be bit-exact. Analytic and cross-target comparisons state a
+  tolerance.
+- Allocator counters report only observed allocator, reallocator, and deallocator calls in the
+  exercised Rust path. They do not prove hard real-time safety.
+- JavaScript allocation, Wasm memory growth, host work, page faults, locks, system calls, and deadline
+  behavior require separate evidence.
+- Expected invalid input and capacity conditions return fixed statuses. Panic containment is not an
+  acceptance mechanism.
+- Each host and browser claim names the tested toolchain, dependency version, browser or OS version,
+  hardware, sample rate, channel layout, and load conditions.
+- Public interfaces remain provisional until more than one product or adapter earns them.
+
+## Milestone 1: offline prepared kernel
+
+### Question
+
+Can one small, concrete Rust kernel render deterministic planar audio correctly across arbitrary
+in-capacity callback partitions without observed render-path allocation or deallocation?
+
+### Scope
+
+Implement one direct path:
+
+```text
+mono sine oscillator -> linked scalar gain -> mono or semantic L/R planar output
+```
+
+The kernel follows the canonical architecture contract:
+
+- phase starts at zero on a positive-going crossing
+- each frame emits the current phase, then advances and wraps an `f64` phase accumulator
+- stereo duplicates the same generated sample identically into distinct left and right planes
+- one scalar gain applies to mono or both stereo planes
+- each instance owns a checked `u64` next-frame clock
+- frame count derives from equal-length borrowed output planes
+- zero frames are a strict no-op
+- malformed layout, clock overflow, and over-capacity zero every supplied sample and do not advance
+  clock or DSP state
+- over-capacity is terminal for that prepared instance
+- preparation rejects a non-positive or non-finite sample rate, non-finite gain or frequency, and
+  frequencies outside `0 <= frequency < sample_rate / 2`
+
+The kernel renders directly into borrowed output. It needs no graph, queue, public processor trait,
+internal heap buffer, or synthetic heap owner for drop instrumentation.
+
+A fixture may use 48 kHz and a prepared maximum of 1,024 frames so the 1,000-frame single-block
+comparison remains in capacity. That value is not a product decision.
+
+### Explicit non-goals
+
+- automation or event queues
+- mixer, observations, or graph compilation
+- decoder, PCM transport, or sample-rate conversion
+- native or browser host adapters
+- public processor abstractions
+- production-quality anti-aliased synthesis
+- cross-CPU, cross-toolchain, or native-to-Wasm bit identity
+
+### Required evidence
+
+- Analytic mono sine fixtures establish initial phase, emit-then-advance order, gain, and clock.
+- Analytic stereo fixtures establish semantic left/right duplication and distinct planar storage.
+- A unity-gain fixture prevents gain from hiding oscillator errors; a non-unity fixture establishes the
+  composed path.
+- Rendering 1,000 frames as one block, one-frame blocks, and generated irregular partitions produces
+  bit-identical samples and the same final clock on one pinned build.
+- Boundary partitions include zero, 1, 17, 64, 128, 257, and the prepared maximum, including zero
+  calls adjacent to phase wraps and maximum-sized calls.
+- Zero frames alter no output guard, phase, clock, status counter, allocator counter, or owned state.
+- Unequal stereo planes and over-capacity mono and stereo output become positive zero in full, return
+  the specified fixed status, and leave state unchanged. A later render on the over-capacity instance
+  remains rejected, proving its terminal state.
+- Checked clock-overflow fixtures fail atomically rather than differing between debug and release.
+- Preparation rejects invalid sample rate, non-finite gain or frequency, and frequency outside the
+  initial half-open range.
+- A serialized, warmed allocator probe observes no `alloc`, `alloc_zeroed`, `realloc`, or `dealloc`
+  calls around valid, zero-frame, invalid-layout, and over-capacity render calls.
+- The probe runs in debug and optimized builds. Its conclusion remains limited to the measured Rust
+  path.
+- `cargo fmt --check`, `cargo test --all-targets --all-features`, and strict Clippy pass.
+
+### Acceptance claim
+
+Success validates only the concrete prepared kernel, its frame semantics, borrowed planar output,
+and same-build partition independence. It does not validate hosts, deadlines, Wasm, a processor
+interface, or a compiled plan.
+
+## Milestone 2: dual-host kernel proof
+
+### Question
+
+Can the exact Milestone 1 kernel interface execute offline, in an `AudioWorklet`, and through CPAL
+without host branches entering its processing path?
+
+### Order
+
+1. non-threaded Wasm in an `AudioWorklet`
+2. macOS CPAL
+
+Browser support choices enter here, not before Milestone 1. Pin the minimum Chrome, Firefox, Safari,
+and iOS/Safari matrix before closing this milestone; explicitly exclude unsupported hosts.
+
+### Browser scope
+
+- compile the kernel for an unshared, worklet-local Wasm instance
+- load and instantiate Wasm before active `process()` callbacks
+- bound constructor work and create the node before connection or audible context activity
+- signal explicit `ready` or `failed` state before activation
+- map planar engine output to Web Audio channel arrays using their actual length
+- record the context's selected render quantum rather than assuming 128
+- pin initial and maximum Wasm pages and treat unexpected growth as failure
+- audit generated JavaScript glue used in the worklet
+- keep Bun, React, decoding, networking, and application control outside the worklet
+
+The maintained wasm-bindgen AudioWorklet example uses shared memory and threads. It is reference
+material for a later deliberate shared-memory build, not the design for this milestone.
+
+### CPAL scope
+
+- negotiate device sample rate, channel layout, and sample format
+- derive actual frames from the interleaved callback slice and channel count
+- adapt planar kernel output into the prepared interleaved destination
+- record observed callback lengths and deadline counters
+- move single-owner kernel state into the callback without requiring shared mutable ownership
+
+### Explicit non-goals
+
+- graph or operation-table portability
+- decoding or worker PCM transport
+- shared Wasm memory or Wasm threads
+- dynamic instance replacement
+- automation, observations, or sustained application-load performance
+
+### Required evidence
+
+- the same core render interface works offline, in the worklet, and in CPAL
+- no host conditionals enter the core processing path
+- Web Audio channel mapping and CPAL interleaving are correct
+- actual callback lengths are accepted without a fixed-block assumption
+- Wasm memory identity and length remain stable after preparation
+- the active Rust render path does not allocate, deallocate, or initialize lazily
+- worklet initialization produces deterministic ready or failed state
+- host-specific failures produce silence without panicking across the callback
+
+### Pivot criterion
+
+This milestone gates the kernel interface, host adaptation, lifecycle, and Wasm memory stability
+only. If those cannot remain separated, narrow the kernel interface before adding engine behavior.
+Do not decide whether hosts share a compiled operation representation here; that gate follows
+Milestone 4.
+
+## Milestone 3: bounded PCM transport and ownership
+
+### Question
+
+Can native and browser workers feed known, predecoded PCM to the render callback without unbounded
+work, callback-side ownership release, or uncontrolled transport growth?
+
+### Entry decisions
+
+Before work begins, define one host-neutral prepared PCM input seam. It includes:
+
+- semantic channel layout and sample rate
+- slot capacity and valid frame count
+- source-frame start and sequence
+- source identity and epoch
+- discontinuity and end-of-stream state
+- fixed ownership, credit, backpressure, starvation, and retirement rules
+
+Native and browser transport mechanisms may differ. Transport terminates at this seam before a render
+operation reads the prepared PCM view.
+
+### Scope
+
+Use generated or checked-in, license-safe WAV PCM truth without adding a production decoder.
+
+Native path:
+
+- one worker thread feeding the CPAL callback through a fixed slot pool or fixed sample ring
+
+Browser path:
+
+- main-thread bootstrap of a direct `MessageChannel` between a dedicated worker and the worklet
+- a fixed pool of recycled transferable `ArrayBuffer` slots before requiring shared memory
+- explicit slot IDs and ownership transitions
+- no waiting in `process()`
+
+Both paths provide:
+
+- bounded admission and pool exhaustion behavior
+- epoch-based stale-data rejection
+- zero-fill starvation and a bounded counter
+- explicit off-callback retirement
+- one bounded level observation returned at a controlled cadence
+- bounded command and observation admission, coalescing, and loss reporting
+
+### Explicit non-goals
+
+- a production decoder
+- HTTP ranges or grants
+- seeking beyond stale-epoch rejection
+- graph compilation or PCM-input plan integration
+- automation or looping
+
+### Sustained evidence gate
+
+Run at least 48 kHz stereo for 30 minutes on the named native and browser matrix. Pin hardware,
+browser and OS versions, power mode, foreground state, pool size, lead time, warmup, and representative
+application load.
+
+Record:
+
+- startup and steady-state transport underruns
+- pool and queue high-water marks
+- duplicate, late, and invalid ownership transitions
+- Wasm memory growth and buffer detachment behavior
+- callback-side Rust and selected JavaScript/Wasm allocation evidence
+- render-time distribution, maximum, and raw histogram
+- command, observation, and PCM saturation behavior
+- shutdown, worker restart, context recreation, and epoch flush behavior
+
+Any percentile threshold uses the actual render quantum budget, not an assumed 128 frames. A clean run
+is empirical evidence for the pinned environment, not a standards guarantee.
+
+### Transport decision
+
+- If recycled transferable buffers pass the sustained matrix, retain the non-isolated deployment and
+  record its measured bounds.
+- If they fail and cross-origin isolation is acceptable, require `SharedArrayBuffer`, fixed
+  rings/mailboxes, Atomics, and an audit of every resource and authentication or embedding flow.
+- If they fail and cross-origin isolation is unacceptable, narrow the browser shared center to DSP,
+  clocks, schemas, and conformance fixtures rather than forcing the complete Rust executor.
+
+This decision closes Milestone 3. It is not a Milestone 1 prerequisite.
+
+## Milestone 4: minimal compiled plan
+
+### Question
+
+Does a private `CompiledPlan` and single-owner `RenderInstance` provide useful leverage across
+offline, native, and browser execution?
+
+### Gate A: oscillator-only compiled program
+
+Compile a private description for:
+
+```text
+oscillator A -> gain A ┐
+                       mixer -> level observation -> output
+oscillator B -> gain B ┘
+```
+
+Include:
+
+- validation of topology, ports, layouts, and capacity
+- compilation to a fixed enum operation table
+- stable processor and parameter identities
+- preassigned planar buffers and deterministic operation order
+- two independent instances from one immutable plan
+- one immediate value event and one linear ramp at exact in-block offsets
+- deterministic same-frame ordering for the supported subset
+- bounded post-master peak and RMS observations
+- a versioned, pointer-free compiled description transferred to the worklet
+- worklet-local validation and instance preparation
+
+### Gate A explicit non-goals
+
+- public graph construction
+- trait-object plugin extensibility
+- graph mutation, live replacement, or state migration
+- processor state save and restore
+- latency compensation
+- cancellation or a public automation language
+- PCM-input integration
+
+### Gate A required evidence
+
+- invalid topology, layouts, capacities, and identifiers fail compilation
+- the two-tone mix matches an independent direct reference
+- peak and RMS observations match rendered output
+- output and supported automation are partition-independent
+- ramp endpoint semantics have no block-boundary off-by-one ambiguity
+- two instances from one plan share no clock or processor state
+- repeated rendering grows no buffer or Wasm memory
+- the compiled description validates and prepares locally in the worklet
+
+### Gate B: PCM input integration
+
+After Gate A, compile a plan that consumes the host-neutral prepared PCM seam from Milestone 3. Prove
+that native and browser transport both terminate at the same seam, epoch rejection remains outside or
+inside the same explicitly chosen operation, and the plan does not acquire host transport types.
+
+Gate B is separate so a transport decision cannot hide behind oscillator-only plan evidence.
+
+### Shared operation-representation decision
+
+Only after Gate A and Gate B decide whether offline, native, and browser hosts can use the same
+compiled operation representation without host conditions entering the renderer.
+
+- If yes, the initial `CompiledPlan` and `RenderInstance` split is earned.
+- If no, narrow the shared center to portable DSP, clocks, event and observation semantics, schemas,
+  and conformance fixtures.
+- If replacement cannot avoid callback-side final drops, keep one immutable instance per active node
+  or stream and defer live replacement.
+
+## Playback validation after the four milestones
+
+Playback proceeds through small, ordered increments:
+
+1. **Same-rate local WAV.** Play, pause, position, bounded buffering, and starvation reporting with a
+   source rate matching the active host.
+2. **Prepared sample-rate conversion.** Account for chunk adaptation, delay, history, reset, flush,
+   and input/output position mapping.
+3. **WAV seeking and epochs.** Prove stale-buffer rejection, decoder repositioning, resampler
+   pre-roll, readiness, and media/render/presentation snapshots.
+4. **MP3 trim and seek fixtures.** Test valid, missing, and malformed trim metadata, decoder anchors,
+   and `Exact`, `AnchorAndDiscard`, or `Adjusted` results.
+5. **FLAC fixtures.** Test lossless reference output and seeking with and without optional metadata.
+6. **WAV loops.** Settle nominal-period-preserving seam geometry, short-loop limits, smoothing
+   bounds, UI coordinate, automation, provenance, readiness, and underrun behavior.
+7. **Compressed loops.** Add only where codec, trim, and seek evidence supports the declared result.
+
+`PlaybackSession` remains provisional until local WAV, seek epochs, and at least one browser path pass
+the same behavioral fixtures.
+
+## Progressive HTTP validation
+
+Test the byte source against a deterministic local server before choosing or integrating production
+storage. The server simulates:
+
+- valid single-range `206` responses
+- ignored `Range` with `200`
+- valid and invalid `416`
+- rejected `HEAD` with successful ranged `GET`
+- weak, strong, and changed validators
+- inconsistent `Content-Range` and complete lengths
+- delayed, truncated, and oversized responses
+- fake expiring grants and refresh without revision or epoch change
+- loop-head range reads
+- required and missing CORS response headers
+
+After selecting an object store or CDN, run the same suite through the provider on every supported
+browser. Production HTTP readiness requires provider evidence; fixture-server success alone is not
+sufficient.
+
+## Later product gates
+
+Engine validation does not settle catalog or deployment design. Before dependent product work ships,
+require evidence for:
+
+- staged, immutable, idempotent publication of originals and derived revisions
+- independent digest and identity for every binary derivation
+- playback-grant bearer lifetime, leakage, refresh, and revocation behavior
+- exact provider CORS, range, validator, and expiry behavior
+- connection-time SSRF validation and independent outbound network controls
+- canonical analysis provenance and current-policy access inheritance
+- playlist visibility remaining independent from asset authorization
+
+Provider selection, Convex schema, job implementation, grant lifetime, artifact payload split, and
+public summary policy remain deferred until those gates become active.
+
+## Plan-wide non-goals
+
+The initial validation sequence does not commit to:
+
+- a workspace or many crates
+- a public arbitrary graph interface
+- render-thread graph mutation
+- live plan replacement or state migration
+- processor state serialization
+- plugin hosting or plugin ABI
+- a storage provider or production catalog schema
+- user-created catalogs or public collaborative playlists
+- automatic media garbage collection
+- musical automation units
+- native iOS support
+- bit-identical native and browser output
+- a nightly Rust default
+
+The plan should be shortened or revised when evidence makes a milestone unnecessary. It should not be
+expanded merely to make future features appear accommodated.
+
+## Primary references
+
+- [KKB audio system architecture](./2026-08-28-kkb-audio-system-architecture.md)
+- [Web Audio API 1.1](https://www.w3.org/TR/webaudio-1.1/)
+- [WebCodecs](https://www.w3.org/TR/webcodecs/)
+- [wasm-bindgen AudioWorklet example](https://wasm-bindgen.github.io/wasm-bindgen/examples/wasm-audio-worklet.html)
+- [CPAL](https://docs.rs/cpal/latest/cpal/)
+- [Rust `GlobalAlloc`](https://doc.rust-lang.org/std/alloc/trait.GlobalAlloc.html)
+- [Rust panic handling](https://doc.rust-lang.org/std/panic/fn.catch_unwind.html)
+- [SharedArrayBuffer security requirements](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer#security_requirements)
+- [RFC 9110: HTTP semantics](https://www.rfc-editor.org/rfc/rfc9110.html)

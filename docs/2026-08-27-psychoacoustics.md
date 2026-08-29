@@ -7,9 +7,9 @@ Date: 2026-08-27
 This is a practical foundation for engineers building playback, DSP, metering, codecs, spatial
 renderers, and audio-engine interfaces. It complements
 [Digital audio from first principles](./2026-08-27-digital-audio-from-first-principles.md), which explains
-samples and real-time processing, and
-[Audio engine and runtime architecture](./2026-07-31-audio-engine-runtime-architecture.md), which
-explains graphs, clocks, and host boundaries. Here the concern is what a listener may perceive from
+samples and real-time processing, and the canonical
+[KKB audio system architecture](./2026-08-28-kkb-audio-system-architecture.md), which defines graphs,
+clocks, and host seams. Here the concern is what a listener may perceive from
 the resulting pressure waveform—and why that cannot be read directly from samples alone.
 
 The evidence boundary is original peer-reviewed work, official standards and specifications, and

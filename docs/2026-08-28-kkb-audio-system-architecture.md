@@ -5,9 +5,10 @@ Status: Working architecture and decision record
 
 ## Purpose
 
-This document records the current architecture for the KKB sound, audio, and music software system.
-It consolidates the product vision, architecture review, primary-source research, and decisions made
-while discussing the first implementation.
+This document is the sole canonical authority for the KKB sound, audio, and music software system's
+architecture, terminology, enduring invariants, and decision gates. It consolidates the product
+vision, architecture review, primary-source research, and decisions made while discussing the first
+implementation.
 
 The system is intended to grow into a modular audio foundation for:
 
@@ -23,30 +24,37 @@ The system is intended to grow into a modular audio foundation for:
 
 The first product will be a new version of `wave-player`. It will eventually have:
 
-- a web application using WebAssembly, TypeScript, Bun, React, and Web Audio
+- a web application whose control layer uses TypeScript, Bun tooling, React, and Web Audio, with a
+  Rust render engine compiled to WebAssembly
 - a native application using Rust and a native UI such as GPUI
+
+Bun and React remain outside real-time execution. The browser `AudioWorklet` contains only the Wasm
+renderer and minimal, hand-audited JavaScript glue.
 
 The immediate target is ordinary single-track playback. The broader design must preserve a credible
 path toward synthesis, live input, analysis, visualization, and multiple synchronized sources
 without requiring those features in the first implementation.
 
-This document refines [Audio engine and runtime architecture](./2026-07-31-audio-engine-runtime-architecture.md).
-That earlier document remains useful as a survey of audio-engine concerns. This document narrows
-several claims, adds missing contracts and failure policies, and separates the full product system
-from the shared render engine.
+This document supersedes the historical
+[Audio engine and runtime architecture](./2026-07-31-audio-engine-runtime-architecture.md) survey.
+That file is retained only as a redirect; Git history preserves its original content. Its earlier
+claims are not active guidance.
 
 Supporting foundations:
 
 - [Digital audio from first principles](./2026-08-27-digital-audio-from-first-principles.md)
 - [Psychoacoustics for digital audio and audio-engine software](./2026-08-27-psychoacoustics.md)
 
+The [initial render-engine validation plan](./2026-08-29-initial-render-engine-validation-plan.md)
+controls implementation order and evidence. It cannot override this architecture.
+
 ## Decision language
 
 This document distinguishes three kinds of statements:
 
 - **Decision**: accepted as the current design.
-- **Working design**: the recommended implementation shape, subject to validation through the first
-  vertical slices.
+- **Working design**: the recommended implementation shape, subject to validation through the
+  focused milestones.
 - **Deferred**: intentionally not part of the initial system.
 
 The architecture should change when implementation evidence contradicts it. Public interfaces
@@ -273,9 +281,11 @@ SpecificUsers([clerk_subject, ...])
 `SpecificUsers` supports admin-created private playlists assigned to one or several authenticated
 users. Admin access is implicit.
 
-Playlist visibility never expands asset permissions. The simplest initial policy is to reject a
-playlist configuration whose audience could access entries that its media policies forbid. A later
-product may instead display inaccessible entries as locked.
+Playlist visibility never expands asset permissions and never implies that every entry is playable.
+The initial product may display inaccessible entries as locked. Playback-grant issuance always checks
+the asset's current stream policy, regardless of playlist membership. This invariant remains valid
+when a playlist audience or an asset policy changes and avoids transactional revalidation of every
+referencing playlist.
 
 Write permissions should remain action-based. Do not encode "VIP can never write" as an intrinsic
 property of the role, because future collaborative playlists may grant narrow write capabilities
@@ -309,10 +319,12 @@ sha256:<digest>
 
 Compute the digest incrementally while importing or uploading when practical. The exact-byte digest
 answers whether two encoded objects are identical. It does not prove that two different encodings
-contain the same recording.
+contain the same recording. HTTP `ETag` values are transport validators, not catalog content hashes.
 
 A changed hash creates a new media revision. An exact duplicate may reuse one stored object while
 remaining associated with more than one logical catalog entry when catalog semantics require it.
+Every remux, transcode, or other binary derivation has its own exact-byte digest and media revision,
+plus an immutable derivation link to its input revision.
 
 ### Recording equivalence
 
@@ -385,10 +397,15 @@ A reasonable initial private object namespace is:
 
 ```text
 originals/<sha256>
-delivery/<revision-id>/<rendition>
-artifacts/<artifact-id>/<payload>
+delivery/<derived-revision-sha256>
+artifacts/<artifact-id>/<payload-digest>
 artwork/<asset-id>/<revision>
 ```
+
+Content-addressed names do not by themselves guarantee immutability. Importers stage bytes under a
+job key, finish hashing and length validation, and only then publish the immutable object and revision
+idempotently. Immutable keys cannot be overwritten. Failed or cancelled jobs never publish a media
+revision.
 
 One provider and private bucket with logical prefixes is sufficient initially. Separate buckets may
 follow when retention, security, or billing differences justify them.
@@ -412,12 +429,18 @@ PlaybackGrant {
 ```
 
 The application requests a grant from Convex. Convex resolves the caller's effective role, checks the
-asset's stream policy, and returns a short-lived URL.
+asset's current stream policy, and returns a short-lived URL scoped to one immutable object and
+operation.
+
+A signed URL is a bearer capability. Anyone who obtains it may use it until expiry, so policy and role
+revocation take effect no later than the grant's expiration unless the provider offers a stronger
+revocation mechanism. Grant responses are not cached, URLs are excluded from logs and analytics, and
+every refresh repeats authorization. Grant lifetime and refresh margin remain measurement-driven.
 
 The media worker performs HTTP reads. The audio render thread and browser `AudioWorklet` never fetch
 media. The worker must be able to refresh an expired grant without changing the media revision or
-source epoch. Signed URLs must permit repeated range requests and expose the required CORS and range
-headers.
+source epoch. Signed URLs must permit repeated range requests and satisfy the exact browser CORS and
+range contract validated for the selected provider.
 
 ### Original retention
 
@@ -469,9 +492,13 @@ Hashing may occur while fetching. A successful import records:
 - priming and trailing trim metadata when available
 - available seeking information
 
-Server-side remote fetching must defend against SSRF. The importer should restrict schemes, reject
-localhost and private or link-local addresses, revalidate DNS and every redirect, bound sizes and
-time, limit redirects, allow cancellation, and clean up partial objects.
+Server-side remote fetching must defend against SSRF. The importer uses one canonical URL parser,
+permits only approved HTTP schemes and ports, rejects ambiguous destinations, resolves and classifies
+all IPv4 and IPv6 answers, and connects to a validated address while preserving the validated host
+and TLS identity. It repeats the complete validation for every manually followed redirect. Network
+policy independently blocks loopback, private, link-local, multicast, unspecified, metadata, and
+other internal destinations. The fetcher disables ambient proxies, bounds streamed and decompressed
+bytes, time, redirects, and concurrency, supports cancellation, and cleans up staged partial objects.
 
 ### Artifact payload storage
 
@@ -518,10 +545,24 @@ The byte source understands:
 - `416 Requested Range Not Satisfiable`
 
 The reader should tolerate servers that reject `HEAD` but accept a small ranged `GET`. Range support
-is a discovered capability, not a catalog promise.
+is discovered for arbitrary locators. A managed delivery rendition does not become delivery-ready
+until it passes the required range and browser CORS conformance checks.
+
+The browser delivery contract names the allowed application origins and exposes every header the
+worker reads, including `Accept-Ranges`, `Content-Range`, `ETag`, and `Content-Length`. It permits the
+request headers and methods used by `Range`, `If-Range`, `GET`, and any retained `HEAD` probe. Provider
+errors may be hidden by CORS, so grant refresh cannot rely on reading a particular HTTP error body.
 
 A changed strong validator during playback must not splice bytes from two resource versions into one
-source epoch. The reader should fail or reopen against a newly identified revision.
+source epoch. Weak validators are not used with `If-Range`; every `206` response is checked against
+the requested interval and known complete length; a `200` response is never appended to partial
+state; and truncated or inconsistent bodies fail the read. The reader should fail or reopen against a
+newly identified revision.
+
+Progressive HTTP behavior is first tested against a deterministic local fixture server, independent
+of Clerk, Convex, an object-store provider, and production signing. The selected provider and target
+browsers must later pass the same range, CORS, expiry, refresh, and validator suite before the reader
+or grant contract is considered production-ready.
 
 ### Initial codecs and containers
 
@@ -561,8 +602,12 @@ Media readers handle encoded finite or progressive media. Their capabilities may
 - end-of-stream
 - recoverable starvation
 
-They run outside the real-time thread and feed timestamped, epoch-tagged PCM into prepared engine
-input ports.
+They run outside the real-time thread and feed timestamped, epoch-tagged PCM into a host-neutral,
+prepared engine input seam. The seam defines layout, sample rate, valid frame count, source-frame
+coordinates, epoch, discontinuity, end-of-stream, starvation, and bounded ownership or retirement.
+Native and browser transports may differ, but transport terminates before the render operation reads
+this prepared view. The validation plan proves this seam before decoding and gives its compiled-plan
+integration a separate acceptance gate.
 
 ### Live inputs
 
@@ -610,8 +655,9 @@ Callers do not initially receive `add_node`, `connect`, or render-thread mutatio
 
 ### Editable description, compiled plan, and render instance
 
-**Working design.** Graph editing, compilation, allocation, and processor preparation happen off the
-render thread.
+**Working design.** Graph editing and plan compilation happen off the render thread. Render-instance
+allocation and processor preparation happen before the instance becomes active and never during an
+active render callback.
 
 The compiler:
 
@@ -629,10 +675,15 @@ storage, constructs and prepares processors and resamplers, and initializes cloc
 The render thread owns that instance and executes its linear prepared operation sequence rather than
 recursively traversing a mutable object graph.
 
-Future topology changes should compile and prepare a replacement instance off-thread and publish it
-at a safe render boundary. Old instances must be reclaimed off-thread so a final reference drop
-cannot deallocate in the callback. State migration may initially be limited to matching stable
-processor identities.
+Native hosts prepare instances off-thread. A browser host with an unshared worklet-local Wasm heap may
+instantiate and prepare its local instance during `AudioWorkletProcessor` construction. That work is
+bounded, occurs before the node is connected or activated, and ends with an explicit ready or failed
+handshake. Heavy compilation remains in a worker.
+
+Live topology replacement remains unvalidated. If introduced, a host prepares a replacement before
+activation and publishes it at a safe render boundary. Old instances are reclaimed off-thread so a
+final reference drop cannot deallocate in the callback. State migration and processor state
+serialization remain deferred.
 
 ### Internal audio representation
 
@@ -645,6 +696,7 @@ Initial target:
 - mono and stereo semantic channel layouts
 - a known engine sample rate chosen from the active output context
 - variable frame counts up to a prepared maximum
+- checked `u64` render-frame arithmetic owned by each `RenderInstance`
 
 Faithful decoding is required. Bit-perfect device output is not an initial goal. When a 44.1 kHz
 source plays through a 48 kHz device or browser context, resampling is expected. The system should
@@ -655,25 +707,52 @@ rather than globally fixed for every session.
 
 ### Variable render sizes
 
-**Decision.** The core never assumes that callbacks always contain 128, 256, or 512 frames.
+**Decision.** The core never assumes that callbacks always contain 128, 256, or 512 frames. Each
+`RenderInstance` is the sole authority for its next render frame; callers do not supply an independent
+clock value.
 
 Conceptual render contract:
 
 ```text
-render(
-  start_frame,
-  frame_count,
-  inputs,
-  outputs,
-  events
-)
+render(inputs, outputs, events) -> RenderStatus
 ```
 
-`frame_count` may vary for each host callback up to a prepared maximum. Nodes that require fixed FFT,
-convolution, or resampling chunks use preallocated local buffering and report added latency.
+Frame count derives from the borrowed output channel planes, whose lengths must agree. It may vary
+between calls up to the prepared maximum. Nodes that require fixed FFT, convolution, or resampling
+chunks use preallocated local buffering and report added latency.
 
-If a callback exceeds prepared capacity, the real-time path must not allocate. It should zero-fill,
-report a reconfiguration condition, and allow the host runtime to rebuild safely.
+Zero frames are a strict no-op. A malformed layout, checked clock overflow, or request beyond prepared
+capacity zero-fills every supplied output sample, returns a fixed non-allocating status, and does not
+advance the render clock or DSP state. Exceeding capacity makes that prepared instance terminal; the
+host replaces it outside the callback rather than repeatedly retrying it.
+
+Web Audio 1.1 chooses a render quantum for an `AudioContext` and keeps it constant for that context's
+lifetime. Browser code reads the actual channel-array length instead of hard-coding 128. The portable
+core still accepts variable partitions because CPAL callbacks and offline drivers have different
+contracts.
+
+### Initial prepared kernel
+
+**Decision.** The first implementation is one concrete offline path:
+
+```text
+mono sine oscillator -> linked scalar gain -> mono or semantic L/R planar output
+```
+
+The oscillator starts at phase zero on a positive-going crossing, emits the current phase, then
+advances and wraps an `f64` phase accumulator. Stereo output duplicates the same generated sample
+identically into distinct left and right planes. Preparation rejects a non-positive or non-finite
+sample rate, non-finite gain or frequency, and frequencies outside `0 <= frequency < sample_rate / 2`
+for this proof.
+
+The kernel renders directly into borrowed output planes. It does not require a graph, queue, public
+processor trait, internal heap buffer, or synthetic heap ownership for drop testing. Same-build
+partition comparisons may require bit-exact samples because they execute the same recurrence in the
+same order. Analytic references and comparisons across targets, toolchains, or math implementations
+use an explicit tolerance and do not imply bit identity.
+
+This contract governs the first milestone only. The focused validation plan defines its evidence and
+explicit exclusions.
 
 ### Real-time discipline
 
@@ -690,6 +769,15 @@ report a reconfiguration condition, and allow the host runtime to rebuild safely
 
 Permitted work is bounded arithmetic over prepared buffers, bounded event consumption, lock-free or
 wait-free access to prepared queues, and updates to real-time-safe counters.
+
+Expected invalid input and capacity conditions return fixed statuses rather than panicking.
+`catch_unwind` is not a real-time-safety mechanism: panic hooks and panic-payload ownership can perform
+unbounded work or require callback-side retirement, and aborting Wasm panics cannot be caught by an
+ordinary host boundary.
+
+Allocator instrumentation supplies bounded empirical evidence only. A measured render path can show
+no observed allocator, reallocator, or deallocator calls; it cannot prove the absence of host or
+JavaScript allocation, page faults, system calls, locks, or deadline misses.
 
 Decoding, streaming, graph compilation, allocation, logging, artifact persistence, and device
 reconfiguration occur outside the callback.
@@ -763,7 +851,6 @@ reported latency
 reported tail
 parameter description
 sample-timed parameter events
-state save and restore
 ```
 
 Most useful DSP is stateful. The goal is deterministic state transition with explicit lifecycle and
@@ -838,12 +925,22 @@ processor state, events, observations, and audible-position estimates.
 
 ### Seek contract
 
-**Decision.** Logical seeks target media PCM frames. Coarse codec seeking must not silently move the
-requested audible position.
+**Decision.** Logical seeks target frames on a declared decoded-and-trimmed media PCM timeline. They
+do not promise recovery of an encoder's original input samples. Coarse codec seeking must not silently
+move the requested audible position.
 
-The reader may seek to an earlier decoder anchor, decode forward, and discard samples until the exact
-logical target. Only when exact recovery is genuinely impossible may the session negotiate an
-adjusted position, and it must report the actual result.
+A reader reports the realized capability and result:
+
+```text
+Exact
+AnchorAndDiscard
+Adjusted(actual_media_frame)
+```
+
+`AnchorAndDiscard` seeks to an earlier decoder anchor, decodes forward, and discards through the
+requested frame. Exactness depends on the codec, container, trim metadata, decoder version, byte
+source, and resampler history. When exact recovery is unavailable, the session reports the adjusted
+position rather than weakening the promise silently.
 
 A seek creates a new source epoch. Stale queued PCM and observations from the prior epoch are ignored.
 The session reports completion only after the new epoch is prepared according to the eventual
@@ -851,39 +948,30 @@ readiness contract.
 
 ### Loop contract
 
-**Decision.** Initial loops are click-free and retain exact logical PCM boundaries where decoding
-allows them.
-
-Loop intervals are half-open:
+**Working design.** Initial loops use half-open logical intervals:
 
 ```text
 [loop_start, loop_end)
 ```
 
-Events at `loop_start` repeat. Events exactly at `loop_end` are outside the active loop.
+Events at `loop_start` repeat. Events exactly at `loop_end` are outside the active loop. The working
+priority is to preserve this nominal loop period and report any seam transformation explicitly.
 
-Click prevention uses a short built-in equal-power seam crossfade, initially expected to be about
-5 to 10 milliseconds. This is transition smoothing, not the later creative crossfade feature.
+A short source-side transition may smooth the boundary, but equal-power overlap is only bounded seam
+smoothing; it cannot guarantee that every signal is click-free. An overlap also cannot simultaneously
+preserve every source sample at unit rate, preserve the nominal period, and expose one authoritative
+media coordinate. WAV fixtures must therefore settle the transition geometry, fade clamping, minimum
+loop length, authoritative UI coordinate, automation behavior, and contribution provenance before
+loop implementation. The architecture does not select those details in advance.
 
-The session:
+The session still prepares the loop head before activation, keeps render time continuous while media
+time wraps, and reports the media discontinuity and transformation provenance. Any seam processing
+occurs on decoded and resampled source PCM before shared downstream processors. Those processors
+preserve state across the wrap. Decoder and source-side seek state reset or re-prime as necessary.
+Generators continue on render time unless explicitly bound to media time.
 
-1. seeks or reads ahead to a decoder anchor before the loop start
-2. decodes and discards to the exact loop start
-3. buffers the loop head before reaching the loop end
-4. overlaps the tail and head through a short seam transition
-5. keeps render time continuous while media time wraps
-6. emits the media discontinuity and transition provenance
-
-The initial seam transition occurs on decoded and resampled source PCM before shared downstream
-processors. Those processors receive one crossfaded stream and preserve state across the loop.
-Decoder and source-side seek state reset or re-prime as necessary. Generators continue on render time
-unless explicitly bound to media time.
-
-At the nominal wrap frame, media-time automation begins the new loop iteration. The short tail used
-for seam smoothing does not create a second simultaneous parameter state in shared downstream
-processors. An explicitly discontinuous automated parameter may still create an audible transition;
-applications use ramps when parameter continuity is required. Render-time automation continues
-unchanged.
+At the nominal wrap frame, media-time automation begins the new loop iteration. Render-time
+automation continues unchanged. Applications use explicit ramps when parameter continuity matters.
 
 Loop readiness is explicit:
 
@@ -1035,14 +1123,20 @@ An artifact records:
 - searchable summaries
 - payload object reference when needed
 
-A practical cache or identity key derives from:
+A practical cache or identity key derives from a domain-separated, algorithm-qualified digest over a
+canonical encoding of:
 
 ```text
-analyzer version
-+ parameters
-+ input provenance digest
+analyzer identity and version
++ canonical parameters
++ complete input provenance
 + result schema version
 ```
+
+Complete provenance includes the exact media-revision digest, decoded sample semantics, relevant
+decoder or processor implementations and versions, trim, channel mapping, sample rate, analyzed
+range, and every ordered source or immutable render-recipe input that can affect the result. Large
+payloads have their own digest and length.
 
 Artifacts are immutable. Reanalysis creates a new artifact. A separate catalog reference may identify
 the preferred current result.
@@ -1053,7 +1147,10 @@ preset revision. A future multi-source or routing system may generalize this to 
 ### Artifact access
 
 Artifacts default to no more access than their input signal. Processed artifacts use the intersection
-of all source and preset access requirements. Explicit publication may create a safe public summary.
+of all source and preset access requirements. Access is derived from current input policies rather
+than copied once at creation, so later restriction cannot leave an artifact exposed. Explicit
+publication creates a distinct reviewed public summary rather than changing the restricted payload's
+policy.
 
 ### Source and rendered analysis
 
@@ -1069,8 +1166,9 @@ contexts. Whole-track inference and persistence remain job-level responsibilitie
 
 ### Generators
 
-Generators are first-class render nodes. A minimal oscillator or tone generator belongs in an early
-engine slice because it validates sample-timed automation without involving a decoder.
+Generators are first-class render nodes. The initial prepared kernel uses a minimal oscillator to
+validate frame progression and partition independence without involving a decoder. Sample-timed
+automation follows in the compiled-plan milestone.
 
 This supports future:
 
@@ -1162,12 +1260,25 @@ Web Audio output
 ```
 
 WebCodecs decoding does not occur inside the `AudioWorklet`. Browser codec support must be detected
-at runtime. A Rust decoder such as Symphonia may run in a worker when its target and feature set are
-validated.
+per configuration at runtime, and WebCodecs does not supply container demuxing. A Rust decoder such as
+Symphonia may run in a worker when its target and feature set are validated.
 
-Shared memory and threads are optional optimizations. `SharedArrayBuffer` requires secure cross-origin
-isolation and affects deployment headers and embedded resources. A first prototype should not require
-shared memory unless measurement proves message or copy-based transport inadequate.
+A dedicated worker and `AudioWorklet` use separate Wasm instances and heaps by default. The worker
+sends a versioned, pointer-free compiled description; the worklet validates it and prepares local
+state. Explicitly shared `WebAssembly.Memory` is a different design that requires Wasm atomics and
+shared-memory deployment.
+
+The main thread bootstraps a direct `MessageChannel` between the media worker and worklet. The first
+PCM transport experiment uses a fixed pool of recycled transferable buffers with explicit ownership,
+credit, epoch, backpressure, starvation, and retirement states. Message delivery and garbage
+collection have no standards-level deadline guarantee, so sustained tests decide whether this is
+viable.
+
+`SharedArrayBuffer` and threads are a measured fallback, not a prerequisite. They require secure
+cross-origin isolation and affect every embedded resource, authentication flow, and deployment
+header. If transferable transport fails and cross-origin isolation is unacceptable, the shared center
+narrows to portable DSP, clocks, schemas, and conformance fixtures rather than forcing the complete
+Rust executor into the browser.
 
 ### Native execution
 
@@ -1197,6 +1308,16 @@ Deterministic offline output requires explicit configuration:
 
 Same-machine repeatability is a realistic initial goal. Cross-CPU or native-to-Wasm bit identity is a
 separate, stronger goal and is deferred.
+
+## Rust toolchain policy
+
+**Decision.** Stable Rust 1.98 is the initial reproducible baseline. The package uses Rust 2024, pins
+the selected toolchain for implementation and CI, and records a compatible `rust-version` policy.
+
+Nightly remains an intentional future option, not the default. It may be adopted when a concrete
+feature requires it, such as a deliberate Wasm threads and shared-memory build. Adoption requires a
+separate compatibility decision covering the exact target features, standard-library build, panic
+strategy, wasm-bindgen version, browsers, and deployment requirements.
 
 ## Dependencies and implementation candidates
 
@@ -1256,77 +1377,55 @@ Role: individual CLI applications.
 
 Clap does not belong in the engine.
 
-## Initial vertical slices
+## Validation sequence and decision gates
 
-**Working design.** The following order is a recommended implementation sequence, not a settled
-native-first product commitment. Adjacent slices may be combined when prototypes make that cheaper.
+**Decision.** The [initial render-engine validation plan](./2026-08-29-initial-render-engine-validation-plan.md)
+contains the sole governing initial implementation sequence. Milestone 1 is only the concrete offline
+prepared kernel defined above. It excludes automation, mixing, observations, decoding, resampling,
+queues, graph compilation, and host adapters.
 
-### Slice 1: render engine proof
+The first four milestones answer separate architecture questions:
 
-- planar mono and stereo `f32`
-- arbitrary render frame counts up to a prepared maximum
-- oscillator generator
-- gain processor
-- sample-timed immediate values and linear ramps
-- mixer and output port
-- post-master level observation
-- offline deterministic fixtures
+1. whether the concrete oscillator-and-gain kernel is partition-independent and allocation-prepared
+2. whether that same kernel interface works offline, in an `AudioWorklet`, and through CPAL
+3. whether native and browser workers can supply bounded PCM through the host-neutral input seam
+4. whether a private compiled plan earns its place through static fan-in, observations, and
+   sample-timed automation
 
-### Slice 2: native single-track playback
+Milestone 2 gates the kernel interface, host adaptation, lifecycle, and Wasm memory stability only.
+It cannot decide whether hosts share a prepared operation representation because that representation
+does not exist until Milestone 4.
 
-- WAV reference playback
-- MP3 and FLAC decoding
-- negotiated macOS output rate through CPAL
-- play, pause, seek, and position
-- source epochs and bounded buffering
-- exact logical seek through decode pre-roll and discard
-- click-free loops with an armed loop head
-- starvation and loop-underrun reporting
+After Milestone 4, decide whether the same compiled operation representation remains useful across
+offline, native, and browser hosts. If it does not, narrow the shared center rather than adding host
+conditions to the renderer. PCM-input integration with a compiled plan has its own acceptance gate;
+it does not need to be part of the first oscillator-only plan proof.
 
-### Slice 3: progressive HTTP playback
+Local playback then proceeds incrementally through same-rate WAV, prepared sample-rate conversion,
+source epochs and seeking, compressed-format trim fixtures, and WAV loop fixtures. Progressive HTTP
+uses the deterministic fixture server before production storage. Catalog, managed import,
+authentication, grants, durable analysis, and microphone work follow the applicable engine and media
+evidence.
 
-- managed object-store source
-- HTTP range probing and reads
-- validator handling
-- grant refresh
-- MP3 and FLAC streaming
-- loop-head prefetch over HTTP
-- browser-compatible CORS and range behavior
+Before production catalog and media delivery are considered ready, evidence must cover:
 
-### Slice 4: web playback
+- immutable, staged, idempotent publication of original and derived revisions
+- independent identity and digest for every derived binary revision
+- bearer-grant expiration, refresh, leakage, and revocation semantics
+- exact provider and browser CORS, range, validator, and expiry behavior
+- connection-time SSRF enforcement plus independent outbound network policy
+- canonical artifact provenance, payload identity, and current-policy access inheritance
+- playlist visibility remaining independent from current asset authorization
 
-- Rust render engine compiled to Wasm
-- dedicated media worker
-- hand-audited AudioWorklet adapter
-- the same playback and loop conformance fixtures as native
-- level and spectrum observations delivered to React
-- suspension and resume behavior
-
-### Slice 5: catalog integration
-
-- Clerk identity and Convex authentication
-- anonymous guest resolution
-- KKB catalog admin and VIP assignments
-- releases, assets, revisions, locators, and playlists
-- managed import and exact hashing
-- browse and stream policies
-- short-lived playback grants
-- public, VIP, admin-only, and specific-user playlists
-
-### Slice 6: analysis and microphone input
-
-- durable source analysis artifacts
-- live microphone analysis
-- real-time visualization observations
-- artifact provenance and object payloads
-- monitoring and basic effects after capture-only behavior is stable
-
-These slices describe sequencing, not separate permanent architectures.
+Provider selection, exact Convex schemas, grant lifetime, and job implementation remain deferred until
+their corresponding evidence is available.
 
 ## Explicitly deferred
 
 - a public arbitrary graph-building interface
 - render-thread graph mutation
+- live plan replacement and processor state migration
+- processor state save and restore
 - third-party plugin hosting
 - a full DAW or Ableton replacement
 - general buses and sends without a product workflow
@@ -1357,19 +1456,20 @@ The following questions remain intentionally unresolved:
 - What precise rounding rule converts seconds to media or render frames?
 - How should simultaneous events at one frame be ordered?
 - Which automation events may be coalesced or dropped when their queue is full?
-- What state should source-local processors restore at a loop boundary beyond the default of
-  preserving downstream state?
+- What loop seam geometry best preserves the nominal period while providing bounded smoothing, as
+  established by WAV fixtures?
 - What latency target is required for microphone monitoring and live effects?
 - When should processed-signal provenance generalize from a preset revision to a complete render
   recipe revision?
 - Which analysis facts and timelines belong directly in Convex versus object payloads?
 - Which summaries may be published more broadly than their source artifacts?
+- What canonical provenance encoding and digest domain should artifact identities use?
 - When should downloads, public user playlists, additional catalogs, and collaborative writes enter
   product scope?
 
-## Corrections to the initial architecture note
+## Corrections to the historical survey
 
-The following refinements replace stronger claims in the initial architecture document:
+The following canonical refinements explain why the 2026-07-31 survey is superseded:
 
 - The common center is a render engine and execution contract, not one universal host runtime.
 - Adapters may have small interfaces but substantial implementations. They are not assumed to be
@@ -1396,7 +1496,7 @@ The following refinements replace stronger claims in the initial architecture do
 
 ### Audio execution and real-time behavior
 
-- [Web Audio API](https://www.w3.org/TR/webaudio/)
+- [Web Audio API 1.1](https://www.w3.org/TR/webaudio-1.1/)
 - [AudioWorkletProcessor `process()`](https://developer.mozilla.org/en-US/docs/Web/API/AudioWorkletProcessor/process)
 - [JACK process callback contract](https://jackaudio.org/api/group__ClientCallbacks.html)
 - [JACK latency API](https://jackaudio.org/api/group__LatencyFunctions.html)
@@ -1409,13 +1509,15 @@ The following refinements replace stronger claims in the initial architecture do
 ### Web and Wasm
 
 - [WebCodecs specification](https://www.w3.org/TR/webcodecs/)
-- [wasm-bindgen AudioWorklet example](https://rustwasm.github.io/docs/wasm-bindgen/examples/wasm-audio-worklet.html)
+- [wasm-bindgen AudioWorklet example](https://wasm-bindgen.github.io/wasm-bindgen/examples/wasm-audio-worklet.html)
 - [SharedArrayBuffer security requirements](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer#security_requirements)
 - [Web Audio render-size explainer](https://github.com/WebAudio/web-audio-api/blob/main/explainer/user-selectable-render-size.md)
 
 ### Media and HTTP
 
-- [MDN HTTP range requests](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Range_requests)
+- [RFC 9110: HTTP semantics](https://www.rfc-editor.org/rfc/rfc9110.html)
+- [WHATWG Fetch](https://fetch.spec.whatwg.org/)
+- [OWASP SSRF prevention](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html)
 - [MDN audio codec guide](https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Formats/Audio_codecs)
 - [MDN media container guide](https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Formats/Containers)
 - [Symphonia](https://github.com/pdeljanov/Symphonia)
