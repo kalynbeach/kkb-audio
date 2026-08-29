@@ -74,7 +74,9 @@ mod prepared_kernel {
             if !gain.is_finite() {
                 return Err(PrepareError::Gain);
             }
-            if !frequency.is_finite() || frequency < 0.0 || frequency >= sample_rate / 2.0 {
+            // This is equivalent to `frequency >= sample_rate / 2.0`
+            // without underflowing the half-rate for subnormal sample rates.
+            if !frequency.is_finite() || frequency < 0.0 || frequency >= sample_rate - frequency {
                 return Err(PrepareError::Frequency);
             }
 
@@ -353,7 +355,7 @@ mod tests {
     }
 
     #[test]
-    fn boundary_partitions_and_zero_calls_adjacent_to_a_phase_wrap_are_supported() {
+    fn boundary_partitions_and_adjacent_zero_calls_are_supported() {
         for frames in [0, 1, 17, 64, 128, 257, MAXIMUM_FRAMES] {
             let mut kernel = prepared_mono(1_000.0, 1.0);
             let mut output = vec![f32::NAN; frames];
@@ -363,6 +365,28 @@ mod tests {
             );
             assert_eq!(kernel.next_frame, frames as u64);
         }
+
+        let mut maximum_kernel = prepared_mono(1_000.0, 1.0);
+        let mut empty: [f32; 0] = [];
+        let before_maximum = maximum_kernel.clone();
+        assert_eq!(
+            maximum_kernel.render(Output::Mono(&mut empty)),
+            RenderStatus::Rendered
+        );
+        assert_eq!(maximum_kernel, before_maximum);
+
+        let mut maximum_output = [f32::NAN; MAXIMUM_FRAMES];
+        assert_eq!(
+            maximum_kernel.render(Output::Mono(&mut maximum_output)),
+            RenderStatus::Rendered
+        );
+
+        let after_maximum = maximum_kernel.clone();
+        assert_eq!(
+            maximum_kernel.render(Output::Mono(&mut empty)),
+            RenderStatus::Rendered
+        );
+        assert_eq!(maximum_kernel, after_maximum);
 
         let mut kernel = PreparedKernel::prepare(OutputLayout::Mono, 8.0, 2.0, 1.0, 8).unwrap();
         let mut before_wrap = [f32::NAN; 3];
@@ -541,6 +565,20 @@ mod tests {
         assert!(output.iter().all(|sample| sample.is_finite()));
         assert_eq!(kernel.next_frame, 4);
         assert_eq!(kernel.phase.to_bits(), 0.0f64.to_bits());
+    }
+
+    #[test]
+    fn preparation_accepts_zero_frequency_at_smallest_positive_sample_rate() {
+        let sample_rate = f64::from_bits(1);
+        let mut kernel =
+            PreparedKernel::prepare(OutputLayout::Mono, sample_rate, 0.0, 1.0, 2).unwrap();
+        let mut output = [f32::NAN; 2];
+
+        assert_eq!(
+            kernel.render(Output::Mono(&mut output)),
+            RenderStatus::Rendered
+        );
+        assert_positive_zero(&output);
     }
 
     #[test]
