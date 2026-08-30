@@ -93,11 +93,11 @@ The build uses `wasm-bindgen` 0.2.127 generated glue, replaces its error-string 
 a fixed numeric trap code, and lets Bun remove the now-unused decoder helpers. This pinned transform
 fails the build if the generated source changes. `bun run audit:worklet` reported one synchronous
 initializer, one processor registration, and no `fetch`, streaming instantiation, `TextDecoder`,
-`SharedArrayBuffer`, Atomics, logging, worker, socket, or `AudioContext` references in the 9,948-byte
+`SharedArrayBuffer`, Atomics, logging, worker, socket, or `AudioContext` references in the 10,487-byte
 worklet bundle:
 
 ```json
-{"bytes":9948,"forbiddenPatterns":[],"processorRegistrations":1,"synchronousInstantiation":true}
+{"bytes":10487,"forbiddenPatterns":[],"processorRegistrations":1,"synchronousInstantiation":true}
 ```
 
 Networking and application control exist only in the main-thread proof harness.
@@ -111,12 +111,16 @@ The Bun tests cover:
 - unequal stereo lengths and persistent positive-zero silence
 - capacity excess without a Wasm render call
 - Wasm memory identity replacement
-- non-rendered Rust statuses and caught exceptions
+- unambiguous non-rendered Rust status mapping and caught exceptions
 - one `ready`, one coded `failed`, malformed messages, duplicate messages, timeout, and
   `processorerror` state transitions
+- closure during observation and runtime failure during a snapshot request
+- exclusive proof preparation and close-before-replace lifecycle ownership
 
-Ten TypeScript tests pass. The existing fourteen Rust tests remain the offline reference and pass in
-debug and optimized builds, including the warmed native allocator probe.
+Fifteen TypeScript tests pass. A direct Wasm binding check also verifies that an over-capacity call
+preserves a zero-frame no-op before later nonzero calls report the terminal state. The existing
+fourteen Rust tests remain the offline reference and pass in debug and optimized builds, including the
+warmed native allocator probe.
 
 ## Local browser observation
 
@@ -160,8 +164,9 @@ actual 128-frame channel-array length. The test harness does not assume that val
 nonzero stereo oscillator output before a zero-gain sink muted device output. No browser console
 messages were recorded. The server, context, and isolated browser session were closed after the run.
 
-This is useful implementation evidence only. Chrome 151 is below the required minimum and the run was
-too short to support a deadline or sustained-load claim.
+This is useful implementation history only. It predates the lifecycle and diagnostic hardening pass,
+Chrome 151 is below the required minimum, and the run was too short to support a deadline or
+sustained-load claim. The required browser matrix must establish evidence for the hardened artifact.
 
 ## Validation commands
 
@@ -177,8 +182,9 @@ bun run check
 ```
 
 The Wasm-target strict Clippy command completed successfully with no warnings. `bun run check` builds
-the Wasm and JavaScript artifacts, type-checks the TypeScript, runs the ten Bun tests, verifies fixed
-unshared Wasm memory, and audits the worklet bundle.
+the Wasm and JavaScript artifacts, type-checks the TypeScript, runs the fifteen Bun tests, verifies
+direct binding zero-frame and terminal behavior and fixed unshared Wasm memory, and audits the worklet
+bundle.
 
 ## Evidence still required before Checkpoint A closes
 

@@ -148,31 +148,42 @@ describe("PreparedPlanarAdapter", () => {
     expect(kernel.calls).toBe(0);
   });
 
-  test("non-rendered Wasm status and thrown exceptions produce silence", () => {
+  test("maps every non-rendered Wasm status to an unambiguous failure", () => {
+    const cases = [
+      [RenderStatus.InvalidLayout, HostFailure.WasmInvalidLayout],
+      [RenderStatus.CapacityExceeded, HostFailure.WasmCapacityExceeded],
+      [RenderStatus.Terminal, HostFailure.WasmTerminal],
+      [RenderStatus.ClockOverflow, HostFailure.WasmClockOverflow],
+      [99, HostFailure.WasmUnknownStatus],
+    ] as const;
+
+    for (const [status, expectedFailure] of cases) {
+      const memory = new MutableMemory();
+      const kernel = new FakeKernel(memory, 64);
+      kernel.nextStatus = status;
+      const adapter = new PreparedPlanarAdapter(1, kernel, memory);
+      const output = new Float32Array(17).fill(1);
+
+      adapter.process([[output]]);
+
+      expectPositiveZero(output);
+      expect(adapter.snapshot().failureCode).toBe(expectedFailure);
+      expect(expectedFailure).not.toBe(HostFailure.Exception);
+    }
+  });
+
+  test("thrown exceptions use their own failure code and produce silence", () => {
     const memory = new MutableMemory();
     const kernel = new FakeKernel(memory, 64);
-    kernel.nextStatus = RenderStatus.Terminal;
-    const adapter = new PreparedPlanarAdapter(1, kernel, memory);
-    const terminalOutput = new Float32Array(17).fill(1);
-    adapter.process([[terminalOutput]]);
-    expectPositiveZero(terminalOutput);
-    expect(adapter.snapshot().failureCode).toBe(
-      HostFailure.WasmRender + RenderStatus.Terminal,
-    );
-
-    const throwingMemory = new MutableMemory();
-    const throwingKernel = new FakeKernel(throwingMemory, 64);
-    throwingKernel.render = () => {
+    kernel.render = () => {
       throw new Error("injected");
     };
-    const throwingAdapter = new PreparedPlanarAdapter(
-      1,
-      throwingKernel,
-      throwingMemory,
-    );
-    const thrownOutput = new Float32Array(17).fill(1);
-    expect(() => throwingAdapter.process([[thrownOutput]])).not.toThrow();
-    expectPositiveZero(thrownOutput);
-    expect(throwingAdapter.snapshot().failureCode).toBe(HostFailure.Exception);
+    const adapter = new PreparedPlanarAdapter(1, kernel, memory);
+    const output = new Float32Array(17).fill(1);
+
+    expect(() => adapter.process([[output]])).not.toThrow();
+
+    expectPositiveZero(output);
+    expect(adapter.snapshot().failureCode).toBe(HostFailure.Exception);
   });
 });

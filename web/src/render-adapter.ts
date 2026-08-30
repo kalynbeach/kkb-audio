@@ -9,8 +9,12 @@ export const RenderStatus = {
 export const HostFailure = {
   InvalidOutput: 30,
   MemoryChanged: 31,
-  WasmRender: 32,
   Exception: 33,
+  WasmInvalidLayout: 34,
+  WasmCapacityExceeded: 35,
+  WasmTerminal: 36,
+  WasmClockOverflow: 37,
+  WasmUnknownStatus: 38,
 } as const;
 
 export interface WorkletKernelBinding {
@@ -115,7 +119,7 @@ export class PreparedPlanarAdapter {
 
       const status = this.#kernel.render(frameCount);
       if (status !== RenderStatus.Rendered) {
-        return this.#fail(outputs, HostFailure.WasmRender + status);
+        return this.#fail(outputs, wasmRenderFailure(status));
       }
 
       for (let frame = 0; frame < frameCount; frame += 1) {
@@ -151,6 +155,21 @@ export class PreparedPlanarAdapter {
     this.#failureCode = code;
     fillSilence(outputs);
     return true;
+  }
+}
+
+function wasmRenderFailure(status: number): number {
+  switch (status) {
+    case RenderStatus.InvalidLayout:
+      return HostFailure.WasmInvalidLayout;
+    case RenderStatus.CapacityExceeded:
+      return HostFailure.WasmCapacityExceeded;
+    case RenderStatus.Terminal:
+      return HostFailure.WasmTerminal;
+    case RenderStatus.ClockOverflow:
+      return HostFailure.WasmClockOverflow;
+    default:
+      return HostFailure.WasmUnknownStatus;
   }
 }
 

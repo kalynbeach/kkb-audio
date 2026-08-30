@@ -26,6 +26,7 @@ pub struct WorkletKernel {
     left: Box<[f32]>,
     right: Box<[f32]>,
     preparation_status: u32,
+    terminal: bool,
 }
 
 #[wasm_bindgen]
@@ -66,6 +67,7 @@ impl WorkletKernel {
             left,
             right,
             preparation_status,
+            terminal: false,
         }
     }
 
@@ -77,10 +79,18 @@ impl WorkletKernel {
         if self.preparation_status != STATUS_RENDERED {
             return self.preparation_status;
         }
+        if frame_count == 0 {
+            return STATUS_RENDERED;
+        }
+        if self.terminal {
+            return STATUS_TERMINAL;
+        }
         if frame_count > self.left.len() {
+            self.terminal = true;
             return STATUS_CAPACITY_EXCEEDED;
         }
         let Some(kernel) = &mut self.kernel else {
+            self.terminal = true;
             return STATUS_TERMINAL;
         };
 
@@ -91,6 +101,12 @@ impl WorkletKernel {
                 right: &mut self.right[..frame_count],
             }),
         };
+        if matches!(
+            status,
+            RenderStatus::CapacityExceeded | RenderStatus::Terminal
+        ) {
+            self.terminal = true;
+        }
         render_status_code(status)
     }
 

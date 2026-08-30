@@ -1,3 +1,4 @@
+import { PreparationLifecycle } from "./preparation-lifecycle";
 import {
   InitializationFailure,
   InitializationGate,
@@ -43,6 +44,7 @@ export class PreparedProof {
   #closed = false;
   #runtimeFailure = 0;
   #snapshotResolve: ((snapshot: RenderSnapshot) => void) | undefined;
+  #snapshotReject: ((code: number) => void) | undefined;
 
   constructor(
     context: AudioContext,
@@ -62,9 +64,7 @@ export class PreparedProof {
 
   acceptRuntimeMessage(value: unknown): void {
     if (isSnapshotMessage(value)) {
-      const resolve = this.#snapshotResolve;
-      this.#snapshotResolve = undefined;
-      resolve?.(value.snapshot);
+      this.#snapshotResolve?.(value.snapshot);
       return;
     }
     const result = this.#gate.accept(value);
@@ -74,15 +74,18 @@ export class PreparedProof {
   }
 
   failRuntime(code: number): void {
-    this.#runtimeFailure = code;
+    if (this.#runtimeFailure === 0) {
+      this.#runtimeFailure = code;
+    }
+    this.#snapshotReject?.(this.#runtimeFailure);
     this.#node.disconnect();
-    void this.#context.suspend();
+    if (!this.#closed) {
+      void this.#context.suspend();
+    }
   }
 
   async activate(): Promise<BrowserProofResult> {
-    if (this.#closed || this.#runtimeFailure !== 0) {
-      throw new InitializationError(this.#runtimeFailure || InitializationFailure.ContextState);
-    }
+    this.#throwIfUnavailable();
     if (this.#activated || this.#gate.result.type !== "ready") {
       throw new InitializationError(InitializationFailure.ContextState);
     }
@@ -92,11 +95,13 @@ export class PreparedProof {
     const mute = new GainNode(this.#context, { gain: 0 });
     this.#node.connect(analyser).connect(mute).connect(this.#context.destination);
     await this.#context.resume();
+    this.#throwIfUnavailable();
     if (this.#context.state !== "running") {
       throw new InitializationError(InitializationFailure.ContextState);
     }
 
     await delay(300);
+    this.#throwIfUnavailable();
     const samples = new Float32Array(analyser.fftSize);
     analyser.getFloatTimeDomainData(samples);
     let observedSignal = false;
@@ -107,8 +112,11 @@ export class PreparedProof {
       }
     }
     const snapshot = await this.#requestSnapshot();
+    this.#throwIfUnavailable();
     if (snapshot.failureCode !== 0 || snapshot.processCount === 0) {
-      throw new InitializationError(snapshot.failureCode || InitializationFailure.ContextState);
+      throw new InitializationError(
+        snapshot.failureCode || InitializationFailure.ContextState,
+      );
     }
 
     const contextWithQuantum = this.#context as AudioContext & {
@@ -129,19 +137,37 @@ export class PreparedProof {
       return;
     }
     this.#closed = true;
+    this.#snapshotReject?.(InitializationFailure.ContextState);
     this.#node.disconnect();
     await this.#context.close();
   }
 
+  #throwIfUnavailable(): void {
+    if (this.#runtimeFailure !== 0 || this.#closed) {
+      throw new InitializationError(
+        this.#runtimeFailure || InitializationFailure.ContextState,
+      );
+    }
+  }
+
   #requestSnapshot(): Promise<RenderSnapshot> {
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
+      const clearPendingSnapshot = () => {
+        clearTimeout(timeout);
         this.#snapshotResolve = undefined;
+        this.#snapshotReject = undefined;
+      };
+      const timeout = setTimeout(() => {
+        clearPendingSnapshot();
         reject(new InitializationError(InitializationFailure.Timeout));
       }, 1_000);
       this.#snapshotResolve = (snapshot) => {
-        clearTimeout(timeout);
+        clearPendingSnapshot();
         resolve(snapshot);
+      };
+      this.#snapshotReject = (code) => {
+        clearPendingSnapshot();
+        reject(new InitializationError(code));
       };
       this.#node.port.postMessage({ type: "snapshot" });
     });
@@ -254,29 +280,42 @@ const activateButton = document.querySelector<HTMLButtonElement>("#activate");
 const failureButton = document.querySelector<HTMLButtonElement>("#failure");
 const closeButton = document.querySelector<HTMLButtonElement>("#close");
 const output = document.querySelector<HTMLElement>("#result");
-let activeProof: PreparedProof | undefined;
+const proofLifecycle = new PreparationLifecycle<PreparedProof>();
 
 prepareButton?.addEventListener("click", async () => {
-  outputText("preparing");
-  try {
-    activeProof = await prepareProof({
+  const preparation = proofLifecycle.tryReplace(() =>
+    prepareProof({
       channelCount: 2,
       frequency: 997,
       gain: 0.125,
       maximumFrames: 1_024,
-    });
-    outputText(JSON.stringify({ state: "ready", ...activeProof.ready }, null, 2));
+    }),
+  );
+  if (preparation === undefined) {
+    return;
+  }
+
+  setPreparationControlsDisabled(true);
+  if (activateButton !== null) {
+    activateButton.disabled = true;
+  }
+  outputText("preparing");
+  try {
+    const prepared = await preparation;
+    outputText(JSON.stringify({ state: "ready", ...prepared.ready }, null, 2));
     if (activateButton !== null) {
       activateButton.disabled = false;
     }
   } catch (error) {
     outputText(errorText(error));
+  } finally {
+    setPreparationControlsDisabled(false);
   }
 });
 
 activateButton?.addEventListener("click", async () => {
   try {
-    const result = await activeProof?.activate();
+    const result = await proofLifecycle.active?.activate();
     outputText(JSON.stringify({ state: "active", ...result }, null, 2));
   } catch (error) {
     outputText(errorText(error));
@@ -284,28 +323,52 @@ activateButton?.addEventListener("click", async () => {
 });
 
 failureButton?.addEventListener("click", async () => {
-  try {
-    await prepareProof({
+  const preparation = proofLifecycle.tryExclusive(async () => {
+    const unexpectedProof = await prepareProof({
       channelCount: 1,
       frequency: 440,
       gain: 0.125,
       injectPreparationFailure: true,
       maximumFrames: 1_024,
     });
+    await unexpectedProof.close();
+  });
+  if (preparation === undefined) {
+    return;
+  }
+
+  setPreparationControlsDisabled(true);
+  try {
+    await preparation;
     outputText("unexpected-ready");
   } catch (error) {
-    outputText(JSON.stringify({ state: "failed", error: errorText(error) }, null, 2));
+    outputText(
+      JSON.stringify({ state: "failed", error: errorText(error) }, null, 2),
+    );
+  } finally {
+    setPreparationControlsDisabled(false);
   }
 });
 
 closeButton?.addEventListener("click", async () => {
-  await activeProof?.close();
-  activeProof = undefined;
+  await proofLifecycle.closeActive();
   if (activateButton !== null) {
     activateButton.disabled = true;
   }
   outputText("closed");
 });
+
+function setPreparationControlsDisabled(disabled: boolean): void {
+  if (prepareButton !== null) {
+    prepareButton.disabled = disabled;
+  }
+  if (failureButton !== null) {
+    failureButton.disabled = disabled;
+  }
+  if (closeButton !== null) {
+    closeButton.disabled = disabled;
+  }
+}
 
 function outputText(text: string): void {
   if (output !== null) {
