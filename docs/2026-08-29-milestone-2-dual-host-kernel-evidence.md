@@ -1,35 +1,41 @@
 # Milestone 2 dual-host kernel evidence
 
 Date: 2026-08-29
-Status: Checkpoint A implemented; required browser matrix and Checkpoint B remain open
+Status: Checkpoint A implemented; browser engine observations and Checkpoint B remain open
 Issue: [#2](https://github.com/kalynbeach/kkb-audio/issues/2)
 
 ## Claim boundary
 
 This document records evidence for the private Milestone 1 kernel in an unshared, worklet-local Wasm
-instance. It does not mark the `AudioWorklet` checkpoint complete. The current stable browser matrix
-has not run, Safari on a physical iOS device has not been recorded, and CPAL work has not begun.
+instance. It does not mark the `AudioWorklet` checkpoint complete. The bounded browser engine
+observations have not run, Safari on a physical iOS device has not been recorded, and CPAL work has
+not begun.
 
 The proof does not cover PCM transport, shared memory, Wasm threads, sustained application load,
-a processor interface, a compiled plan, or broad browser support.
+a processor interface, a compiled plan, minimum browser versions, branded-browser support, or broad
+browser compatibility.
 
-## Browser minimums recorded at implementation start
+## Planned browser engine observations
 
-The issue requires the current stable releases on 2026-08-29 to become the minimum versions for this
-proof:
+Checkpoint A uses four tested configurations to catch browser-engine and iOS lifecycle differences
+without turning this architecture proof into browser support certification:
 
-| Host | Required minimum | Source | Checkpoint A result |
-| --- | --- | --- | --- |
-| Chrome on macOS | 152.0.7977.65 | [Chrome Releases, 2026-08-25](https://chromereleases.googleblog.com/2026/08/stable-channel-update-for-desktop_0256176589.html) | Not run |
-| Firefox on macOS | 154.0.1 | [Mozilla product details](https://product-details.mozilla.org/1.0/firefox_versions.json) | Not run |
-| Safari on macOS | 26.6.1 | [Apple Safari 26.6.1](https://support.apple.com/en-us/148286) | Not run |
-| Safari on physical iOS | iOS 26.6.1 / Safari | [Apple iOS 26.6.1](https://support.apple.com/en-us/148282) | Device model and OS build not yet recorded; not run |
+- Helium on macOS for Chromium
+- Zen on macOS for Gecko
+- Safari on macOS for desktop WebKit
+- Safari on a physical iOS device for mobile WebKit and iOS lifecycle behavior
 
-Older browsers, Android, other iOS browser apps, Windows, and Linux are outside Milestone 2.
+Record the versions actually tested. These results apply only to those configurations. Helium does
+not establish Chrome support, and Zen does not establish Firefox support. The existing Chrome run is
+supplementary evidence rather than a required row.
+
+Current local candidates are Helium 0.15.7.1, which reports Chromium 151.0.7922.173; Zen 1.21.16b,
+whose release tracks Firefox 154.0.1; and Safari 26.5.2. The physical iOS device and its tested version
+remain to be chosen. No browser or operating-system update is required by this checkpoint.
 
 ## Toolchain and local host
 
-Recorded before implementation:
+Recorded for the built artifact and original local implementation:
 
 - Rust `rustc 1.98.0 (88d9e12ae 2026-08-18)`
 - Cargo `1.98.0 (797e8a9bc 2026-08-05)`
@@ -38,11 +44,11 @@ Recorded before implementation:
 - TypeScript `7.0.2`, executed through Bun
 - macOS 26.5.2 build 25F84
 - MacBook Pro `MacBookPro18,2`, Apple M1 Max, 64 GB memory
-- installed Chrome 151.0.7922.175
-- installed Firefox 95.0.2
+- installed Helium 0.15.7.1, Chromium 151.0.7922.173
+- installed Zen 1.21.16b, based on Firefox 154.0.1
 - installed Safari 26.5.2
+- supplementary installed Chrome 151.0.7922.175
 
-The installed browsers are below the required matrix and do not earn a minimum-version support claim.
 No browser or operating-system application was updated during implementation.
 
 ## Implemented Checkpoint A behavior
@@ -122,20 +128,21 @@ preserves a zero-frame no-op before later nonzero calls report the terminal stat
 fourteen Rust tests remain the offline reference and pass in debug and optimized builds, including the
 warmed native allocator probe.
 
-## Local browser observation
+## Supplementary Chrome observation
 
-A short muted proof ran through `agent-browser` against the installed Google Chrome 151 build. The
-browser identified itself as HeadlessChrome 151.0.0.0, with Google Chrome and Chromium major version
-151. The page was served from `http://127.0.0.1:4173` without cross-origin isolation;
+Short muted proof runs used `agent-browser` against the installed Google Chrome 151 build. The browser
+identified itself as HeadlessChrome 151.0.0.0, with Google Chrome and Chromium major version 151. The
+page was served from `http://127.0.0.1:4173` without cross-origin isolation;
 `crossOriginIsolated` was false and `SharedArrayBuffer` was undefined.
 
-Observed failure path:
+The initial run observed deterministic injected preparation failure:
 
 ```json
 {"state":"failed","code":41}
 ```
 
-Observed preparation and active rendering:
+After the lifecycle and diagnostic hardening in commit `2da3de9`, the proof rejected a concurrent
+Prepare action, closed the active proof before sequential replacement, and rendered successfully:
 
 ```json
 {
@@ -154,7 +161,7 @@ Observed preparation and active rendering:
     "failureCode": 0,
     "lastFrameCount": 128,
     "memoryBytes": 16777216,
-    "processCount": 2
+    "processCount": 30
   }
 }
 ```
@@ -162,11 +169,11 @@ Observed preparation and active rendering:
 Chrome 151 did not expose `AudioContext.renderQuantumSize`, so the processor snapshot supplied the
 actual 128-frame channel-array length. The test harness does not assume that value. The analyser saw
 nonzero stereo oscillator output before a zero-gain sink muted device output. No browser console
-messages were recorded. The server, context, and isolated browser session were closed after the run.
+errors were recorded. The server, context, and isolated browser session were closed after each run.
 
-This is useful implementation history only. It predates the lifecycle and diagnostic hardening pass,
-Chrome 151 is below the required minimum, and the run was too short to support a deadline or
-sustained-load claim. The required browser matrix must establish evidence for the hardened artifact.
+This is supplementary implementation evidence for one Chrome/Chromium configuration, not a minimum
+version or branded-browser support claim. The run was too short to support a deadline or
+sustained-load claim.
 
 ## Validation commands
 
@@ -188,14 +195,15 @@ bundle.
 
 ## Evidence still required before Checkpoint A closes
 
-- Run the ready, injected-failure, active-render, actual-quantum, and stable-memory proof on Chrome
-  152.0.7977.65 on macOS.
-- Run the same proof on Firefox 154.0.1 on macOS.
-- Run the same proof on Safari 26.6.1 on macOS.
-- Record a physical iOS device model and build, then run the same proof on iOS 26.6.1 Safari.
-- Record exact sample rate, channel layout, load conditions, and browser console result for each row.
+- Run the ready, injected-failure, active-render, actual-quantum, and stable-memory proof in Helium on
+  macOS and record the observed Helium, Chromium, and macOS versions.
+- Run the same proof in Zen on macOS and record the observed Zen, Firefox-base, and macOS versions.
+- Run the same proof in Safari on macOS and record the observed Safari and macOS versions.
+- Record a physical iOS device model and tested iOS version, then run the same proof in Safari.
+- Record sample rate, channel layout, bounded load conditions, and browser console result for each
+  configuration.
 - Characterize JavaScript-engine and host allocation separately if a stronger allocation claim is
   needed. Current evidence only rules out explicit callback-local collection or view construction in
   project code and retains the Milestone 1 native Rust allocator probe.
 
-Checkpoint B must not begin until the project accepts this browser checkpoint evidence.
+Checkpoint B must not begin until the project accepts these bounded browser engine observations.

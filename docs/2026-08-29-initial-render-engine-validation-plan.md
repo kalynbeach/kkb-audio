@@ -36,8 +36,11 @@ production networking do not block these milestones.
   behavior require separate evidence.
 - Expected invalid input and capacity conditions return fixed statuses. Panic containment is not an
   acceptance mechanism.
-- Each host and browser claim names the tested toolchain, dependency version, browser or OS version,
-  hardware, sample rate, channel layout, and load conditions.
+- Record the pinned toolchain and dependency versions once for each built artifact. Each browser
+  observation names the browser and OS versions, relevant platform or physical device, sample rate,
+  channel layout, and bounded load conditions.
+- Browser observations validate only the tested configurations. They do not establish minimum-version
+  or branded-browser support.
 - Public interfaces remain provisional until more than one product or adapter earns them.
 
 ## Milestone 1: offline prepared kernel
@@ -127,8 +130,12 @@ without host branches entering its processing path?
 1. non-threaded Wasm in an `AudioWorklet`
 2. macOS CPAL
 
-Browser support choices enter here, not before Milestone 1. Pin the minimum Chrome, Firefox, Safari,
-and iOS/Safari matrix before closing this milestone; explicitly exclude unsupported hosts.
+Browser engine observations enter here, not before Milestone 1. Before closing this milestone, run
+the proof in Helium on macOS for Chromium, Zen on macOS for Gecko, Safari on macOS for desktop
+WebKit, and Safari on a physical iOS device for mobile WebKit and iOS lifecycle behavior. Record the
+versions actually tested as observations rather than minimums. A fork establishes evidence for its
+engine family and configuration, not support for the corresponding upstream branded browser.
+Supplementary browser results are welcome but do not add required rows.
 
 ### Browser scope
 
@@ -159,7 +166,7 @@ material for a later deliberate shared-memory build, not the design for this mil
 - decoding or worker PCM transport
 - shared Wasm memory or Wasm threads
 - dynamic instance replacement
-- automation, observations, or sustained application-load performance
+- automation, render observation operators, or sustained application-load performance
 
 ### Required evidence
 
