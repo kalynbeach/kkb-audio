@@ -2,18 +2,20 @@
 
 Date: 2026-08-29
 Browser observations: 2026-08-30
-Status: Checkpoint A complete; Checkpoint B remains open
+Native observation: 2026-08-31
+Status: Milestone 2 complete
 Issue: [#2](https://github.com/kalynbeach/kkb-audio/issues/2)
 
 ## Claim boundary
 
 This document records evidence for the private Milestone 1 kernel in an unshared, worklet-local Wasm
-instance. Checkpoint A is complete for the recorded Helium, Zen, macOS Safari, and physical iOS Safari
-configurations. CPAL work has not begun.
+instance and through a private macOS CPAL adapter. Checkpoint A is complete for the recorded Helium,
+Zen, macOS Safari, and physical iOS Safari configurations. Checkpoint B is complete for the recorded
+MacBook Pro speakers configuration and five-second native observation.
 
 The proof does not cover PCM transport, shared memory, Wasm threads, sustained application load,
-a processor interface, a compiled plan, minimum browser versions, branded-browser support, or broad
-browser compatibility.
+a processor interface, a compiled plan, minimum browser versions, branded-browser support, broad
+browser compatibility, broad macOS device support, or sustained native deadline behavior.
 
 ## Browser engine observation scope
 
@@ -37,6 +39,7 @@ Recorded for the built artifact and original local implementation:
 - Cargo `1.98.0 (797e8a9bc 2026-08-05)`
 - Bun `1.4.0`
 - `wasm-bindgen` crate and CLI `0.2.127`
+- CPAL `0.18.2`, exact-pinned for macOS
 - TypeScript `7.0.2`, executed through Bun
 - macOS 26.5.2 build 25F84
 - MacBook Pro `MacBookPro18,2`, Apple M1 Max, 64 GB memory
@@ -135,9 +138,12 @@ The Bun tests cover:
 - exclusive proof preparation and close-before-replace lifecycle ownership
 
 Fifteen TypeScript tests pass. A direct Wasm binding check also verifies that an over-capacity call
-preserves a zero-frame no-op before later nonzero calls report the terminal state. The existing
-fourteen Rust tests remain the offline reference and pass in debug and optimized builds, including the
-warmed native allocator probe.
+preserves a zero-frame no-op before later nonzero calls report the terminal state. Nineteen non-ignored
+Rust tests pass in debug and optimized builds. Five CPAL adapter tests cover mono and stereo
+interleaving at actual frame counts of 17 and 257, continued rendering across ten distinct in-capacity
+frame lengths with bounded observation truncation, malformed interleaved lengths, capacity failure,
+host-error latching, unsupported channel counts, and a warmed allocator probe around the complete
+project-owned callback processor. The original fourteen tests remain the offline kernel reference.
 
 ## Required browser engine observations
 
@@ -237,6 +243,57 @@ This is supplementary implementation evidence for one Chrome/Chromium configurat
 version or branded-browser support claim. The run was too short to support a deadline or
 sustained-load claim.
 
+## Implemented Checkpoint B behavior
+
+The macOS-only proof is compiled inside the library test target, so it can call the unchanged private
+`PreparedKernel::prepare` and `PreparedKernel::render(Output)` definitions without making them public
+or duplicating them. CPAL `0.18.2` is exact-pinned only for macOS targets and is absent from the Wasm
+build.
+
+Before stream activation, the proof reads the default output configuration, accepts only semantic mono
+or stereo, dispatches the negotiated PCM sample format, prepares the kernel, allocates and first-writes
+fixed planar storage, and sets a 4,096-frame proof capacity. DSD configurations are rejected before
+activation. The callback derives frame count from the actual interleaved slice and prepared channel
+count. It starts by filling the complete host slice with the sample format's equilibrium value, renders
+to prepared planar storage, and then converts and interleaves only after a successful render.
+
+Malformed interleaved lengths, capacity excess, non-rendered kernel status, or host stream errors
+latch a numeric failure and leave positive-zero or format-equilibrium silence. The data callback owns
+the kernel and planar storage directly. It performs no project-code allocation, deallocation, locking,
+I/O, logging, or formatting. The CPAL error callback only stores a fixed atomic failure flag.
+Fixed-capacity single-writer counters publish callback count, minimum, maximum, and up to eight
+distinct frame lengths through pre-created atomics. More distinct in-capacity lengths set a bounded
+truncation flag without changing rendering or audio state.
+
+The processing deadline counter compares project callback-processor duration with the current
+`frames / sample_rate` quantum budget. It does not measure CPAL, CoreAudio, device, scheduling, or
+end-to-end deadline behavior. The warmed allocator probe covers valid stereo mapping, malformed
+length, capacity failure, and latched host failure and observed zero allocator, zeroed-allocator,
+reallocator, and deallocator calls. This is bounded evidence for project-owned Rust code only.
+
+## macOS CPAL observation
+
+One optimized five-second run used:
+
+- macOS 26.6.2 build 25G83
+- MacBook Pro `MacBookPro18,2`, Apple M1 Max, 64 GB memory
+- default output device `MacBook Pro Speakers`
+- 48 kHz, semantic stereo, negotiated `f32` samples
+- CPAL-reported supported buffer range 15 through 4,096 frames
+- prepared capacity 4,096 frames
+- 440 Hz oscillator at gain 0.02
+
+The run reported:
+
+```json
+{"callback_count":469,"failure_code":0,"host_failed":false,"maximum_frames":512,"minimum_frames":512,"observed_frame_sizes":[512],"observed_frame_sizes_truncated":false,"processing_deadline_overruns":0}
+```
+
+The callback accepted the observed 512-frame length without a fixed-block assumption. No host or
+adapter failure occurred, and project callback processing exceeded none of the 10.67 ms quantum
+budgets. This short, low-gain observation does not establish sustained-load performance, whole-host
+allocation behavior, general CoreAudio behavior, or support for other devices and configurations.
+
 ## Validation commands
 
 The following checks pass on the recorded host:
@@ -248,12 +305,14 @@ cargo test --release --all-targets --all-features
 cargo clippy --all-targets --all-features -- -D warnings
 cargo clippy --target wasm32-unknown-unknown --release -- -D warnings
 bun run check
+cargo test --release --lib cpal_host::tests::observe_default_macos_output_for_five_seconds -- --ignored --exact --nocapture
 ```
 
 The Wasm-target strict Clippy command completed successfully with no warnings. `bun run check` builds
 the Wasm and JavaScript artifacts, type-checks the TypeScript, runs the fifteen Bun tests, verifies
 direct binding zero-frame and terminal behavior and fixed unshared Wasm memory, and audits the worklet
-bundle.
+bundle. The ignored CPAL observation test is separate because it opens the default output device and
+emits a bounded tone.
 
 ## Checkpoint A conclusion
 
@@ -267,5 +326,14 @@ and host allocation separately if a stronger allocation claim is needed. Current
 out explicit callback-local collection or view construction in project code and retains the Milestone
 1 native Rust allocator probe.
 
-Checkpoint B may now begin. The macOS CPAL adapter and native observation remain required before
-Milestone 2 closes.
+## Checkpoint B conclusion
+
+The project accepts Checkpoint B for the exact MacBook Pro speakers configuration and five-second
+conditions recorded above. The private Milestone 1 kernel seam rendered through CPAL using the actual
+interleaved callback length, while host negotiation, planar storage, sample conversion, failure
+handling, and observations remained in the private adapter.
+
+Milestone 2 is complete. The evidence establishes the kernel seam across offline, AudioWorklet, and
+CPAL execution under the recorded conditions. Milestone 3 may now define and test the host-neutral
+prepared PCM input seam. No compiled-operation portability decision is made here; that gate remains
+in Milestone 4.

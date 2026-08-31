@@ -163,6 +163,9 @@ mod prepared_kernel {
     }
 }
 
+#[cfg(all(test, target_os = "macos"))]
+mod cpal_host;
+
 #[cfg(target_arch = "wasm32")]
 mod worklet_wasm;
 
@@ -184,14 +187,14 @@ mod tests {
     struct CountingAllocator;
 
     thread_local! {
-        static MEASURE_ALLOCATIONS: Cell<bool> = const { Cell::new(false) };
+        pub(crate) static MEASURE_ALLOCATIONS: Cell<bool> = const { Cell::new(false) };
     }
 
     static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
     static ZEROED_ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
     static REALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
     static DEALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
-    static ALLOCATOR_PROBE_LOCK: Mutex<()> = Mutex::new(());
+    pub(crate) static ALLOCATOR_PROBE_LOCK: Mutex<()> = Mutex::new(());
 
     fn measurement_is_active() -> bool {
         MEASURE_ALLOCATIONS.try_with(Cell::get).unwrap_or_default()
@@ -627,14 +630,14 @@ mod tests {
         );
     }
 
-    fn reset_allocator_counts() {
+    pub(crate) fn reset_allocator_counts() {
         ALLOCATIONS.store(0, Ordering::Relaxed);
         ZEROED_ALLOCATIONS.store(0, Ordering::Relaxed);
         REALLOCATIONS.store(0, Ordering::Relaxed);
         DEALLOCATIONS.store(0, Ordering::Relaxed);
     }
 
-    fn allocator_counts() -> [usize; 4] {
+    pub(crate) fn allocator_counts() -> [usize; 4] {
         [
             ALLOCATIONS.load(Ordering::Relaxed),
             ZEROED_ALLOCATIONS.load(Ordering::Relaxed),
