@@ -12,7 +12,7 @@ mono sine oscillator -> linked scalar gain -> mono or semantic L/R planar output
 
 Its tests establish frame and phase semantics, partition-independent output, bounded capacity behavior, checked clock handling, and no observed allocator calls in the exercised render path.
 
-Milestone 2 Checkpoint A now has an unshared, fixed-memory Wasm `AudioWorklet` proof around the same private kernel seam. The bounded Helium, Zen, macOS Safari, and physical iOS Safari engine observations have not run, so the checkpoint remains open. These observations will record tested configurations without declaring minimum-version or branded-browser support. CPAL work has not begun. See the [Checkpoint A evidence](docs/2026-08-29-milestone-2-dual-host-kernel-evidence.md) for exact claims and limitations. There is no public engine API or playback application yet.
+Milestone 2 Checkpoint A is complete for the recorded Helium, Zen, macOS Safari, and physical iOS Safari configurations. The unshared, fixed-memory Wasm `AudioWorklet` proof runs around the same private kernel seam in each bounded observation. These results do not declare minimum-version or branded-browser support. CPAL Checkpoint B has not begun. See the [Checkpoint A evidence](docs/2026-08-29-milestone-2-dual-host-kernel-evidence.md) for exact configurations, claims, and limitations. There is no public engine API or playback application yet.
 
 See the canonical [system architecture](docs/2026-08-28-kkb-audio-system-architecture.md) and [initial validation plan](docs/2026-08-29-initial-render-engine-validation-plan.md).
 
