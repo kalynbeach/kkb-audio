@@ -190,26 +190,26 @@ Milestone 4.
 
 ### Question
 
-Can native and browser workers feed known, predecoded PCM to the render callback without unbounded
-work, callback-side ownership release, or uncontrolled transport growth?
+Can native and browser workers supply prepared PCM through one private, host-neutral seam while the
+transport remains bounded and the render callback does not wait, grow transport state, or release
+final ownership?
 
 ### Entry decisions
 
-Before work begins, define one host-neutral prepared PCM input seam. It includes:
+Before work begins, define one private prepared PCM input seam with:
 
-- semantic channel layout and sample rate
-- slot capacity and valid frame count
-- source-frame start and sequence
-- source identity and epoch
-- discontinuity and end-of-stream state
-- fixed ownership, credit, backpressure, starvation, and retirement rules
+- stream-level semantic channel layout, sample rate, and source identity
+- block-level slot ID, epoch, source-frame start, and valid frame count
+- block-level discontinuity and end-of-stream state
+- fixed-capacity planar `f32` storage
+- fixed ownership, backpressure, starvation, and off-callback retirement rules
 
 Native and browser transport mechanisms may differ. Transport terminates at this seam before a render
 operation reads the prepared PCM view.
 
 ### Scope
 
-Use generated or checked-in, license-safe WAV PCM truth without adding a production decoder.
+Use deterministic generated PCM without adding a production decoder.
 
 Native path:
 
@@ -218,57 +218,53 @@ Native path:
 Browser path:
 
 - main-thread bootstrap of a direct `MessageChannel` between a dedicated worker and the worklet
-- a fixed pool of recycled transferable `ArrayBuffer` slots before requiring shared memory
+- a fixed pool of recycled transferable `ArrayBuffer` slots
 - explicit slot IDs and ownership transitions
 - no waiting in `process()`
 
-Both paths provide:
+Both paths:
 
-- bounded admission and pool exhaustion behavior
-- epoch-based stale-data rejection
-- zero-fill starvation and a bounded counter
-- explicit off-callback retirement
-- one bounded level observation returned at a controlled cadence
-- bounded command and observation admission, coalescing, and loss reporting
+- adapt prepared block boundaries to actual callback frame counts
+- bound admission and pool exhaustion behavior
+- reject stale epochs
+- zero-fill starvation and record a bounded counter
+- return or retire ownership outside the callback
+
+### Required evidence
+
+- deterministic PCM output across varied callback partitions
+- fixed pool capacity without transport growth
+- valid ownership transitions and rejection of invalid or duplicate transitions
+- stale-epoch rejection
+- deterministic starvation and pool-exhaustion behavior
+- a callback-side Rust allocation probe
+- no callback-local collection or typed-array-view construction in project worklet code
+- one brief recorded CPAL run and one brief recorded browser run, limited to their exact configurations
+- the existing Rust and Bun validation commands remain green
+
+The recorded host runs prove only that the bounded paths execute in those configurations. They do not
+require a browser matrix, a fixed duration, representative application load, or sustained-performance
+claim.
 
 ### Explicit non-goals
 
 - a production decoder
 - HTTP ranges or grants
+- sample-rate conversion
 - seeking beyond stale-epoch rejection
+- observations or general command infrastructure
 - graph compilation or PCM-input plan integration
 - automation or looping
+- `SharedArrayBuffer` or Wasm threads
+- sustained-load certification or a browser compatibility matrix
+- production host-support claims
 
-### Sustained evidence gate
+### Later transport evidence
 
-Run at least 48 kHz stereo for 30 minutes on the named native and browser matrix. Pin hardware,
-browser and OS versions, power mode, foreground state, pool size, lead time, warmup, and representative
-application load.
-
-Record:
-
-- startup and steady-state transport underruns
-- pool and queue high-water marks
-- duplicate, late, and invalid ownership transitions
-- Wasm memory growth and buffer detachment behavior
-- callback-side Rust and selected JavaScript/Wasm allocation evidence
-- render-time distribution, maximum, and raw histogram
-- command, observation, and PCM saturation behavior
-- shutdown, worker restart, context recreation, and epoch flush behavior
-
-Any percentile threshold uses the actual render quantum budget, not an assumed 128 frames. A clean run
-is empirical evidence for the pinned environment, not a standards guarantee.
-
-### Transport decision
-
-- If recycled transferable buffers pass the sustained matrix, retain the non-isolated deployment and
-  record its measured bounds.
-- If they fail and cross-origin isolation is acceptable, require `SharedArrayBuffer`, fixed
-  rings/mailboxes, Atomics, and an audit of every resource and authentication or embedding flow.
-- If they fail and cross-origin isolation is unacceptable, narrow the browser shared center to DSP,
-  clocks, schemas, and conformance fixtures rather than forcing the complete Rust executor.
-
-This decision closes Milestone 3. It is not a Milestone 1 prerequisite.
+Milestone 3 does not select the final production browser transport or require cross-origin isolation.
+Representative sustained tests belong to a later playback path with realistic decoding, application
+load, and lifecycle behavior. If that evidence shows recycled transferable buffers are inadequate,
+then evaluate `SharedArrayBuffer`, a narrower browser shared center, or another measured alternative.
 
 ## Milestone 4: minimal compiled plan
 

@@ -1270,15 +1270,16 @@ shared-memory deployment.
 
 The main thread bootstraps a direct `MessageChannel` between the media worker and worklet. The first
 PCM transport experiment uses a fixed pool of recycled transferable buffers with explicit ownership,
-credit, epoch, backpressure, starvation, and retirement states. Message delivery and garbage
-collection have no standards-level deadline guarantee, so sustained tests decide whether this is
-viable.
+epoch, backpressure, starvation, and retirement states. Its initial gate establishes bounded
+correctness and lifecycle behavior, not sustained production viability. Representative sustained
+tests wait for a playback path with realistic decoding, application load, and lifecycle behavior.
 
-`SharedArrayBuffer` and threads are a measured fallback, not a prerequisite. They require secure
-cross-origin isolation and affect every embedded resource, authentication flow, and deployment
-header. If transferable transport fails and cross-origin isolation is unacceptable, the shared center
-narrows to portable DSP, clocks, schemas, and conformance fixtures rather than forcing the complete
-Rust executor into the browser.
+`SharedArrayBuffer` and threads are a measured fallback, not a prerequisite or a decision required by
+the initial transport proof. They require secure cross-origin isolation and affect every embedded
+resource, authentication flow, and deployment header. If later playback evidence shows transferable
+transport is inadequate, evaluate shared memory or narrow the browser shared center to portable DSP,
+clocks, schemas, and conformance fixtures rather than forcing the complete Rust executor into the
+browser.
 
 ### Native execution
 
