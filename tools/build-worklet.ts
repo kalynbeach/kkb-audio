@@ -43,6 +43,7 @@ run([
 removeWorkletUnsafeErrorFormatting(join(generatedDirectory, "kkb_audio.js"));
 
 await build("web/src/worklet-processor.ts");
+await build("web/src/pcm-worker.ts");
 await build("web/src/main.ts");
 copyFileSync("web/proof.html", join(outputDirectory, "index.html"));
 copyFileSync(

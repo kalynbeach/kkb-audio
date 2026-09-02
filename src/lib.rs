@@ -163,6 +163,9 @@ mod prepared_kernel {
     }
 }
 
+#[allow(dead_code)]
+mod prepared_pcm;
+
 #[cfg(all(test, target_os = "macos"))]
 mod cpal_host;
 

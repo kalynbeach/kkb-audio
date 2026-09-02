@@ -11,6 +11,7 @@ const ready: ReadyMessage = {
   memoryPages: 256,
   maximumFrames: 1_024,
   sampleRate: 48_000,
+  slotCount: 4,
 };
 
 describe("InitializationGate", () => {

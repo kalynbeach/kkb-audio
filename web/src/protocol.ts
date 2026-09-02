@@ -12,6 +12,7 @@ export type ReadyMessage = {
   memoryPages: number;
   maximumFrames: number;
   sampleRate: number;
+  slotCount: number;
 };
 
 export type FailedMessage = {
@@ -53,6 +54,7 @@ export class InitializationGate {
       isFiniteInteger(value.memoryBytes) &&
       isFiniteInteger(value.memoryPages) &&
       isFiniteInteger(value.maximumFrames) &&
+      isFiniteInteger(value.slotCount) &&
       typeof value.sampleRate === "number" &&
       Number.isFinite(value.sampleRate) &&
       value.sampleRate > 0

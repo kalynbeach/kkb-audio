@@ -1,20 +1,27 @@
-use crate::prepared_kernel::{Output, OutputLayout, PrepareError, PreparedKernel, RenderStatus};
+use crate::prepared_pcm::{
+    BlockMeta, ChannelLayout, OwnedPcmBlock, PcmOutput, PcmRenderStatus, PreparedBlockSource,
+    PreparedPcmInput, StreamSpec,
+};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, Sample, SampleFormat, SizedSample};
+use rtrb::{Consumer, PopError, Producer, PushError, RingBuffer};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 const OBSERVED_FRAME_SIZE_CAPACITY: usize = 8;
 const PROOF_MAXIMUM_FRAMES: usize = 4_096;
-const PROOF_FREQUENCY_HZ: f64 = 440.0;
-const PROOF_GAIN: f32 = 0.02;
 const PROOF_DURATION: Duration = Duration::from_secs(5);
+const PCM_SLOT_COUNT: usize = 4;
+const PCM_SLOT_FRAMES: usize = 1_024;
+const PROOF_SOURCE_ID: u64 = 3;
+const PROOF_EPOCH: u64 = 1;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum AdapterPrepareError {
     Channels,
-    Kernel(PrepareError),
+    Stream,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,6 +48,10 @@ struct SharedObservation {
     maximum_frames: AtomicUsize,
     deadline_overruns: AtomicU64,
     failure_code: AtomicU32,
+    starvation_callbacks: AtomicU64,
+    stale_blocks: AtomicU64,
+    invalid_blocks: AtomicU64,
+    retirement_backpressure: AtomicU64,
     observed_frame_sizes: [AtomicUsize; OBSERVED_FRAME_SIZE_CAPACITY],
     observed_frame_size_count: AtomicUsize,
     observed_frame_sizes_truncated: AtomicBool,
@@ -55,6 +66,10 @@ impl SharedObservation {
             maximum_frames: AtomicUsize::new(0),
             deadline_overruns: AtomicU64::new(0),
             failure_code: AtomicU32::new(FailureCode::None as u32),
+            starvation_callbacks: AtomicU64::new(0),
+            stale_blocks: AtomicU64::new(0),
+            invalid_blocks: AtomicU64::new(0),
+            retirement_backpressure: AtomicU64::new(0),
             observed_frame_sizes: std::array::from_fn(|_| AtomicUsize::new(0)),
             observed_frame_size_count: AtomicUsize::new(0),
             observed_frame_sizes_truncated: AtomicBool::new(false),
@@ -90,6 +105,10 @@ impl SharedObservation {
             deadline_overruns: self.deadline_overruns.load(Ordering::Relaxed),
             failure_code: self.failure_code.load(Ordering::Relaxed),
             host_failed: self.host_failed.load(Ordering::Relaxed),
+            starvation_callbacks: self.starvation_callbacks.load(Ordering::Relaxed),
+            stale_blocks: self.stale_blocks.load(Ordering::Relaxed),
+            invalid_blocks: self.invalid_blocks.load(Ordering::Relaxed),
+            retirement_backpressure: self.retirement_backpressure.load(Ordering::Relaxed),
             observed_frame_sizes,
             observed_frame_sizes_truncated: self
                 .observed_frame_sizes_truncated
@@ -106,13 +125,142 @@ struct ObservationSnapshot {
     deadline_overruns: u64,
     failure_code: u32,
     host_failed: bool,
+    starvation_callbacks: u64,
+    stale_blocks: u64,
+    invalid_blocks: u64,
+    retirement_backpressure: u64,
     observed_frame_sizes: Vec<usize>,
     observed_frame_sizes_truncated: bool,
 }
 
+struct NativeSource {
+    ready: Consumer<OwnedPcmBlock>,
+    retired: Producer<OwnedPcmBlock>,
+}
+
+impl PreparedBlockSource for NativeSource {
+    type Block = OwnedPcmBlock;
+
+    fn pop_ready(&mut self) -> Option<Self::Block> {
+        self.ready.pop().ok()
+    }
+
+    fn retire(&mut self, block: Self::Block) -> Result<(), Self::Block> {
+        self.retired
+            .push(block)
+            .map_err(|PushError::Full(block)| block)
+    }
+
+    fn scan_limit(&self) -> usize {
+        PCM_SLOT_COUNT
+    }
+}
+
+struct WorkerControl {
+    stop: Arc<AtomicBool>,
+    ready: Arc<AtomicBool>,
+    backpressure: Arc<AtomicU64>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl WorkerControl {
+    fn stop(mut self) {
+        self.shutdown();
+    }
+
+    fn shutdown(&mut self) {
+        self.stop.store(true, Ordering::Release);
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
+impl Drop for WorkerControl {
+    fn drop(&mut self) {
+        self.shutdown();
+    }
+}
+
+fn spawn_pcm_worker(layout: ChannelLayout) -> (NativeSource, WorkerControl) {
+    let (mut ready_producer, ready_consumer) = RingBuffer::new(PCM_SLOT_COUNT);
+    let (retired_producer, mut retired_consumer) = RingBuffer::<OwnedPcmBlock>::new(PCM_SLOT_COUNT);
+    let stop = Arc::new(AtomicBool::new(false));
+    let ready = Arc::new(AtomicBool::new(false));
+    let backpressure = Arc::new(AtomicU64::new(0));
+    let worker_stop = Arc::clone(&stop);
+    let worker_ready = Arc::clone(&ready);
+    let worker_backpressure = Arc::clone(&backpressure);
+    let thread = std::thread::spawn(move || {
+        let mut free: [Option<OwnedPcmBlock>; PCM_SLOT_COUNT] = std::array::from_fn(|slot| {
+            Some(OwnedPcmBlock::new(slot as u32, layout, PCM_SLOT_FRAMES))
+        });
+        let mut next_frame = 0_u64;
+        let mut exhausted = false;
+        while !worker_stop.load(Ordering::Acquire) {
+            let mut made_progress = false;
+            for free_slot in &mut free {
+                let Some(mut block) = free_slot.take() else {
+                    continue;
+                };
+                block.meta = BlockMeta {
+                    slot_id: block.meta.slot_id,
+                    epoch: PROOF_EPOCH,
+                    source_frame_start: next_frame,
+                    valid_frames: PCM_SLOT_FRAMES,
+                    discontinuity: next_frame == 0,
+                    end_of_stream: false,
+                };
+                block.fill_deterministic();
+                match ready_producer.push(block) {
+                    Ok(()) => {
+                        next_frame = next_frame.saturating_add(PCM_SLOT_FRAMES as u64);
+                        made_progress = true;
+                    }
+                    Err(PushError::Full(block)) => {
+                        *free_slot = Some(block);
+                    }
+                }
+            }
+            if free.iter().all(Option::is_none) {
+                worker_ready.store(true, Ordering::Release);
+            }
+            match retired_consumer.pop() {
+                Ok(block) => {
+                    let slot_id = block.meta.slot_id as usize;
+                    free[slot_id] = Some(block);
+                    exhausted = false;
+                    made_progress = true;
+                }
+                Err(PopError::Empty) => {
+                    if !exhausted && free.iter().all(Option::is_none) {
+                        worker_backpressure.fetch_add(1, Ordering::Relaxed);
+                        exhausted = true;
+                    }
+                }
+            }
+            if !made_progress {
+                std::thread::yield_now();
+            }
+        }
+    });
+    (
+        NativeSource {
+            ready: ready_consumer,
+            retired: retired_producer,
+        },
+        WorkerControl {
+            stop,
+            ready,
+            backpressure,
+            thread: Some(thread),
+        },
+    )
+}
+
 struct CallbackProcessor {
-    kernel: PreparedKernel,
-    layout: OutputLayout,
+    input: PreparedPcmInput<NativeSource>,
+    layout: ChannelLayout,
     channels: usize,
     sample_rate: u32,
     maximum_frames: usize,
@@ -132,34 +280,36 @@ impl CallbackProcessor {
     fn prepare(
         sample_rate: u32,
         channels: usize,
-        frequency: f64,
-        gain: f32,
         maximum_frames: usize,
+        source: NativeSource,
         shared: Arc<SharedObservation>,
     ) -> Result<Self, AdapterPrepareError> {
         let layout = match channels {
-            1 => OutputLayout::Mono,
-            2 => OutputLayout::Stereo,
+            1 => ChannelLayout::Mono,
+            2 => ChannelLayout::Stereo,
             _ => return Err(AdapterPrepareError::Channels),
         };
-        let kernel = PreparedKernel::prepare(
-            layout,
-            f64::from(sample_rate),
-            frequency,
-            gain,
+        let input = PreparedPcmInput::new(
+            StreamSpec {
+                layout,
+                sample_rate,
+                source_id: PROOF_SOURCE_ID,
+            },
+            PROOF_EPOCH,
             maximum_frames,
+            source,
         )
-        .map_err(AdapterPrepareError::Kernel)?;
+        .ok_or(AdapterPrepareError::Stream)?;
 
         // Allocation and first writes happen before the processor enters a callback.
         let left = vec![0.0; maximum_frames].into_boxed_slice();
         let right = match layout {
-            OutputLayout::Mono => Box::default(),
-            OutputLayout::Stereo => vec![0.0; maximum_frames].into_boxed_slice(),
+            ChannelLayout::Mono => Box::default(),
+            ChannelLayout::Stereo => vec![0.0; maximum_frames].into_boxed_slice(),
         };
 
         Ok(Self {
-            kernel,
+            input,
             layout,
             channels,
             sample_rate,
@@ -205,34 +355,34 @@ impl CallbackProcessor {
         self.record_frame_count(frame_count);
 
         let render_status = match self.layout {
-            OutputLayout::Mono => {
+            ChannelLayout::Mono => {
                 let Some(left) = self.left.get_mut(..frame_count) else {
                     return self.finish_silent(FailureCode::CapacityExceeded, frame_count, started);
                 };
-                self.kernel.render(Output::Mono(left))
+                self.input.render(PcmOutput::Mono(left))
             }
-            OutputLayout::Stereo => {
+            ChannelLayout::Stereo => {
                 let Some(left) = self.left.get_mut(..frame_count) else {
                     return self.finish_silent(FailureCode::CapacityExceeded, frame_count, started);
                 };
                 let Some(right) = self.right.get_mut(..frame_count) else {
                     return self.finish_silent(FailureCode::CapacityExceeded, frame_count, started);
                 };
-                self.kernel.render(Output::Stereo { left, right })
+                self.input.render(PcmOutput::Stereo { left, right })
             }
         };
 
-        if render_status != RenderStatus::Rendered {
+        if render_status != PcmRenderStatus::Rendered {
             return self.finish_silent(FailureCode::Render, frame_count, started);
         }
 
         match self.layout {
-            OutputLayout::Mono => {
+            ChannelLayout::Mono => {
                 for (destination, source) in output.iter_mut().zip(self.left.iter().copied()) {
                     *destination = T::from_sample(source);
                 }
             }
-            OutputLayout::Stereo => {
+            ChannelLayout::Stereo => {
                 let planar_samples = self
                     .left
                     .iter()
@@ -316,6 +466,19 @@ impl CallbackProcessor {
         self.shared
             .deadline_overruns
             .store(self.deadline_overruns, Ordering::Relaxed);
+        let counters = self.input.counters();
+        self.shared
+            .starvation_callbacks
+            .store(counters.starvation_callbacks, Ordering::Relaxed);
+        self.shared
+            .stale_blocks
+            .store(counters.stale_blocks, Ordering::Relaxed);
+        self.shared
+            .invalid_blocks
+            .store(counters.invalid_blocks, Ordering::Relaxed);
+        self.shared
+            .retirement_backpressure
+            .store(counters.retirement_backpressure, Ordering::Relaxed);
         if failure != FailureCode::None {
             self.shared
                 .failure_code
@@ -379,17 +542,42 @@ mod tests {
     };
     use std::hint::black_box;
 
+    fn test_source(layout: ChannelLayout, block_frames: usize) -> NativeSource {
+        let (mut ready_producer, ready) = RingBuffer::new(PCM_SLOT_COUNT);
+        let (retired, _retired_consumer) = RingBuffer::<OwnedPcmBlock>::new(PCM_SLOT_COUNT);
+        let mut source_frame = 0_u64;
+        for slot_id in 0..PCM_SLOT_COUNT {
+            let mut block = OwnedPcmBlock::new(slot_id as u32, layout, block_frames);
+            block.meta = BlockMeta {
+                slot_id: slot_id as u32,
+                epoch: PROOF_EPOCH,
+                source_frame_start: source_frame,
+                valid_frames: block_frames,
+                discontinuity: slot_id == 0,
+                end_of_stream: slot_id + 1 == PCM_SLOT_COUNT,
+            };
+            block.fill_deterministic();
+            assert!(ready_producer.push(block).is_ok());
+            source_frame += block_frames as u64;
+        }
+        NativeSource { ready, retired }
+    }
+
     fn prepared_processor(
         channels: usize,
         maximum_frames: usize,
     ) -> (CallbackProcessor, Arc<SharedObservation>) {
         let shared = Arc::new(SharedObservation::new());
+        let layout = if channels == 2 {
+            ChannelLayout::Stereo
+        } else {
+            ChannelLayout::Mono
+        };
         let processor = CallbackProcessor::prepare(
             48_000,
             channels,
-            1_000.0,
-            0.5,
             maximum_frames,
+            test_source(layout, maximum_frames.max(1)),
             Arc::clone(&shared),
         )
         .expect("valid test processor");
@@ -398,6 +586,45 @@ mod tests {
 
     fn assert_positive_zero(samples: &[f32]) {
         assert!(samples.iter().all(|sample| sample.to_bits() == 0));
+    }
+
+    #[test]
+    fn native_worker_uses_fixed_slots_and_bounded_backpressure() {
+        let (mut source, worker) = spawn_pcm_worker(ChannelLayout::Stereo);
+        while !worker.ready.load(Ordering::Acquire) {
+            std::thread::yield_now();
+        }
+        while worker.backpressure.load(Ordering::Relaxed) == 0 {
+            std::thread::yield_now();
+        }
+        assert_eq!(worker.backpressure.load(Ordering::Relaxed), 1);
+
+        let mut blocks: [Option<OwnedPcmBlock>; PCM_SLOT_COUNT] = std::array::from_fn(|_| None);
+        let mut addresses = [std::ptr::null(); PCM_SLOT_COUNT];
+        for _ in 0..PCM_SLOT_COUNT {
+            let block = source.pop_ready().expect("one block per fixed slot");
+            let slot_id = block.meta.slot_id as usize;
+            assert!(blocks[slot_id].is_none());
+            addresses[slot_id] = block.left.as_ptr();
+            blocks[slot_id] = Some(block);
+        }
+        assert!(source.pop_ready().is_none());
+        let retired = blocks[0].take().expect("owned slot");
+        let retired_id = retired.meta.slot_id as usize;
+        assert!(source.retire(retired).is_ok());
+        let recycled = loop {
+            if let Some(block) = source.pop_ready() {
+                break block;
+            }
+            std::thread::yield_now();
+        };
+        assert_eq!(recycled.meta.slot_id as usize, retired_id);
+        assert_eq!(recycled.left.as_ptr(), addresses[retired_id]);
+        assert_eq!(
+            recycled.left[0],
+            crate::prepared_pcm::deterministic_sample(recycled.meta.source_frame_start, 0)
+        );
+        worker.stop();
     }
 
     #[test]
@@ -419,7 +646,7 @@ mod tests {
             .iter()
             .chain(second.as_chunks::<2>().0)
         {
-            assert_eq!(frame[0], frame[1]);
+            assert_eq!(frame[0], -frame[1]);
         }
         let snapshot = stereo_shared.snapshot();
         assert_eq!(snapshot.callback_count, 2);
@@ -432,17 +659,13 @@ mod tests {
     #[test]
     fn frame_size_observation_truncation_does_not_interrupt_rendering() {
         let (mut processor, shared) = prepared_processor(2, 64);
-        let mut expected_next_frame = 0_u64;
-
         for frame_count in 1..=10 {
             let mut output = vec![f32::NAN; frame_count * 2];
             assert_eq!(processor.process(&mut output), ProcessStatus::Rendered);
             assert!(output.iter().all(|sample| sample.is_finite()));
             for frame in output.as_chunks::<2>().0 {
-                assert_eq!(frame[0], frame[1]);
+                assert_eq!(frame[0], -frame[1]);
             }
-            expected_next_frame += frame_count as u64;
-            assert_eq!(processor.kernel.next_frame, expected_next_frame);
         }
 
         let snapshot = shared.snapshot();
@@ -547,11 +770,23 @@ mod tests {
     fn preparation_rejects_unsupported_channel_counts() {
         let shared = Arc::new(SharedObservation::new());
         assert!(matches!(
-            CallbackProcessor::prepare(48_000, 0, 440.0, 0.02, 128, Arc::clone(&shared)),
+            CallbackProcessor::prepare(
+                48_000,
+                0,
+                128,
+                test_source(ChannelLayout::Mono, 128),
+                Arc::clone(&shared)
+            ),
             Err(AdapterPrepareError::Channels)
         ));
         assert!(matches!(
-            CallbackProcessor::prepare(48_000, 3, 440.0, 0.02, 128, shared),
+            CallbackProcessor::prepare(
+                48_000,
+                3,
+                128,
+                test_source(ChannelLayout::Mono, 128),
+                shared
+            ),
             Err(AdapterPrepareError::Channels)
         ));
     }
@@ -578,12 +813,20 @@ mod tests {
         let device_name = device.to_string();
         let supported_buffer_size = format!("{:?}", supported.buffer_size());
         let shared = Arc::new(SharedObservation::new());
+        let layout = if channels == 1 {
+            ChannelLayout::Mono
+        } else {
+            ChannelLayout::Stereo
+        };
+        let (source, worker) = spawn_pcm_worker(layout);
+        while !worker.ready.load(Ordering::Acquire) {
+            std::thread::yield_now();
+        }
         let processor = CallbackProcessor::prepare(
             sample_rate,
             channels,
-            PROOF_FREQUENCY_HZ,
-            PROOF_GAIN,
             PROOF_MAXIMUM_FRAMES,
+            source,
             Arc::clone(&shared),
         )
         .map_err(|error| format!("processor preparation failed: {error:?}"))?;
@@ -599,10 +842,16 @@ mod tests {
         std::thread::sleep(PROOF_DURATION);
         stream.pause().map_err(|error| error.to_string())?;
         drop(stream);
+        let worker_backpressure = worker.backpressure.load(Ordering::Relaxed);
+        worker.stop();
 
         let snapshot = shared.snapshot();
         println!(
-            "cpal_observation={{\"device\":{device_name:?},\"sample_rate\":{sample_rate},\"channels\":{channels},\"sample_format\":{sample_format:?},\"supported_buffer_size\":{supported_buffer_size:?},\"prepared_maximum_frames\":{PROOF_MAXIMUM_FRAMES},\"frequency_hz\":{PROOF_FREQUENCY_HZ},\"gain\":{PROOF_GAIN},\"duration_seconds\":{},\"callback_count\":{},\"observed_frame_sizes\":{:?},\"observed_frame_sizes_truncated\":{},\"minimum_frames\":{},\"maximum_frames\":{},\"processing_deadline_overruns\":{},\"host_failed\":{},\"failure_code\":{}}}",
+            "cpal_observation={{\"device\":{device_name:?},\"sample_rate\":{sample_rate},\"channels\":{channels},\"sample_format\":{sample_format:?},\"supported_buffer_size\":{supported_buffer_size:?},\"prepared_maximum_frames\":{PROOF_MAXIMUM_FRAMES},\"slot_count\":{PCM_SLOT_COUNT},\"slot_frames\":{PCM_SLOT_FRAMES},\"worker_backpressure\":{worker_backpressure},\"starvation_callbacks\":{},\"stale_blocks\":{},\"invalid_blocks\":{},\"retirement_backpressure\":{},\"duration_seconds\":{},\"callback_count\":{},\"observed_frame_sizes\":{:?},\"observed_frame_sizes_truncated\":{},\"minimum_frames\":{},\"maximum_frames\":{},\"processing_deadline_overruns\":{},\"host_failed\":{},\"failure_code\":{}}}",
+            snapshot.starvation_callbacks,
+            snapshot.stale_blocks,
+            snapshot.invalid_blocks,
+            snapshot.retirement_backpressure,
             PROOF_DURATION.as_secs(),
             snapshot.callback_count,
             snapshot.observed_frame_sizes,
