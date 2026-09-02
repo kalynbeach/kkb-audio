@@ -27,6 +27,13 @@ export type GateResult =
   | { type: "ready"; message: ReadyMessage }
   | { type: "failed"; code: number };
 
+export function runtimeFailureCode(value: unknown): number | undefined {
+  if (!isRecord(value)) return undefined;
+  return value.type === "runtime-failed" && isFiniteInteger(value.code)
+    ? value.code
+    : undefined;
+}
+
 export class InitializationGate {
   #result: GateResult = { type: "pending" };
 

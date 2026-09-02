@@ -2,7 +2,12 @@ import { WorkletKernel, initSync } from "./generated/kkb_audio.js";
 import { isPcmBlockMessage, type PcmStreamConfig } from "./pcm-protocol";
 import { PreparedPlanarAdapter, fillSilence, type RenderSnapshot, type WorkletMemory } from "./render-adapter";
 
-const ProcessorFailure = { InvalidOptions: 40, InjectedPreparation: 41, Instantiation: 42 } as const;
+const ProcessorFailure = {
+  InvalidOptions: 40,
+  InjectedPreparation: 41,
+  Instantiation: 42,
+  InvalidTransportMessage: 43,
+} as const;
 const MAXIMUM_PROOF_FRAMES = 1_024;
 const WASM_PAGE_BYTES = 65_536;
 
@@ -58,7 +63,12 @@ class KkbPreparedKernelProcessor extends AudioWorkletProcessor {
         ) {
           const transportPort = event.data.port;
           transportPort.onmessage = (transportEvent: MessageEvent<unknown>) => {
-            if (!isPcmBlockMessage(transportEvent.data, processorOptions)) return;
+            if (!isPcmBlockMessage(transportEvent.data, processorOptions)) {
+              this.#failRuntime(ProcessorFailure.InvalidTransportMessage);
+              transportPort.onmessage = null;
+              transportPort.close();
+              return;
+            }
             const accepted = adapter.acceptBlock(transportEvent.data);
             transportPort.postMessage(
               {
@@ -97,13 +107,23 @@ class KkbPreparedKernelProcessor extends AudioWorkletProcessor {
   #failInitialization(code: number): void {
     this.#failureCode = code; this.#adapter = undefined; this.#postInitialization({ type: "failed", code });
   }
+  #failRuntime(code: number): void {
+    if (this.#failureCode !== 0) return;
+    this.#failureCode = code;
+    this.port.postMessage({ type: "runtime-failed", code });
+  }
   #postInitialization(message: unknown): void {
     if (this.#initializationSent) { this.#failureCode = ProcessorFailure.Instantiation; return; }
     this.#initializationSent = true; this.port.postMessage(message);
   }
   #snapshot(): RenderSnapshot {
     const adapter = this.#adapter;
-    if (adapter !== undefined) return adapter.snapshot();
+    if (adapter !== undefined) {
+      const snapshot = adapter.snapshot();
+      return this.#failureCode === 0
+        ? snapshot
+        : { ...snapshot, failureCode: this.#failureCode };
+    }
     return { failureCode: this.#failureCode, invalidBlockCount: 0, lastFrameCount: 0, memoryBytes: 0, processCount: 0, slotCount: 0, staleBlockCount: 0, starvationCount: 0 };
   }
 }

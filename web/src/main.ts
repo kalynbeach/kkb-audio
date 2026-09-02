@@ -2,6 +2,7 @@ import { PreparationLifecycle } from "./preparation-lifecycle";
 import {
   InitializationFailure,
   InitializationGate,
+  runtimeFailureCode,
   type ReadyMessage,
 } from "./protocol";
 import type { RenderSnapshot } from "./render-adapter";
@@ -72,6 +73,11 @@ export class PreparedProof {
   acceptRuntimeMessage(value: unknown): void {
     if (isSnapshotMessage(value)) {
       this.#snapshotResolve?.(value.snapshot);
+      return;
+    }
+    const failureCode = runtimeFailureCode(value);
+    if (failureCode !== undefined) {
+      this.failRuntime(failureCode);
       return;
     }
     const result = this.#gate.accept(value);
@@ -211,6 +217,7 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
   const workletUrl = options.workletUrl ?? "./worklet-processor.js";
   let worker: Worker | undefined;
   let prepared: PreparedProof | undefined;
+  let startupRuntimeFailure: number | undefined;
 
   try {
     if (context.state !== "suspended") await context.suspend();
@@ -272,6 +279,13 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
       }, timeoutMilliseconds);
       node.port.onmessage = (event: MessageEvent<unknown>) => {
         if (prepared !== undefined) { prepared.acceptRuntimeMessage(event.data); return; }
+        const failureCode = runtimeFailureCode(event.data);
+        if (failureCode !== undefined) {
+          startupRuntimeFailure ??= failureCode;
+          clearTimeout(timeout);
+          reject(new InitializationError(failureCode));
+          return;
+        }
         const result = gate.accept(event.data);
         if (result.type === "ready") { clearTimeout(timeout); resolve(result.message); }
         else if (result.type === "failed") { clearTimeout(timeout); reject(new InitializationError(result.code)); }
@@ -286,6 +300,9 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
     });
 
     const [ready, workerInitialExhaustionCount] = await Promise.all([workletReady, workerReady]);
+    if (startupRuntimeFailure !== undefined) {
+      throw new InitializationError(startupRuntimeFailure);
+    }
     if (context.state !== "suspended" || gate.result.type !== "ready") {
       throw new InitializationError(InitializationFailure.ContextState);
     }

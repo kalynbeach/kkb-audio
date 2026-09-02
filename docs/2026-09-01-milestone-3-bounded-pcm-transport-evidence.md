@@ -55,10 +55,13 @@ worker free -> worker filling -> in flight to worklet -> validating/copying
 -> in flight to worker -> worker free
 ```
 
-The worklet message handler validates metadata and exact byte length, copies into one of four fixed
-Wasm slots, attempts admission, and immediately returns the transferable plus that admission result
-outside `process()`. A fixed four-block prefill is allowed while the context is suspended, but returned
-ownership does not trigger more production until `PreparedProof.activate()` explicitly starts it.
+The worklet message handler validates metadata and exact byte length, copies a valid block into one
+of four fixed Wasm slots, attempts admission, and immediately returns the transferable plus that
+admission result outside `process()`. A malformed transferred block terminally fails the transport,
+closes its direct port, and reports the failure on the control port; the received buffer is released by
+the off-callback handler and main-thread cleanup terminates the worker rather than silently shrinking
+the pool. A fixed four-block prefill is allowed while the context is suspended, but returned ownership
+does not trigger more production until `PreparedProof.activate()` explicitly starts it.
 After activation the worker schedules at most one one-block pump at a time; rejected admission retains
 and retries the same source block with a fixed limit of 64 paced rejections, approximately 384 ms for
 the proof's 48 kHz, 256-frame configuration. The callback reads only fixed Wasm storage. Wasm memory
@@ -79,9 +82,10 @@ Bun tests cover exact PCM message validation, fixed transferable capacity, disti
 deterministic exhaustion, duplicate return rejection, quiescence while suspended, one positively
 paced one-block pump, exact metadata and buffer preservation across rejected-block retries, bounded
 terminal retry failure, a real Bun `MessageChannel` round trip with sender detachment and
-returned-buffer reuse, and deterministic planar sample generation. Prepared-proof tests also verify
-dedicated-worker termination for runtime failure and snapshot timeout and idempotent close. The
-direct Wasm check admits two blocks, rejects duplicate reservation, renders partitions of 3 and 5
+returned-buffer reuse, terminal handling of a malformed transferred block, and deterministic planar
+sample generation. Prepared-proof tests also verify dedicated-worker termination for worker and
+worklet runtime failures and snapshot timeout, failure-code preservation during both active operation
+and the startup window before worker readiness, and idempotent close. The direct Wasm check admits two blocks, rejects duplicate reservation, renders partitions of 3 and 5
 frames across a block boundary, rejects a stale block, checks starvation/stale counters, and checks
 terminal capacity behavior.
 
@@ -104,9 +108,9 @@ The recorded toolchain was:
 The final successful browser run used the corrected source and build with these SHA-256 hashes:
 
 - `kkb_audio_bg.wasm`: `f49ea76c1ad7bbd63c2158fa816a71342c4784e68618b33c5d793ad8bdece2fd`
-- `main.js`: `30e88ce85044675caa783b7753822ef432c787e364aca1b85b88ec82c9d3353c`
+- `main.js`: `494225e65e02bf79c83e1fd5865ed9715be8d86c018e9fd683a5aaa1bef70b6c`
 - `pcm-worker.js`: `d102821bddd389f1563ef36cad80d6457d0d2fef71a9c4880e3d28e6abee4734`
-- `worklet-processor.js`: `fcb9b971566791d8ac32201d0868efadb5693ea6eac36ee4c3357d7c55d413d7`
+- `worklet-processor.js`: `f3abd9b897c143a994ddb51a1fafc7f5bd1ec6620dbf708c1058b3cb8bb0a170`
 - `index.html`: `e52bab89d9d043dbabb421290a0030c4735fc16306f2eb5269826ef64f438475`
 
 ## Recorded CPAL host observation
@@ -140,8 +144,8 @@ The analyser observed semantic-left signal through a `ChannelSplitterNode` befor
 
 Initialization reported fixed Wasm memory of 16,777,216 bytes and 256 pages, maximum frames of 1024,
 four slots, and an initial worker exhaustion count of one. The snapshot reported failure code zero,
-invalid-block count zero, last frame count 128, stable memory, process count two, four slots,
-stale-block count zero, and starvation count zero. Console errors and page errors were empty. The
+invalid-block count zero, last frame count 128, stable memory, process count 38, four slots,
+stale-block count zero, and starvation count eight. Console errors and page errors were empty. The
 context, worker, browser, and server were closed after the run.
 
 This is evidence for one managed headless Chrome configuration. It is not a declaration of branded
@@ -160,8 +164,15 @@ Runtime observation exposed three fixture defects before the final successful ru
   a false signal result. The corrected proof observes the semantic left/mono channel through a
   `ChannelSplitterNode` before the zero-gain sink without changing the planar fixture samples.
 
+A later review found that malformed transferred PCM messages were dropped without returning their
+buffers, which could strand all four worker slots. The corrected handler now treats malformed input as
+a terminal protocol failure, closes the direct port, reports the exact runtime code, and lets existing
+main-thread cleanup terminate the worker. The focused regression test transfers a malformed block and
+checks one terminal report, positive-zero callback output, and the latched snapshot code.
+
 The failing attempts and local diagnostic are correction history, not successful evidence runs. The
-browser evidence above is from the final successful run using the corrected source and build.
+browser evidence above was repeated after the malformed-message correction and uses the final source
+and artifact hashes recorded here.
 
 ## Acceptance and limitations
 
