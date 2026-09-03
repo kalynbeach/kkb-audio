@@ -44,6 +44,8 @@ self.onmessage = (event: MessageEvent<unknown>) => {
       port.postMessage(block, [block.buffer]);
     },
     (code) => {
+      port.onmessage = null;
+      port.close();
       self.postMessage({ type: "worker-failed", code });
     },
   );

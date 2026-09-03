@@ -188,6 +188,47 @@ describe("PCM transferable protocol", () => {
     channel.port2.close();
   });
 
+  test("terminally fails a malformed admission return after ownership transfers back", async () => {
+    const singleSlotConfig = { ...config, slotCount: 1 };
+    const failures: number[] = [];
+    const scheduled: Array<() => void> = [];
+    const channel = new MessageChannel();
+    const producer = new FixedPcmProducer(
+      singleSlotConfig,
+      (block) => channel.port1.postMessage(block, [block.buffer]),
+      (code) => failures.push(code),
+      (callback) => scheduled.push(callback),
+    );
+
+    const handled = new Promise<boolean>((resolve) => {
+      channel.port1.onmessage = (event: MessageEvent<unknown>) => {
+        resolve(producer.acceptAdmissionResult(event.data));
+      };
+      channel.port2.onmessage = (event: MessageEvent<{ slotId: number; buffer: ArrayBuffer }>) => {
+        const malformed = {
+          type: "admission-result",
+          slotId: event.data.slotId,
+          accepted: 1,
+          buffer: event.data.buffer,
+        };
+        channel.port2.postMessage(malformed, [malformed.buffer]);
+      };
+      channel.port1.start();
+      channel.port2.start();
+    });
+
+    producer.prefill(1);
+    expect(await handled).toBe(false);
+    expect(failures).toEqual([PCM_WORKER_FAILURE_CODE]);
+    producer.activate();
+    expect(scheduled).toHaveLength(0);
+    expect(producer.acceptAdmissionResult(null)).toBe(false);
+    expect(failures).toEqual([PCM_WORKER_FAILURE_CODE]);
+    expect(producer.snapshot().invalidRecycleCount).toBe(1);
+    channel.port1.close();
+    channel.port2.close();
+  });
+
   test("generated planar samples are deterministic by source frame and channel", () => {
     const pool = new FixedTransferPool(config);
     const block = pool.takeNext()!;

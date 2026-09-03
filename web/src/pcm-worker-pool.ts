@@ -154,8 +154,12 @@ export class FixedPcmProducer {
   }
 
   acceptAdmissionResult(value: unknown): boolean {
+    if (this.#failed) return false;
     const valid = this.#pool.acceptAdmissionResult(value);
-    if (!valid) return false;
+    if (!valid) {
+      this.#fail();
+      return false;
+    }
 
     if (isAdmissionResultMessage(value, this.#config) && value.accepted) {
       this.#consecutiveRejections = 0;
