@@ -238,6 +238,15 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
     worker = new Worker(workerUrl, { type: "module" });
     const workerReady = new Promise<number>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new InitializationError(InitializationFailure.Timeout)), timeoutMilliseconds);
+      const failWorker = (code: number) => {
+        clearTimeout(timeout);
+        if (prepared === undefined) {
+          startupRuntimeFailure ??= code;
+          reject(new InitializationError(code));
+        } else {
+          prepared.failRuntime(code);
+        }
+      };
       worker!.onmessage = (event: MessageEvent<unknown>) => {
         const message = event.data as { type?: unknown; slotCount?: unknown; exhaustionCount?: unknown; invalidRecycleCount?: unknown } | null;
         if (
@@ -246,15 +255,10 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
         ) {
           clearTimeout(timeout); resolve(message.exhaustionCount);
         } else if (message?.type === "worker-failed") {
-          clearTimeout(timeout);
-          if (prepared === undefined) {
-            reject(new InitializationError(InitializationFailure.InvalidMessage));
-          } else {
-            prepared.acceptWorkerMessage(event.data);
-          }
+          failWorker(workerFailureCode(event.data) ?? InitializationFailure.InvalidMessage);
         }
       };
-      worker!.onerror = () => { clearTimeout(timeout); reject(new InitializationError(InitializationFailure.InvalidMessage)); };
+      worker!.onerror = () => failWorker(InitializationFailure.InvalidMessage);
     });
     worker.postMessage({ type: "initialize", config, port: channel.port1 }, [channel.port1]);
 

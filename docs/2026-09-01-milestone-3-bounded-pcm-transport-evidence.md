@@ -86,8 +86,9 @@ paced one-block pump, exact metadata and buffer preservation across rejected-blo
 terminal retry failure, a real Bun `MessageChannel` round trip with sender detachment and
 returned-buffer reuse, terminal handling of malformed transferred blocks and admission returns, and
 deterministic planar sample generation. Prepared-proof tests also verify dedicated-worker termination
-for worker and worklet runtime failures and snapshot timeout, failure-code preservation during both active operation
-and the startup window before worker readiness, and idempotent close. The direct Wasm check admits two blocks, rejects duplicate reservation, renders partitions of 3 and 5
+for worker and worklet runtime failures and snapshot timeout, failure-code preservation during active
+operation and both readiness-order startup windows, worker error-event cleanup before and after
+activation, and idempotent close. The direct Wasm check admits two blocks, rejects duplicate reservation, renders partitions of 3 and 5
 frames across a block boundary, rejects a stale block, checks starvation/stale counters, and checks
 terminal capacity behavior.
 
@@ -178,6 +179,13 @@ review found the reverse ownership path could similarly strand a worker slot whe
 was malformed after its buffer transferred back. The worker producer now latches its terminal failure,
 closes the direct port, and reports failure code 50; a real `MessageChannel` regression test verifies
 that the returned ownership cannot leave the producer pumping a silently diminished pool.
+
+Another review found that worker failure messages after worker readiness but before worklet readiness
+could be lost by rejecting an already-resolved promise; worker error events after preparation likewise
+skipped runtime cleanup. Both worker failure paths now latch startup failures and route errors after
+preparation through runtime cleanup. Focused tests reproduce both startup paths and verify suspension,
+disconnection, and worker termination for error events before and after activation. This correction
+was verified with automated tests and typechecking, not a new browser observation.
 
 The failing attempts and local diagnostic are correction history, not successful evidence runs. The
 browser evidence above was repeated after the malformed transferred-block correction. It predates the
