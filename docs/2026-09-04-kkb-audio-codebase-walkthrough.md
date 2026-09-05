@@ -1517,32 +1517,32 @@ The documentation has three different purposes.
 
 ### Foundations: learn the subject
 
-- [`2026-08-27-digital-audio-from-first-principles.md`](./2026-08-27-digital-audio-from-first-principles.md)  
+- [`2026-08-27-digital-audio-from-first-principles.md`](./2026-08-27-digital-audio-from-first-principles.md)\
   Samples, frames, PCM, buffers, codecs, and rendering. Best first read if audio terminology is unfamiliar.
 
-- [`2026-08-27-psychoacoustics.md`](./2026-08-27-psychoacoustics.md)  
+- [`2026-08-27-psychoacoustics.md`](./2026-08-27-psychoacoustics.md)\
   What measurements do—and do not—say about perception. Background for future metering, processing, and listening claims; not an implemented analysis subsystem.
 
 ### Architecture and sequencing
 
-- [`2026-08-28-kkb-audio-system-architecture.md`](./2026-08-28-kkb-audio-system-architecture.md)  
+- [`2026-08-28-kkb-audio-system-architecture.md`](./2026-08-28-kkb-audio-system-architecture.md)\
   Canonical architecture, terminology, invariants, future product boundaries, and unresolved decisions.
 
-- [`2026-08-29-initial-render-engine-validation-plan.md`](./2026-08-29-initial-render-engine-validation-plan.md)  
+- [`2026-08-29-initial-render-engine-validation-plan.md`](./2026-08-29-initial-render-engine-validation-plan.md)\
   The implementation sequence and evidence required at each stage.
 
-- [`2026-07-31-audio-engine-runtime-architecture.md`](./2026-07-31-audio-engine-runtime-architecture.md)  
+- [`2026-07-31-audio-engine-runtime-architecture.md`](./2026-07-31-audio-engine-runtime-architecture.md)\
   Superseded historical pointer. Not active architecture guidance.
 
-- [`NOTES.md`](./NOTES.md)  
+- [`NOTES.md`](./NOTES.md)\
   Early vision and dependency ideas, not the current dependency list.
 
 ### Recorded evidence
 
-- [`2026-08-29-milestone-2-dual-host-kernel-evidence.md`](./2026-08-29-milestone-2-dual-host-kernel-evidence.md)  
+- [`2026-08-29-milestone-2-dual-host-kernel-evidence.md`](./2026-08-29-milestone-2-dual-host-kernel-evidence.md)\
   Historical oscillator-based native/browser observations.
 
-- [`2026-09-01-milestone-3-bounded-pcm-transport-evidence.md`](./2026-09-01-milestone-3-bounded-pcm-transport-evidence.md)  
+- [`2026-09-01-milestone-3-bounded-pcm-transport-evidence.md`](./2026-09-01-milestone-3-bounded-pcm-transport-evidence.md)\
   Current bounded PCM claim, ownership behavior, tests, exact observed configurations, and limitations.
 
 Milestone 3 records:
@@ -1561,34 +1561,34 @@ Finally, `docs/agents/domain.md`, `issue-tracker.md`, and `triage-labels.md` gov
 
 I would use this sequence:
 
-1. **`src/lib.rs:11–162`**  
+1. **`src/lib.rs:11–162`**\
    Learn the smallest renderer: types, borrowing, preparation, state, samples.
 
-2. **The analytic and partition tests in `src/lib.rs`**  
+2. **The analytic and partition tests in `src/lib.rs`**\
    See exactly what “correct” means.
 
-3. **`src/prepared_pcm.rs:19–147`**  
+3. **`src/prepared_pcm.rs:19–147`**\
    Learn the stream/block/source vocabulary.
 
-4. **`src/prepared_pcm.rs:186–333`**  
+4. **`src/prepared_pcm.rs:186–333`**\
    Follow the consumption and retirement loop.
 
-5. **`OwnedPcmBlock` and `FixedSlotSource`**  
+5. **`OwnedPcmBlock` and `FixedSlotSource`**\
    Understand ownership, `.take()`, fixed arrays, and recycling.
 
-6. **`src/cpal_host.rs:279–400` and `490–535`**  
+6. **`src/cpal_host.rs:279–400` and `490–535`**\
    See how a host owns and invokes the shared renderer.
 
-7. **`src/worklet_wasm.rs`**  
+7. **`src/worklet_wasm.rs`**\
    Understand how Rust becomes a callable Wasm component.
 
-8. **`web/src/render-adapter.ts` and `worklet-processor.ts`**  
+8. **`web/src/render-adapter.ts` and `worklet-processor.ts`**\
    Follow pointers, views, copies, and actual browser callbacks.
 
-9. **`web/src/pcm-worker-pool.ts` and `pcm-worker.ts`**  
+9. **`web/src/pcm-worker-pool.ts` and `pcm-worker.ts`**\
    Trace transferable-buffer ownership.
 
-10. **`web/src/main.ts` and `tools/`**  
+10. **`web/src/main.ts` and `tools/`**\
     Finish with lifecycle and build integration.
 
 The next planned milestone is the private compiled-plan proof: two oscillators, gains, mixing, observations, and sample-timed automation, followed by integrating this PCM input boundary. **None of that compiled-plan machinery exists yet.**
