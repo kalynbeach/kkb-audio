@@ -1,47 +1,65 @@
 # Learning lab design
 
-Scope: `/lab.html` only. The [product brief](PRODUCT.md) and
-[engine guide](docs/2026-09-06-audio-engine-learning-lab.md) define behavior and claims.
+This lab follows the KKB design-system baseline from [`kkb/DESIGN.md`](https://github.com/kalynbeach/kkb/blob/c30c935932ff5a7c245454491cef2591a55fece4/DESIGN.md)
+and [`@kkb/ui`](https://github.com/kalynbeach/kkb/tree/c30c935932ff5a7c245454491cef2591a55fece4/packages/ui).
+The scope is `/lab.html`; the engine's architecture remains in [the canonical architecture](docs/2026-08-28-kkb-audio-system-architecture.md).
+
+## Sources and precedence
+
+Kalyn's September 7 direction specifies the research repository's shadcn theme and component
+styles, with **Inter for sans and TX-02 for mono**. These choices override the baseline's font,
+icon and theme selections. They do not change its accessibility or product principles.
+
+- Theme: [`research/design/pi-one-tool-shadcn-theme.css`](https://github.com/kalynbeach/research/blob/ce52029a5989fa5b5ca1ccb0020bc066cf99e218/design/pi-one-tool-shadcn-theme.css), copied unchanged to [`web/styles/theme.css`](web/styles/theme.css).
+- Controls: research's Base UI `base-nova` shadcn sources at the same revision, copied into [`web/src/components/ui`](web/src/components/ui). The research component styles and Lucide utility icons remain intact.
+- Typography: research's Inter/TX-02 token roles, with self-hosted Inter variable Latin and the TX-02 variable asset from KKB. No Geist face or fallback is used.
+- Layout: [`web/lab.css`](web/lab.css) owns the graph, plots and page composition. Ordinary buttons, fields, sliders, checkboxes, selection groups and status elements use the copied shadcn components.
+
+## KKB baseline
+
+KKB is a technical and creative workshop. The lab should make its work inspectable, using precise
+labels, visible state and useful controls. Typography, symbol meaning and information hierarchy
+stay stable across light and dark modes. Theme changes come through semantic tokens.
+
+Use the 4px spacing rhythm, ruled divisions and flat resting surfaces. The research theme maps all
+radius tokens to zero. Signal colors use its `chart-1`, `chart-2` and `chart-3` roles and always have
+text labels. Focus uses the theme's ring token. Resting hierarchy comes from spacing, borders and
+paired foreground/background roles, without decorative shadows or gradients.
+
+Inter carries instructions and control labels. TX-02 carries sample coordinates, values, process
+names and technical metadata. Use tabular numeric presentation. Compact labels must remain readable
+in both modes, and selected controls must expose their state beyond color.
+
+Reusable controls belong to the shared UI foundation. This standalone repository vendors the
+requested research implementations because `@kkb/ui` is a workspace package in another repository.
+Engine sessions, workers, audio contexts and the complete instrument composition remain lab-owned.
 
 ## Instrument composition
 
-This is a linked signal bench. The graph, compiled sequence, microscope and event timeline share
-one selected processor and one integer sample cursor. A compact masthead and three experiment
-controls introduce the instrument; they do not displace it with a marketing section.
+The graph, compiled sequence, inspector, waveform and event timeline share one selected processor
+and integer sample cursor. A short introduction and three guided experiments lead into the actual
+instrument. Graph connections come from compiled input slots.
 
-The page inherits nearby KKB Geist typography and cool instrument colors. Dark blue grounds
-support sustained waveform inspection. Cyan identifies source A, peach identifies source B, and
-pale yellow-green identifies the mixed output. Every trace also has a text label. Numbers and
-sample coordinates use a monospace system stack with tabular presentation.
+Miniature traces display recorded engine samples with individual autoscaling. The microscope uses
+a common labeled amplitude scale. Wide views retain min/max extrema; detailed views show individual
+samples. Block boundaries and event annotations use actual render frames. Ramp brackets communicate
+duration, not a separately simulated parameter curve.
 
-## Tokens and controls
+Audio starts through an explicit Play action. Listening volume starts at 15%, with adjacent Stop and
+Mute controls. The cursor follows an estimated Web Audio replay clock; the Rust/Wasm render has
+already completed. There is no ambient animation.
 
-The page background is `#101820`, graph panel `#17232d`, text `#edf3f7`, secondary text `#a4b4c1`,
-and dividers `#334450`. Source colors are `#70cadd`, `#f1b38e`, and `#dce8ac`.
-Controls use 6px corners; instrument sections use 8–10px corners. The graph's dot grid describes
-a signal canvas. Measurement and selection carry emphasis, with no decorative moving particles.
+## Responsive and accessible behavior
 
-Geist body copy is 14px; main titles are 24px and section titles 16px. Labels and supporting
-measurement text are smaller, with key sample values at 27px. Native range, numeric, select and
-checkbox controls keep their keyboard behavior. Focus uses a visible cyan outline. Playback uses
-the pale output color, and the stop control remains adjacent.
+The document must fit the viewport. The graph has a labeled, keyboard-reachable local scroll region
+and execution-step shortcuts that bring selected nodes into view. The inspector moves below the
+graph as space narrows; source controls and event fields reflow. Peak/RMS remains available beneath
+the microscope when the transport cannot fit it.
 
-## Signal graphics
+Every action has a keyboard path. Native numeric fields support drafts, commit on Enter or blur,
+and cancel on Escape. Event selection preserves focus; markers support arrow keys. A selector
+reaches coincident markers. Guided actions focus their resulting inspection or comparison region.
 
-The graph is a fixed seven-node diagram with connections drawn from compiled input slots. Miniature
-traces are actual recorded node samples, individually autoscaled. The microscope uses a common,
-labeled scale for all visible lanes. Min/max bins retain extrema at wide zoom; detailed zoom adds
-sample dots. Thin vertical lines mark real offline render-call boundaries. Gain event markers and
-ramp duration brackets use source colors and exact sample labels.
-
-Playback updates the cursor from the Web Audio clock at at most approximately 30 UI frames per
-second. It is an estimated replay position; compilation and DSP have already completed. There is no
-ambient animation. Reduced-motion preferences disable decorative control transitions.
-
-## Responsive behavior
-
-The desktop inspector sits beside the graph. Below 800px it moves beneath the graph, the execution
-sequence wraps, and source controls use two columns. The graph scrolls internally to preserve legible
-nodes. The document itself fits the viewport. Event editing wraps; a native selector makes coincident
-markers individually reachable. The transport stays available near the viewport bottom and adapts
-into two rows on narrow screens. No hover-only control is required.
+Light, Dark and System are explicit options. Dynamic views provide textual values and stable
+stopped states. Reduced-motion preferences remove control transitions. Neither theme nor viewport
+changes engine behavior. Browser verification and its limits are recorded in the [lab guide](docs/2026-09-06-audio-engine-learning-lab.md).

@@ -1,6 +1,7 @@
 # Audio-engine learning lab
 
 Date: 2026-09-06
+Frontend updated: 2026-09-07
 Branch: `feat/audio-engine-learning-lab`
 Base: reviewed Gate B `e199dbe82d184ca05ff28c711e2ca0afde888439`
 
@@ -15,11 +16,14 @@ Use the repository's pinned Bun 1.4.0, Rust 1.98.0 and wasm-bindgen CLI 0.2.127.
 
 ```sh
 bun install --frozen-lockfile
-bun run build:worklet
-PORT=4197 bun run serve:proof
+bun run dev
 ```
 
-Open `http://127.0.0.1:4197/lab.html`. Port 4197 is this feature's task-local preview.
+Open `http://127.0.0.1:4197/lab.html`. This builds Rust/Wasm and worker assets, then serves the
+React HTML entry with hot reload. `PORT` overrides 4197. React/CSS changes update live; restart
+`bun run dev` after Rust, worker or build-tool edits. To inspect production bundles, use
+`bun run build:worklet` followed by `PORT=4197 bun run serve:proof`. Existing proof pages remain
+at `/index.html` and `/plan.html` in development.
 No deployment or existing preview channel is involved. Audio remains silent until Play.
 Listening volume begins at 15% and can be muted independently of the engine samples.
 
@@ -101,49 +105,56 @@ exact sets/ramps, all seven two-second tapes across 17/128/257/1,024-frame calls
 rejection and event movement bounds. They run in a separate Bun process because an existing worklet
 transport unit test mocks the generated Wasm module globally.
 
-Recorded automated results: 49 Rust tests passed in debug and release, with the existing hardware
-test ignored; 39 existing Bun tests and 4 lab tests passed, 802 assertions total. Native and Wasm
-Clippy, TypeScript, actual-Wasm kernel/plan checks, fixed-memory checks and both worklet audits passed.
+### September 7 React migration
 
-Browser verification used the Codex in-app browser at 1280×720 and a 390×844 viewport.
-It exercised graph/connection/sequence selection, sample stepping, event editing and retargeting,
-overlapping-event selection, partition comparison, and muted replay. The comparison reported zero
-difference for all 672,000 node samples for both 128/257 and 257/128 frame calls. Dragging a selected
-overlapping ramp from sample 24,017 to 31,504 preserved its 512-frame duration and moved its end to
-32,016. Marker Enter retained keyboard focus; ArrowRight moved both event and cursor by one sample.
+The full `bun run check` passes under Bun 1.4.0: 39 existing tests, four actual-Wasm lab tests
+and eight React tests, with 900 assertions total. The React suite exercises immediate revision
+invalidation, drag/release, StrictMode and unmount cleanup, worker failure recovery, page
+restoration, negative numeric drafts and selector focus. It uses a controlled Worker transport
+and stubs canvas drawing; the separate Wasm suite validates actual samples.
 
-Play/Stop, source-edit interruption, completion, and replay after navigating to the existing worklet
-proof and back were exercised. No console warnings or errors were observed in the browser log
-capture. Browser build metadata was unavailable. The narrow page had document client/scroll widths
-of 390/390; its graph had an intentional internal client/scroll width of 356/640. Selecting Output
-through the compiled sequence moved that internal scroll position to 284. Guided actions brought
-the microscope or comparison result into view and focused it.
+Native debug and release each pass 49 tests, with the existing device-opening test ignored.
+Rust formatting, native/Wasm Clippy, TypeScript, fixed 16 MiB Wasm memory, kernel/plan conformance
+and both worklet source audits pass. No Rust engine changes were made during the React migration.
 
-An independent reviewer executed the actual main-thread code with mocked browser APIs to verify
-stale response rejection during dragging, resource recreation after persisted page restoration,
-and recovery after a failed worker initialization. These deterministic lifecycle checks supplement
-the browser run; they are not a browser cache implementation or network-fault test.
+Browser verification used the Codex in-app browser at 1280×720, 960×800 and 390×844. Document
+client/scroll widths matched at all three sizes. The mobile graph scrolls internally; the compiled
+Output step brings its node into view. Peak/RMS moves below the microscope on narrow layouts.
+Both research color modes and Inter/TX-02 computed font roles were inspected.
 
-The complete feature was independently reviewed against the pinned Gate B base, including all new
-files and this guide. Final disposition: zero actionable standards or specification findings.
-The separate design review concluded **pass**, with all five material findings resolved:
+The React page exercised graph selection, keyboard source sliders, exact negative event edits,
+overlapping event selection, sample inspection, muted playback/Stop, source edits stopping replay
+and partition comparisons. The bundled production page also prepared the engine, replayed muted
+output, reported exact equality across all 672,000 node samples for 128/257-frame calls, and opened
+the existing worklet proof. Development entry updates reuse one React root; after the fix, hot
+replacement produced no new duplicate-root or unaccepted-update warnings.
 
-| Design finding | Final status |
-| --- | --- |
-| Event-marker keyboard focus | Resolved |
-| Mobile sample-label collisions | Resolved |
-| Guided actions leaving results off-screen | Resolved |
-| Mobile graph navigation discoverability | Resolved |
-| Lesson statements becoming stale after edits | Resolved |
+The complete branch and migration received independent read-only code and design reviews.
+Review fixes preserve event-selector keyboard focus, keep diagnostics available on narrow screens,
+contain horizontal control groups and expose graph scrolling at tablet widths. Coincident events
+retain their lines while only the selected event receives a waveform annotation.
 
-This is offline replay, not a new real-time worklet or sustained playback proof. No audible listening
-assessment, other browser engine, physical mobile device, new CPAL run, deadline benchmark or
-cross-target bit identity is claimed. Reduced-motion CSS was reviewed; no assistive-technology or
-reduced-motion emulation run is claimed. The design detector could not run because its installed
-htmlparser2, css-select and css-tree dependencies were absent; screenshots and a separate read-only
-design review were used. The global skill installation was left untouched.
+### Original September 6 implementation
 
-## Assets
+The original implementation passed the same native and actual-Wasm engine checks before React.
+Its browser run additionally exercised dragging an overlapping ramp while preserving its 512-frame
+duration, marker Enter/ArrowRight focus, navigation back from the proof and completed replay. These
+are historical observations of the previous frontend, not additional React browser coverage.
 
-The lab self-hosts the existing KKB Geist font. Its [upstream OFL license](https://github.com/vercel/geist-font/blob/main/OFL.txt)
-is included in `web/assets/Geist-LICENSE.txt` and copied into the build. No runtime dependency was added.
+The lab remains an offline inspection and replay tool. No audible listening assessment, other
+browser engine, physical mobile device, new CPAL device run, deadline benchmark or cross-target
+bit identity is claimed. Reduced-motion CSS was inspected; no assistive-technology or reduced-motion
+emulation run is claimed. The original design detector was unavailable because its installed
+parser dependencies were absent; current review uses rendered screenshots and a separate reviewer.
+
+## Frontend and assets
+
+The frontend uses Bun 1.4.0, React 19 and shadcn/ui backed by Base UI. React owns component state
+and DOM updates. The session hook owns worker revisions, debounce cancellation, audio resources
+and page lifecycle. Canvas drawing reads the same state and the theme tokens. Engine DSP remains
+in Rust/Wasm; JavaScript does not synthesize the displayed traces.
+
+[DESIGN.md](../DESIGN.md) and [PRODUCT.md](../PRODUCT.md) apply the KKB design-system baseline and
+record source revisions. The research theme and fourteen component modules are vendored unchanged.
+The build self-hosts Inter variable Latin from inter-ui and TX-02 from KKB; Inter's OFL license
+is copied to the build as Inter-LICENSE.txt. The legacy Geist assets are removed.

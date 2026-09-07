@@ -1,0 +1,299 @@
+/*
+ * Pi One Tool / shadcn theme
+ *
+ * Source study: https://monotykamary.com/posts/i-gave-pi-one-tool/
+ * shadcn contract: https://ui.shadcn.com/docs/theming
+ *
+ * Use this as a Tailwind v4 global stylesheet. It includes the imports and
+ * semantic token bridge expected by current shadcn/ui components. Inter and
+ * Instrument Serif must be loaded by the consuming app. TX-02 and Departure
+ * Mono resolve from locally installed fonts.
+ */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-sans: var(--pi-font-sans);
+  --font-heading: var(--pi-font-sans);
+  --font-serif: var(--pi-font-serif);
+  --font-mono: var(--pi-font-mono);
+  --font-pixel: var(--pi-font-pixel);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* The source design gets depth from rules and density, not elevation. */
+  --shadow-2xs: 0 0 #0000;
+  --shadow-xs: 0 0 #0000;
+  --shadow-sm: 0 0 #0000;
+  --shadow-md: 0 0 #0000;
+  --shadow-lg: 0 0 #0000;
+  --shadow-xl: 0 0 #0000;
+  --shadow-2xl: 0 0 #0000;
+}
+
+:root {
+  color-scheme: light;
+
+  /* Published source primitives. */
+  --pi-ground: #f4f4f0;
+  --pi-ground-deep: #ecece6;
+  --pi-surface: #fffffcc7;
+  --pi-surface-solid: #fffffc;
+  --pi-ink: #171714;
+  --pi-ink-soft: #363632;
+  --pi-muted-ink: #6a6a64;
+  --pi-quiet-ink: #6f6f69;
+  --pi-line: #d6d6ce;
+  --pi-line-strong: #a9a9a0;
+  --pi-possibility: #ffffff;
+  --pi-inverse: #0b0b0a;
+
+  /* Published chart/diagram hues. */
+  --pi-blue: #7188a8;
+  --pi-green: #668d78;
+  --pi-amber: #a48759;
+  --pi-violet: #83779f;
+  --pi-red: #a66f6b;
+
+  /* Repository typography roles and published figure rhythm. */
+  --pi-font-sans: "InterVariable", Inter, ui-sans-serif, system-ui, sans-serif;
+  --pi-font-serif: "Instrument Serif", ui-serif, Georgia, serif;
+  --pi-font-mono: "TX-02", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --pi-font-pixel:
+    "Departure Mono", "TX-02", ui-monospace, "SFMono-Regular", Consolas,
+    monospace;
+  --pi-figure-title-size: 0.75rem;
+  --pi-figure-label-size: 0.6875rem;
+  --pi-figure-meta-size: 0.625rem;
+  --pi-figure-caption-size: 0.625rem;
+  --pi-figure-padding: 1.125rem;
+  --pi-figure-min-width: 43.75rem;
+  --pi-figure-flow: 3.25rem;
+  --pi-text-micro-size: 0.5rem;
+  --pi-text-label-size: 0.5625rem;
+  --pi-text-meta-size: 0.625rem;
+  --pi-reading-measure: 47.5rem;
+  --pi-rule-width: 1px;
+  --pi-text-shadow: 0 1px 18px var(--pi-ground);
+  --pi-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --pi-bar-neutral: 60%;
+  --pi-bar-signal: 68%;
+  --pi-bar-accent: 76%;
+  --pi-bar-hover: 88%;
+  --pi-bar-value-halo: #171714d9;
+
+  /* shadcn semantic theme. */
+  --radius: 0rem;
+  --background: var(--pi-ground);
+  --foreground: var(--pi-ink);
+  --card: var(--pi-surface-solid);
+  --card-foreground: var(--pi-ink);
+  --popover: var(--pi-surface-solid);
+  --popover-foreground: var(--pi-ink);
+  --primary: var(--pi-ink);
+  --primary-foreground: var(--pi-ground);
+  --secondary: var(--pi-ground-deep);
+  --secondary-foreground: var(--pi-ink-soft);
+  --muted: var(--pi-ground-deep);
+  --muted-foreground: var(--pi-muted-ink);
+  --accent: var(--pi-ground-deep);
+  --accent-foreground: var(--pi-ink);
+  --destructive: var(--pi-red);
+  --border: var(--pi-line);
+  --input: var(--pi-line);
+  --ring: var(--pi-line-strong);
+  --chart-1: var(--pi-blue);
+  --chart-2: var(--pi-green);
+  --chart-3: var(--pi-amber);
+  --chart-4: var(--pi-violet);
+  --chart-5: var(--pi-red);
+  --sidebar: var(--pi-ground);
+  --sidebar-foreground: var(--pi-ink);
+  --sidebar-primary: var(--pi-ink);
+  --sidebar-primary-foreground: var(--pi-ground);
+  --sidebar-accent: var(--pi-ground-deep);
+  --sidebar-accent-foreground: var(--pi-ink);
+  --sidebar-border: var(--pi-line);
+  --sidebar-ring: var(--pi-line-strong);
+}
+
+.dark {
+  color-scheme: dark;
+
+  --pi-ground: #080807;
+  --pi-ground-deep: #030303;
+  --pi-surface: #080807cc;
+  --pi-surface-solid: #0c0c0b;
+  --pi-ink: #f2f2ed;
+  --pi-ink-soft: #d0d0c9;
+  --pi-muted-ink: #92928a;
+  --pi-quiet-ink: #7a7a73;
+  --pi-line: #292925;
+  --pi-line-strong: #54544e;
+  --pi-possibility: #ffffff;
+  --pi-inverse: #ffffff;
+  --pi-text-shadow: 0 1px 18px var(--pi-ground);
+  --pi-bar-neutral: 46%;
+  --pi-bar-signal: 60%;
+
+  --background: var(--pi-ground);
+  --foreground: var(--pi-ink);
+  --card: var(--pi-surface-solid);
+  --card-foreground: var(--pi-ink);
+  --popover: var(--pi-surface-solid);
+  --popover-foreground: var(--pi-ink);
+  --primary: var(--pi-ink);
+  --primary-foreground: var(--pi-ground);
+  --secondary: var(--pi-ground-deep);
+  --secondary-foreground: var(--pi-ink-soft);
+  --muted: var(--pi-line);
+  --muted-foreground: var(--pi-muted-ink);
+  --accent: var(--pi-line);
+  --accent-foreground: var(--pi-ink);
+  --destructive: var(--pi-red);
+  --border: var(--pi-line);
+  --input: var(--pi-line);
+  --ring: var(--pi-line-strong);
+  --chart-1: var(--pi-blue);
+  --chart-2: var(--pi-green);
+  --chart-3: var(--pi-amber);
+  --chart-4: var(--pi-violet);
+  --chart-5: var(--pi-red);
+  --sidebar: var(--pi-ground);
+  --sidebar-foreground: var(--pi-ink);
+  --sidebar-primary: var(--pi-ink);
+  --sidebar-primary-foreground: var(--pi-ground);
+  --sidebar-accent: var(--pi-line);
+  --sidebar-accent-foreground: var(--pi-ink);
+  --sidebar-border: var(--pi-line);
+  --sidebar-ring: var(--pi-line-strong);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+    scrollbar-color: var(--pi-line-strong) var(--background);
+  }
+
+  html {
+    background: var(--background);
+    font-family: var(--font-sans);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+  }
+
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-mono);
+  }
+
+  ::selection {
+    background: var(--pi-ink);
+    color: var(--pi-ground);
+  }
+}
+
+@media print {
+  :root,
+  .dark {
+    color-scheme: light;
+
+    --pi-ground: #ffffff;
+    --pi-ground-deep: #ecece6;
+    --pi-surface: #ffffff;
+    --pi-surface-solid: #ffffff;
+    --pi-ink: #111111;
+    --pi-ink-soft: #222222;
+    --pi-muted-ink: #444444;
+    --pi-quiet-ink: #777777;
+    --pi-line: #cccccc;
+    --pi-line-strong: #a9a9a0;
+    --pi-inverse: #0b0b0a;
+    --pi-text-shadow: none;
+    --pi-bar-neutral: 60%;
+    --pi-bar-signal: 68%;
+
+    --background: var(--pi-ground);
+    --foreground: var(--pi-ink);
+    --card: var(--pi-surface-solid);
+    --card-foreground: var(--pi-ink);
+    --popover: var(--pi-surface-solid);
+    --popover-foreground: var(--pi-ink);
+    --primary: var(--pi-ink);
+    --primary-foreground: var(--pi-ground);
+    --secondary: var(--pi-ground-deep);
+    --secondary-foreground: var(--pi-ink-soft);
+    --muted: var(--pi-ground-deep);
+    --muted-foreground: var(--pi-muted-ink);
+    --accent: var(--pi-ground-deep);
+    --accent-foreground: var(--pi-ink);
+    --border: var(--pi-line);
+    --input: var(--pi-line);
+    --ring: var(--pi-line-strong);
+    --sidebar: var(--pi-ground);
+    --sidebar-foreground: var(--pi-ink);
+    --sidebar-primary: var(--pi-ink);
+    --sidebar-primary-foreground: var(--pi-ground);
+    --sidebar-accent: var(--pi-ground-deep);
+    --sidebar-accent-foreground: var(--pi-ink);
+    --sidebar-border: var(--pi-line);
+    --sidebar-ring: var(--pi-line-strong);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+  }
+}

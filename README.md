@@ -48,15 +48,22 @@ Open `/` for the PCM transport through the compiled plan, or `/plan.html` for th
 
 ## Audio-engine learning lab
 
-Open `/lab.html` to explore the closed oscillator graph, compiled operation order, per-node waveforms,
+The Bun + React frontend uses the research repo's shadcn/ui components and theme, with Inter and
+TX-02 fonts. Open `/lab.html` to explore the closed oscillator graph, compiled operation order, per-node waveforms,
 sample-timed gain events, and render partitions. The lab renders the actual Rust/Wasm engine offline
 in a worker, then replays its mono output after an explicit Play action. It preserves both proof pages.
 
 ```sh
-bun run build:worklet
-PORT=4197 bun run serve:proof
+bun install --frozen-lockfile
+bun run dev
 ```
 
-The task-local URL is `http://127.0.0.1:4197/lab.html`. See the
+Open `http://127.0.0.1:4197/lab.html`. `bun run dev` builds Rust/Wasm and the workers, then serves
+the React page with hot reload on localhost. Set `PORT` to change the default 4197. React and CSS
+edits update live; restart `bun run dev` after Rust, worker or build-tool changes to rebuild them.
+For the bundled production assets, run `bun run build:worklet` then `PORT=4197 bun run serve:proof`.
+The existing proof pages remain at `/index.html` and `/plan.html` during development.
+
+See the
 [learning lab guide and evidence](docs/2026-09-06-audio-engine-learning-lab.md) for experiments,
 keyboard controls, implementation boundaries, and verification.

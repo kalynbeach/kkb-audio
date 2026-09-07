@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "allowImportingTsExtensions": true,
+    "jsx": "react-jsx",
     "lib": ["ES2024", "DOM"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
@@ -9,5 +10,12 @@
     "target": "ES2024",
     "types": ["bun"]
   },
-  "include": ["tools/**/*.ts", "web/src/**/*.ts", "web/test/**/*.ts"]
+  "include": [
+    "tools/**/*.ts",
+    "tools/**/*.tsx",
+    "web/src/**/*.ts",
+    "web/src/**/*.tsx",
+    "web/test/**/*.ts",
+    "web/test/**/*.tsx"
+  ]
 }

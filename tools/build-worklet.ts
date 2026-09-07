@@ -6,6 +6,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import tailwind from "bun-plugin-tailwind";
 
 const EXPECTED_RUST = "rustc 1.98.0";
 const EXPECTED_BUN = "1.4.0";
@@ -24,12 +25,7 @@ rmSync(outputDirectory, { force: true, recursive: true });
 mkdirSync(generatedDirectory, { recursive: true });
 mkdirSync(outputDirectory, { recursive: true });
 
-const rawWasm = join(
-  "target",
-  WASM_TARGET,
-  "release",
-  "kkb_audio.wasm",
-);
+const rawWasm = join("target", WASM_TARGET, "release", "kkb_audio.wasm");
 run([
   "wasm-bindgen",
   rawWasm,
@@ -48,12 +44,22 @@ await build("web/src/main.ts");
 await build("web/src/plan-processor.ts");
 await build("web/src/plan-worker.ts");
 await build("web/src/plan-main.ts");
-await build("web/src/lab-main.ts");
 await build("web/src/lab-worker.ts");
-copyFileSync("web/lab.html", join(outputDirectory, "lab.html"));
-copyFileSync("web/lab.css", join(outputDirectory, "lab.css"));
-copyFileSync("web/assets/GeistVF.woff", join(outputDirectory, "GeistVF.woff"));
-copyFileSync("web/assets/Geist-LICENSE.txt", join(outputDirectory, "Geist-LICENSE.txt"));
+const lab = await Bun.build({
+  entrypoints: ["web/lab.html"],
+  outdir: outputDirectory,
+  target: "browser",
+  minify: true,
+  plugins: [tailwind],
+});
+if (!lab.success) {
+  for (const log of lab.logs) console.error(log);
+  process.exit(1);
+}
+copyFileSync(
+  "node_modules/inter-ui/LICENSE.txt",
+  join(outputDirectory, "Inter-LICENSE.txt"),
+);
 copyFileSync("web/proof.html", join(outputDirectory, "index.html"));
 copyFileSync("web/plan-proof.html", join(outputDirectory, "plan.html"));
 copyFileSync(
@@ -73,7 +79,9 @@ function removeWorkletUnsafeErrorFormatting(path: string): void {
     !generated.includes(decoderInitialization) ||
     !generated.includes(deprecatedSyncWarning)
   ) {
-    throw new Error("wasm-bindgen worklet glue changed; audit the pinned output");
+    throw new Error(
+      "wasm-bindgen worklet glue changed; audit the pinned output",
+    );
   }
   // AudioWorkletGlobalScope does not expose TextDecoder consistently. Error
   // strings are not part of the callback contract, so traps use a fixed code
