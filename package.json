@@ -8,8 +8,10 @@
     "typecheck": "bun x tsc --noEmit",
     "check:wasm": "bun tools/check-wasm-memory.ts web/dist/kkb_audio_bg.wasm",
     "check:kernel": "bun tools/check-worklet-kernel.ts",
+    "check:plan": "bun tools/check-worklet-plan.ts",
+    "audit:plan": "bun tools/audit-plan-worklet.ts web/dist/plan-processor.js",
     "audit:worklet": "bun tools/audit-worklet.ts web/dist/worklet-processor.js",
-    "check": "bun run build:worklet && bun run typecheck && bun test web/test && bun run check:wasm && bun run check:kernel && bun run audit:worklet",
+    "check": "bun run build:worklet && bun run typecheck && bun test web/test && bun run check:wasm && bun run check:kernel && bun run check:plan && bun run audit:worklet && bun run audit:plan",
     "serve:proof": "bun tools/serve-proof.ts"
   },
   "devDependencies": {

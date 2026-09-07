@@ -268,6 +268,10 @@ then evaluate `SharedArrayBuffer`, a narrower browser shared center, or another 
 
 ## Milestone 4: minimal compiled plan
 
+Gate A is implemented and its native Rust, Wasm, and built-in-browser results are recorded in the
+[compiled-plan evidence](./2026-09-06-milestone-4-compiled-plan-evidence.md). Gate B remains pending.
+The shared operation-representation decision still follows both gates.
+
 ### Question
 
 Does a private `CompiledPlan` and single-owner `RenderInstance` provide useful leverage across

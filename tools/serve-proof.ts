@@ -7,6 +7,10 @@ const files: Record<string, { path: string; type: string }> = {
   "/": { path: "index.html", type: "text/html; charset=utf-8" },
   "/index.html": { path: "index.html", type: "text/html; charset=utf-8" },
   "/main.js": { path: "main.js", type: "text/javascript; charset=utf-8" },
+  "/plan.html": { path: "plan.html", type: "text/html; charset=utf-8" },
+  "/plan-main.js": { path: "plan-main.js", type: "text/javascript; charset=utf-8" },
+  "/plan-worker.js": { path: "plan-worker.js", type: "text/javascript; charset=utf-8" },
+  "/plan-processor.js": { path: "plan-processor.js", type: "text/javascript; charset=utf-8" },
   "/pcm-worker.js": {
     path: "pcm-worker.js",
     type: "text/javascript; charset=utf-8",

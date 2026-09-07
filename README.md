@@ -16,6 +16,8 @@ Milestone 2 is complete for the recorded browser and macOS native configurations
 
 Milestone 3 is complete within its bounded-PCM ownership and delivery claim for the exact recorded macOS CPAL and managed headless Chrome proofs. One private prepared-block seam is fed by one native worker through fixed SPSC rings and by one browser worker through a direct `MessageChannel` and four recycled transferable buffers. Variable callback partitions, epochs, starvation, ownership rejection, backpressure, callback allocator instrumentation, fixed Wasm memory, and worklet source constraints are covered. This does not establish a production transport, production performance, sustained-load or deadline behavior, branded-browser compatibility, or broad host support. See the [Milestone 3 evidence](docs/2026-09-01-milestone-3-bounded-pcm-transport-evidence.md) for the exact configurations and limitations. There is no public engine API or playback application yet.
 
+Milestone 4 Gate A adds a private compiled plan for two oscillators, separate gains, mixing, post-master peak/RMS observations, and sample-timed gain automation. Native Rust tests and the Wasm proof cover independent instances, exact same-build partition comparisons, and bounded rendering. A separate browser proof compiles in a worker, validates and prepares locally in the worklet, and measures muted output. See the [Gate A evidence](docs/2026-09-06-milestone-4-compiled-plan-evidence.md). Gate B, PCM-input integration, and the shared operation-representation decision remain pending.
+
 See the canonical [system architecture](docs/2026-08-28-kkb-audio-system-architecture.md) and [initial validation plan](docs/2026-08-29-initial-render-engine-validation-plan.md).
 
 ## Development
@@ -39,3 +41,5 @@ Run the local proof after `bun run build:worklet`:
 ```sh
 bun run serve:proof
 ```
+
+Open `/` for the existing PCM transport proof or `/plan.html` for the compiled-plan proof. The plan page prepares a suspended, disconnected node before activation and displays its output-level observation. Its output is muted after the analyser.

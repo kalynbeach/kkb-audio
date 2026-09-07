@@ -45,7 +45,11 @@ removeWorkletUnsafeErrorFormatting(join(generatedDirectory, "kkb_audio.js"));
 await build("web/src/worklet-processor.ts");
 await build("web/src/pcm-worker.ts");
 await build("web/src/main.ts");
+await build("web/src/plan-processor.ts");
+await build("web/src/plan-worker.ts");
+await build("web/src/plan-main.ts");
 copyFileSync("web/proof.html", join(outputDirectory, "index.html"));
+copyFileSync("web/plan-proof.html", join(outputDirectory, "plan.html"));
 copyFileSync(
   join(generatedDirectory, "kkb_audio_bg.wasm"),
   join(outputDirectory, "kkb_audio_bg.wasm"),

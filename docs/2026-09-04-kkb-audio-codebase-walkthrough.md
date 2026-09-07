@@ -7,6 +7,10 @@ This describes **commit `eaccf29` on `feat/3-bounded-pcm-transport`**. Three rea
 
 No source files were changed during the exploration.
 
+Update, 2026-09-06: this walkthrough remains a snapshot of `eaccf29`. The separate Milestone 4 Gate A
+compiled-plan proof now exists. See the [current evidence](./2026-09-06-milestone-4-compiled-plan-evidence.md)
+for its files, automation semantics, and validation. PCM-input plan integration remains pending.
+
 ## 1. What this project is today
 
 **`kkb-audio` is a small collection of working audio-engine proofs—not yet an audio player or a public engine library.**
@@ -1591,7 +1595,11 @@ I would use this sequence:
 10. **`web/src/main.ts` and `tools/`**\
     Finish with lifecycle and build integration.
 
-The next planned milestone is the private compiled-plan proof: two oscillators, gains, mixing, observations, and sample-timed automation, followed by integrating this PCM input boundary. **None of that compiled-plan machinery exists yet.**
+At this walkthrough's snapshot, the next milestone was the private compiled-plan proof. Gate A now
+implements two oscillators, gains, mixing, observations, and sample-timed automation in
+`src/compiled_plan.rs`, with focused tests in `src/compiled_plan/tests.rs` and a separate browser path
+through `src/compiled_plan_wasm.rs` and `web/src/plan-*.ts`. Integrating the PCM input boundary is still
+the separate Gate B. See the [Gate A evidence](./2026-09-06-milestone-4-compiled-plan-evidence.md).
 
 ## The mental model to keep
 
