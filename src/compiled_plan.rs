@@ -15,6 +15,8 @@ const HEADER_WORDS: usize = 8;
 const OP_WORDS: usize = 8;
 const EVENT_WORDS: usize = 8;
 
+mod lab;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CompileError {
     SampleRate,

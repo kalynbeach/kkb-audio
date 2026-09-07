@@ -4,6 +4,12 @@ import { join } from "node:path";
 const port = Number(process.env.PORT ?? 4173);
 const root = "web/dist";
 const files: Record<string, { path: string; type: string }> = {
+  "/lab.html": { path: "lab.html", type: "text/html; charset=utf-8" },
+  "/lab.css": { path: "lab.css", type: "text/css; charset=utf-8" },
+  "/lab-main.js": { path: "lab-main.js", type: "text/javascript; charset=utf-8" },
+  "/lab-worker.js": { path: "lab-worker.js", type: "text/javascript; charset=utf-8" },
+  "/GeistVF.woff": { path: "GeistVF.woff", type: "font/woff" },
+  "/Geist-LICENSE.txt": { path: "Geist-LICENSE.txt", type: "text/plain; charset=utf-8" },
   "/": { path: "index.html", type: "text/html; charset=utf-8" },
   "/index.html": { path: "index.html", type: "text/html; charset=utf-8" },
   "/main.js": { path: "main.js", type: "text/javascript; charset=utf-8" },

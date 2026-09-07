@@ -45,3 +45,18 @@ bun run serve:proof
 ```
 
 Open `/` for the PCM transport through the compiled plan, or `/plan.html` for the oscillator plan. Both pages prepare a suspended, disconnected node before activation and mute output after the analyser. The oscillator page also displays its output-level observation.
+
+## Audio-engine learning lab
+
+Open `/lab.html` to explore the closed oscillator graph, compiled operation order, per-node waveforms,
+sample-timed gain events, and render partitions. The lab renders the actual Rust/Wasm engine offline
+in a worker, then replays its mono output after an explicit Play action. It preserves both proof pages.
+
+```sh
+bun run build:worklet
+PORT=4197 bun run serve:proof
+```
+
+The task-local URL is `http://127.0.0.1:4197/lab.html`. See the
+[learning lab guide and evidence](docs/2026-09-06-audio-engine-learning-lab.md) for experiments,
+keyboard controls, implementation boundaries, and verification.

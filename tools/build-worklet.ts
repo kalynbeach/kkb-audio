@@ -48,6 +48,12 @@ await build("web/src/main.ts");
 await build("web/src/plan-processor.ts");
 await build("web/src/plan-worker.ts");
 await build("web/src/plan-main.ts");
+await build("web/src/lab-main.ts");
+await build("web/src/lab-worker.ts");
+copyFileSync("web/lab.html", join(outputDirectory, "lab.html"));
+copyFileSync("web/lab.css", join(outputDirectory, "lab.css"));
+copyFileSync("web/assets/GeistVF.woff", join(outputDirectory, "GeistVF.woff"));
+copyFileSync("web/assets/Geist-LICENSE.txt", join(outputDirectory, "Geist-LICENSE.txt"));
 copyFileSync("web/proof.html", join(outputDirectory, "index.html"));
 copyFileSync("web/plan-proof.html", join(outputDirectory, "plan.html"));
 copyFileSync(
