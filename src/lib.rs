@@ -27,6 +27,7 @@ mod prepared_kernel {
         CapacityExceeded,
         Terminal,
         ClockOverflow,
+        InvalidInput,
     }
 
     pub(crate) enum Output<'a> {

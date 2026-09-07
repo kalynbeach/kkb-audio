@@ -40,7 +40,9 @@ impl WorkletPlan {
     pub fn new(description: &[u32], sample_rate: f64, channels: u32) -> Self {
         let prepared = CompiledPlan::decode(description).ok().filter(|(plan, _)| {
             // The negotiated host rate/layout must match the transferred program.
-            layout(channels) == Some(plan.layout()) && plan.sample_rate() == sample_rate
+            layout(channels) == Some(plan.layout())
+                && plan.sample_rate() == sample_rate
+                && plan.pcm_spec().is_none()
         });
         let Some((plan, events)) = prepared else {
             return Self {
@@ -131,6 +133,7 @@ impl WorkletPlan {
             RenderStatus::CapacityExceeded => 2,
             RenderStatus::Terminal => 3,
             RenderStatus::ClockOverflow => 4,
+            RenderStatus::InvalidInput => 6,
         }
     }
 

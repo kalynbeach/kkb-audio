@@ -5,6 +5,8 @@ export const RenderStatus = {
   InvalidLayout: 1,
   CapacityExceeded: 2,
   Terminal: 3,
+  ClockOverflow: 4,
+  InvalidInput: 6,
 } as const;
 
 export const HostFailure = {
@@ -14,7 +16,9 @@ export const HostFailure = {
   WasmInvalidLayout: 34,
   WasmCapacityExceeded: 35,
   WasmTerminal: 36,
+  WasmClockOverflow: 37,
   WasmUnknownStatus: 38,
+  WasmInvalidInput: 39,
 } as const;
 
 export interface WorkletKernelBinding {
@@ -174,6 +178,8 @@ function wasmRenderFailure(status: number): number {
     case RenderStatus.InvalidLayout: return HostFailure.WasmInvalidLayout;
     case RenderStatus.CapacityExceeded: return HostFailure.WasmCapacityExceeded;
     case RenderStatus.Terminal: return HostFailure.WasmTerminal;
+    case RenderStatus.ClockOverflow: return HostFailure.WasmClockOverflow;
+    case RenderStatus.InvalidInput: return HostFailure.WasmInvalidInput;
     default: return HostFailure.WasmUnknownStatus;
   }
 }

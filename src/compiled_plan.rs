@@ -1,12 +1,16 @@
-//! Milestone 4 Gate A: a closed oscillator/gain/mix program, compiled off-callback.
+//! Private closed oscillator and prepared-PCM programs, compiled off-callback.
 
 use crate::prepared_kernel::{Output, OutputLayout, RenderStatus};
+use crate::prepared_pcm::{
+    ChannelLayout, PcmOutput, PcmRenderStatus, PreparedBlockSource, PreparedPcmInput, StreamSpec,
+};
 use std::f64::consts::TAU;
 
 const OP_COUNT: usize = 7;
 pub(crate) const MAXIMUM_FRAMES: usize = 1_024;
 const EVENT_CAPACITY: usize = 16;
-const WIRE_VERSION: u32 = 1;
+const PCM_MAXIMUM_FRAMES: usize = 4_096;
+const WIRE_VERSION: u32 = 2;
 const HEADER_WORDS: usize = 8;
 const OP_WORDS: usize = 8;
 const EVENT_WORDS: usize = 8;
@@ -37,6 +41,9 @@ struct Port {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum NodeKind {
+    PcmInput {
+        spec: StreamSpec,
+    },
     Oscillator {
         frequency: f64,
     },
@@ -59,7 +66,7 @@ enum NodeKind {
 impl NodeKind {
     fn inputs(&self) -> [Option<Port>; 2] {
         match *self {
-            Self::Oscillator { .. } => [None, None],
+            Self::Oscillator { .. } | Self::PcmInput { .. } => [None, None],
             Self::Gain { input, .. } | Self::Observe { input } | Self::Output { input } => {
                 [Some(input), None]
             }
@@ -81,10 +88,14 @@ struct Description {
     maximum_frames: usize,
     observation_frames: usize,
     nodes: [Node; OP_COUNT],
+    operation_count: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Operation {
+    PcmInput {
+        spec: StreamSpec,
+    },
     Oscillator {
         increment: f64,
         frequency: f64,
@@ -115,6 +126,7 @@ pub(crate) struct CompiledPlan {
     observation_location: u32,
     ids: [u32; OP_COUNT],
     operations: [Operation; OP_COUNT],
+    operation_count: usize,
 }
 
 impl CompiledPlan {
@@ -123,21 +135,43 @@ impl CompiledPlan {
         if !rate.is_finite() || rate <= 0.0 {
             return Err(CompileError::SampleRate);
         }
-        if !(1..=MAXIMUM_FRAMES).contains(&description.maximum_frames)
+        if !matches!(description.operation_count, 4 | OP_COUNT) {
+            return Err(CompileError::Topology);
+        }
+        let nodes = &description.nodes[..description.operation_count];
+        let pcm_spec = nodes.iter().find_map(|node| match node.kind {
+            NodeKind::PcmInput { spec } => Some(spec),
+            _ => None,
+        });
+        let maximum_frames = if pcm_spec.is_some() {
+            PCM_MAXIMUM_FRAMES
+        } else {
+            MAXIMUM_FRAMES
+        };
+        if !(1..=maximum_frames).contains(&description.maximum_frames)
             || !(1..=MAXIMUM_FRAMES).contains(&description.observation_frames)
         {
             return Err(CompileError::Capacity);
         }
-        let nodes = &description.nodes;
-        let mut counts = [0; 5];
+        let mut counts = [0; 6];
         for (index, node) in nodes.iter().enumerate() {
             if node.id == 0 || nodes[..index].iter().any(|previous| previous.id == node.id) {
                 return Err(CompileError::Identifier);
             }
-            if !matches!(node.kind, NodeKind::Output { .. }) && node.layout != OutputLayout::Mono {
+            let internal_layout =
+                pcm_spec.map_or(OutputLayout::Mono, |spec| pcm_layout(spec.layout));
+            if (pcm_spec.is_some() || !matches!(node.kind, NodeKind::Output { .. }))
+                && node.layout != internal_layout
+            {
                 return Err(CompileError::Layout);
             }
             match node.kind {
+                NodeKind::PcmInput { spec } => {
+                    counts[5] += 1;
+                    if !spec.validate() || f64::from(spec.sample_rate) != rate {
+                        return Err(CompileError::SampleRate);
+                    }
+                }
                 NodeKind::Oscillator { frequency } => {
                     counts[0] += 1;
                     if !frequency.is_finite() || frequency < 0.0 || frequency >= rate - frequency {
@@ -167,19 +201,19 @@ impl CompiledPlan {
                 if port.port != 0 || matches!(source.kind, NodeKind::Output { .. }) {
                     return Err(CompileError::Port);
                 }
-                if source.layout != OutputLayout::Mono {
+                if source.layout != internal_layout {
                     return Err(CompileError::Layout);
                 }
             }
         }
-        if counts != [2, 2, 1, 1, 1] {
+        if counts != [2, 2, 1, 1, 1, 0] && counts != [0, 1, 0, 1, 1, 1] {
             return Err(CompileError::Topology);
         }
 
         // A stable topological sort uses processor identity to break ties.
         let mut order = [0; OP_COUNT];
         let mut emitted = [false; OP_COUNT];
-        for slot in &mut order {
+        for slot in &mut order[..nodes.len()] {
             let ready = nodes
                 .iter()
                 .enumerate()
@@ -198,8 +232,8 @@ impl CompiledPlan {
             emitted[ready] = true;
         }
 
-        // Gate A accepts only two distinct oscillator/gain paths into one mix,
-        // followed by the post-master observation and the output mapping.
+        // Only two closed programs: oscillator/gain fan-in, or PCM/linked gain.
+        // Both finish with post-master observation and output mapping.
         for node in nodes {
             let source_kind = |port: Port| {
                 nodes
@@ -208,10 +242,10 @@ impl CompiledPlan {
                     .map(|n| n.kind)
             };
             let valid = match node.kind {
-                NodeKind::Oscillator { .. } => true,
+                NodeKind::Oscillator { .. } | NodeKind::PcmInput { .. } => true,
                 NodeKind::Gain { input, .. } => matches!(
                     source_kind(input),
-                    Some(NodeKind::Oscillator { .. })
+                    Some(NodeKind::Oscillator { .. } | NodeKind::PcmInput { .. })
                 ) && nodes
                     .iter()
                     .filter(
@@ -226,7 +260,11 @@ impl CompiledPlan {
                             .all(|&p| matches!(source_kind(p), Some(NodeKind::Gain { .. })))
                 }
                 NodeKind::Observe { input } => {
-                    matches!(source_kind(input), Some(NodeKind::Mix { .. }))
+                    if pcm_spec.is_some() {
+                        matches!(source_kind(input), Some(NodeKind::Gain { .. }))
+                    } else {
+                        matches!(source_kind(input), Some(NodeKind::Mix { .. }))
+                    }
                 }
                 NodeKind::Output { input } => {
                     matches!(source_kind(input), Some(NodeKind::Observe { .. }))
@@ -243,10 +281,14 @@ impl CompiledPlan {
             layout: OutputLayout::Mono,
             observation_frames: description.observation_frames,
             observation_location: 0,
-            ids: order.map(|index| nodes[index].id),
+            ids: [0; OP_COUNT],
             operations: [Operation::Output { input: 0 }; OP_COUNT],
+            operation_count: nodes.len(),
         };
-        for (slot, &index) in order.iter().enumerate() {
+        for (slot, &index) in order[..nodes.len()].iter().enumerate() {
+            plan.ids[slot] = nodes[index].id;
+        }
+        for (slot, &index) in order[..nodes.len()].iter().enumerate() {
             let node = nodes[index];
             let source_slot = |port: Port| {
                 plan.ids
@@ -255,6 +297,7 @@ impl CompiledPlan {
                     .ok_or(CompileError::Identifier)
             };
             plan.operations[slot] = match node.kind {
+                NodeKind::PcmInput { spec } => Operation::PcmInput { spec },
                 NodeKind::Oscillator { frequency } => Operation::Oscillator {
                     increment: TAU * (frequency / rate),
                     frequency,
@@ -293,6 +336,23 @@ impl CompiledPlan {
 
     pub(crate) fn proof(sample_rate: f64, layout: OutputLayout) -> Result<Self, CompileError> {
         Self::compile(&proof_description(sample_rate, layout))
+    }
+
+    pub(crate) fn pcm_proof(spec: StreamSpec, maximum_frames: usize) -> Result<Self, CompileError> {
+        Self::compile(&pcm_description(spec, maximum_frames))
+    }
+
+    pub(crate) fn pcm_spec(&self) -> Option<StreamSpec> {
+        self.operations[..self.operation_count]
+            .iter()
+            .find_map(|op| match op {
+                Operation::PcmInput { spec } => Some(*spec),
+                _ => None,
+            })
+    }
+
+    fn buffer_channels(&self) -> usize {
+        self.pcm_spec().map_or(1, |spec| spec.layout.channels())
     }
 
     pub(crate) fn sample_rate(&self) -> f64 {
@@ -341,8 +401,9 @@ impl CompiledPlan {
                 .map_err(|_| CompileError::Value)?;
         }
         let rate = self.sample_rate.to_bits();
-        let mut words =
-            Vec::with_capacity(HEADER_WORDS + OP_COUNT * OP_WORDS + events.len() * EVENT_WORDS);
+        let mut words = Vec::with_capacity(
+            HEADER_WORDS + self.operation_count * OP_WORDS + events.len() * EVENT_WORDS,
+        );
         words.extend_from_slice(&[
             WIRE_VERSION,
             rate as u32,
@@ -353,13 +414,20 @@ impl CompiledPlan {
                 OutputLayout::Stereo => 2,
             },
             self.observation_frames as u32,
-            OP_COUNT as u32,
+            self.operation_count as u32,
             events.len() as u32,
         ]);
-        for (slot, operation) in self.operations.iter().enumerate() {
+        for (slot, operation) in self.operations[..self.operation_count].iter().enumerate() {
             let mut record = [0; OP_WORDS];
             record[1] = self.ids[slot];
             match *operation {
+                Operation::PcmInput { spec } => {
+                    record[0] = 6;
+                    record[2] = spec.sample_rate;
+                    record[3] = spec.source_id as u32;
+                    record[4] = (spec.source_id >> 32) as u32;
+                    record[5] = spec.layout.channels() as u32;
+                }
                 Operation::Oscillator { frequency, .. } => {
                     record[0] = 1;
                     let bits = frequency.to_bits();
@@ -416,14 +484,15 @@ impl CompiledPlan {
     /// Bounded worklet-local validation. Recompilation verifies the closed graph;
     /// canonical comparison also rejects reserved fields and noncanonical slot order.
     pub(crate) fn decode(words: &[u32]) -> Result<(Self, Vec<Event>), CompileError> {
-        if words.len() < HEADER_WORDS || words[0] != WIRE_VERSION || words[6] != OP_COUNT as u32 {
+        if words.len() < HEADER_WORDS || words[0] != WIRE_VERSION || !matches!(words[6], 4 | 7) {
             return Err(CompileError::Description);
         }
         let event_count = words[7] as usize;
+        let operation_count = words[6] as usize;
         if event_count > EVENT_CAPACITY {
             return Err(CompileError::Capacity);
         }
-        if words.len() != HEADER_WORDS + OP_COUNT * OP_WORDS + event_count * EVENT_WORDS {
+        if words.len() != HEADER_WORDS + operation_count * OP_WORDS + event_count * EVENT_WORDS {
             return Err(CompileError::Description);
         }
         let layout = match words[4] {
@@ -435,7 +504,9 @@ impl CompiledPlan {
             proof_description(f64::from_bits(join_words(words[1], words[2])), layout);
         description.maximum_frames = words[3] as usize;
         description.observation_frames = words[5] as usize;
-        for slot in 0..OP_COUNT {
+        description.operation_count = operation_count;
+        let is_pcm = operation_count == 4;
+        for slot in 0..operation_count {
             let start = HEADER_WORDS + slot * OP_WORDS;
             let record = &words[start..start + OP_WORDS];
             let input = |index: u32| {
@@ -450,6 +521,17 @@ impl CompiledPlan {
             };
             let value = f64::from_bits(join_words(record[5], record[6]));
             let kind = match record[0] {
+                6 => NodeKind::PcmInput {
+                    spec: StreamSpec {
+                        sample_rate: record[2],
+                        source_id: join_words(record[3], record[4]),
+                        layout: match record[5] {
+                            1 => ChannelLayout::Mono,
+                            2 => ChannelLayout::Stereo,
+                            _ => return Err(CompileError::Layout),
+                        },
+                    },
+                },
                 1 => NodeKind::Oscillator { frequency: value },
                 2 => NodeKind::Gain {
                     input: input(record[3])?,
@@ -469,7 +551,7 @@ impl CompiledPlan {
             };
             description.nodes[slot] = Node {
                 id: record[1],
-                layout: if record[0] == 5 {
+                layout: if record[0] == 5 || is_pcm {
                     layout
                 } else {
                     OutputLayout::Mono
@@ -479,7 +561,7 @@ impl CompiledPlan {
         }
         let plan = Self::compile(&description)?;
         let mut events = Vec::with_capacity(event_count);
-        for record in words[HEADER_WORDS + OP_COUNT * OP_WORDS..]
+        for record in words[HEADER_WORDS + operation_count * OP_WORDS..]
             .as_chunks::<EVENT_WORDS>()
             .0
         {
@@ -512,12 +594,55 @@ fn join_words(low: u32, high: u32) -> u64 {
     u64::from(low) | (u64::from(high) << 32)
 }
 
+fn pcm_layout(layout: ChannelLayout) -> OutputLayout {
+    match layout {
+        ChannelLayout::Mono => OutputLayout::Mono,
+        ChannelLayout::Stereo => OutputLayout::Stereo,
+    }
+}
+
+fn pcm_description(spec: StreamSpec, maximum_frames: usize) -> Description {
+    let layout = pcm_layout(spec.layout);
+    let port = |processor| Port { processor, port: 0 };
+    let mut description = proof_description(f64::from(spec.sample_rate), layout);
+    description.maximum_frames = maximum_frames;
+    description.operation_count = 4;
+    description.nodes[..4].copy_from_slice(&[
+        Node {
+            id: 10,
+            layout,
+            kind: NodeKind::PcmInput { spec },
+        },
+        Node {
+            id: 20,
+            layout,
+            kind: NodeKind::Gain {
+                input: port(10),
+                parameter: 1,
+                value: 0.5,
+            },
+        },
+        Node {
+            id: 60,
+            layout,
+            kind: NodeKind::Observe { input: port(20) },
+        },
+        Node {
+            id: 70,
+            layout,
+            kind: NodeKind::Output { input: port(60) },
+        },
+    ]);
+    description
+}
+
 fn proof_description(sample_rate: f64, layout: OutputLayout) -> Description {
     let port = |processor| Port { processor, port: 0 };
     Description {
         sample_rate,
         maximum_frames: MAXIMUM_FRAMES,
         observation_frames: 64,
+        operation_count: OP_COUNT,
         nodes: [
             Node {
                 id: 10,
@@ -707,8 +832,9 @@ impl RenderInstance {
         });
         Self {
             plan: *plan,
-            // Each operation has a predetermined mono plane. No aliasing or reuse analysis.
-            buffers: vec![0.0; OP_COUNT * plan.maximum_frames].into_boxed_slice(),
+            // Each operation has predetermined planes. PCM preserves semantic L/R.
+            buffers: vec![0.0; plan.operation_count * plan.buffer_channels() * plan.maximum_frames]
+                .into_boxed_slice(),
             phases: [0.0; OP_COUNT],
             parameters,
             events: [None; EVENT_CAPACITY],
@@ -778,11 +904,15 @@ impl RenderInstance {
         }
     }
 
-    fn observe(&mut self, sample: f32, frame: u64) {
+    fn observe(&mut self, sample: f32, right: Option<f32>, frame: u64) {
         let levels = &mut self.levels;
         levels.count += 1;
         levels.peak = levels.peak.max(sample.abs());
         levels.squares += f64::from(sample) * f64::from(sample);
+        if let Some(right) = right {
+            levels.peak = levels.peak.max(right.abs());
+            levels.squares += f64::from(right) * f64::from(right);
+        }
         if levels.count == self.plan.observation_frames {
             levels.sequence = levels.sequence.saturating_add(1);
             if levels.pending.is_some() {
@@ -795,7 +925,7 @@ impl RenderInstance {
                 sequence: levels.sequence,
                 dropped: levels.dropped,
                 peak: levels.peak,
-                rms: (levels.squares / levels.count as f64).sqrt(),
+                rms: (levels.squares / (levels.count * self.plan.buffer_channels()) as f64).sqrt(),
             });
             levels.count = 0;
             levels.peak = 0.0;
@@ -804,18 +934,70 @@ impl RenderInstance {
     }
 
     pub(crate) fn render(&mut self, mut output: Output<'_>) -> RenderStatus {
+        let frames = match self.validate_output(&mut output) {
+            Ok(0) => return RenderStatus::Rendered,
+            Ok(frames) => frames,
+            Err(status) => return status,
+        };
+        if self.plan.pcm_spec().is_some() {
+            zero_output(&mut output);
+            return RenderStatus::InvalidInput;
+        }
+        self.execute(output, frames)
+    }
+
+    /// Epoch checks and block ownership stay in PreparedPcmInput. Validate before
+    /// pulling any samples, then fill the PCM operation's fixed planes once per call.
+    pub(crate) fn render_pcm<S: PreparedBlockSource>(
+        &mut self,
+        input: &mut PreparedPcmInput<S>,
+        mut output: Output<'_>,
+    ) -> RenderStatus {
+        let frames = match self.validate_output(&mut output) {
+            Ok(0) => return RenderStatus::Rendered,
+            Ok(frames) => frames,
+            Err(status) => return status,
+        };
+        if self.plan.pcm_spec() != Some(input.spec())
+            || input.maximum_frames() < self.plan.maximum_frames
+        {
+            zero_output(&mut output);
+            return RenderStatus::InvalidInput;
+        }
+        // The closed PCM topology always places its sole source at slot zero.
+        let (left, rest) = self.buffers.split_at_mut(self.plan.maximum_frames);
+        let status = match self.plan.layout {
+            OutputLayout::Mono => input.render(PcmOutput::Mono(&mut left[..frames])),
+            OutputLayout::Stereo => input.render(PcmOutput::Stereo {
+                left: &mut left[..frames],
+                right: &mut rest[..frames],
+            }),
+        };
+        if status != PcmRenderStatus::Rendered {
+            zero_output(&mut output);
+            return match status {
+                PcmRenderStatus::InvalidLayout => RenderStatus::InvalidInput,
+                PcmRenderStatus::CapacityExceeded => RenderStatus::CapacityExceeded,
+                PcmRenderStatus::Terminal => RenderStatus::Terminal,
+                PcmRenderStatus::Rendered => unreachable!(),
+            };
+        }
+        self.execute(output, frames)
+    }
+
+    fn validate_output(&mut self, output: &mut Output<'_>) -> Result<usize, RenderStatus> {
         let frames = match (&output, self.plan.layout) {
             (Output::Mono(samples), OutputLayout::Mono) => samples.len(),
             (Output::Stereo { left, right }, OutputLayout::Stereo) if left.len() == right.len() => {
                 left.len()
             }
             _ => {
-                zero_output(&mut output);
-                return RenderStatus::InvalidLayout;
+                zero_output(output);
+                return Err(RenderStatus::InvalidLayout);
             }
         };
         if frames == 0 {
-            return RenderStatus::Rendered;
+            return Ok(0);
         }
         let failure = if self.terminal {
             Some(RenderStatus::Terminal)
@@ -828,49 +1010,65 @@ impl RenderInstance {
             None
         };
         if let Some(status) = failure {
-            zero_output(&mut output);
-            return status;
+            zero_output(output);
+            return Err(status);
         }
 
+        Ok(frames)
+    }
+
+    fn execute(&mut self, mut output: Output<'_>, frames: usize) -> RenderStatus {
+        let channels = self.plan.buffer_channels();
+        let base = self.plan.maximum_frames;
         for offset in 0..frames {
             let frame = self.next_frame + offset as u64;
             self.apply_events(frame);
-            for slot in 0..OP_COUNT {
-                let base = self.plan.maximum_frames;
-                let sample = match self.plan.operations[slot] {
-                    Operation::Oscillator { increment, .. } => {
-                        let sample = self.phases[slot].sin() as f32;
-                        self.phases[slot] += increment;
-                        if self.phases[slot] >= TAU {
-                            self.phases[slot] -= TAU;
-                        }
-                        sample
-                    }
-                    Operation::Gain { input, .. } => {
-                        self.buffers[input * base + offset] * self.parameters[slot].at(frame)
-                    }
-                    Operation::Mix { inputs } => {
-                        self.buffers[inputs[0] * base + offset]
-                            + self.buffers[inputs[1] * base + offset]
-                    }
-                    Operation::Observe { input } => {
-                        let sample = self.buffers[input * base + offset];
-                        self.observe(sample, frame);
-                        sample
-                    }
-                    Operation::Output { input } => {
-                        let sample = self.buffers[input * base + offset];
-                        match &mut output {
-                            Output::Mono(samples) => samples[offset] = sample,
-                            Output::Stereo { left, right } => {
-                                left[offset] = sample;
-                                right[offset] = sample;
+            for slot in 0..self.plan.operation_count {
+                for channel in 0..channels {
+                    let plane = |input: usize| (input * channels + channel) * base + offset;
+                    let sample = match self.plan.operations[slot] {
+                        Operation::PcmInput { .. } => self.buffers[plane(slot)],
+                        Operation::Oscillator { increment, .. } => {
+                            let sample = self.phases[slot].sin() as f32;
+                            self.phases[slot] += increment;
+                            if self.phases[slot] >= TAU {
+                                self.phases[slot] -= TAU;
                             }
+                            sample
                         }
-                        sample
-                    }
-                };
-                self.buffers[slot * base + offset] = sample;
+                        Operation::Gain { input, .. } => {
+                            self.buffers[plane(input)] * self.parameters[slot].at(frame)
+                        }
+                        Operation::Mix { inputs } => {
+                            self.buffers[plane(inputs[0])] + self.buffers[plane(inputs[1])]
+                        }
+                        Operation::Observe { input } => {
+                            let sample = self.buffers[plane(input)];
+                            if channel == 0 {
+                                let right =
+                                    (channels == 2).then(|| self.buffers[plane(input) + base]);
+                                self.observe(sample, right, frame);
+                            }
+                            sample
+                        }
+                        Operation::Output { input } => {
+                            let sample = self.buffers[plane(input)];
+                            match &mut output {
+                                Output::Mono(samples) => samples[offset] = sample,
+                                Output::Stereo { left, right } => {
+                                    if channel == 0 {
+                                        left[offset] = sample;
+                                    }
+                                    if channels == 1 || channel == 1 {
+                                        right[offset] = sample;
+                                    }
+                                }
+                            }
+                            sample
+                        }
+                    };
+                    self.buffers[plane(slot)] = sample;
+                }
             }
         }
         self.next_frame += frames as u64;
@@ -890,3 +1088,6 @@ fn zero_output(output: &mut Output<'_>) {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod pcm_tests;

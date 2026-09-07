@@ -1402,6 +1402,14 @@ offline, native, and browser hosts. If it does not, narrow the shared center rat
 conditions to the renderer. PCM-input integration with a compiled plan has its own acceptance gate;
 it does not need to be part of the first oscillator-only plan proof.
 
+**Validation decision, 2026-09-06.** Gates A and B support retaining the private `CompiledPlan` and
+`RenderInstance` split for the next playback increment. The same operation table and executor run
+oscillator and prepared-PCM programs in native Rust and unshared Wasm. Native and browser transports
+both end at `PreparedPcmInput`, which owns epoch rejection and block retirement before the PCM
+operation reads its planes. The [Milestone 4 evidence](./2026-09-06-milestone-4-compiled-plan-evidence.md)
+does not establish a production browser transport, sustained deadline performance, public graph API,
+or live instance replacement. Keep one prepared instance per active stream.
+
 Local playback then proceeds incrementally through same-rate WAV, prepared sample-rate conversion,
 source epochs and seeking, compressed-format trim fixtures, and WAV loop fixtures. Progressive HTTP
 uses the deterministic fixture server before production storage. Catalog, managed import,

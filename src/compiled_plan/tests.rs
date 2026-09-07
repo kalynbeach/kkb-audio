@@ -649,7 +649,7 @@ fn versioned_description_round_trip_revalidates_program_and_event_limits() {
     assert!(CompiledPlan::decode(&extra).is_err());
     let event_offset = HEADER_WORDS + OP_COUNT * OP_WORDS;
     for (offset, value) in [
-        (0, 2),
+        (0, WIRE_VERSION + 1),
         (3, 0),
         (3, u32::MAX),
         (4, 3),

@@ -9,7 +9,8 @@ No source files were changed during the exploration.
 
 Update, 2026-09-06: this walkthrough remains a snapshot of `eaccf29`. The separate Milestone 4 Gate A
 compiled-plan proof now exists. See the [current evidence](./2026-09-06-milestone-4-compiled-plan-evidence.md)
-for its files, automation semantics, and validation. PCM-input plan integration remains pending.
+for its files, automation semantics, and validation. Gate B now integrates this prepared PCM seam
+with the compiled plan; see the [Gate B update](./2026-09-06-milestone-4-compiled-plan-evidence.md#gate-b-pcm-integration).
 
 ## 1. What this project is today
 
@@ -1598,8 +1599,9 @@ I would use this sequence:
 At this walkthrough's snapshot, the next milestone was the private compiled-plan proof. Gate A now
 implements two oscillators, gains, mixing, observations, and sample-timed automation in
 `src/compiled_plan.rs`, with focused tests in `src/compiled_plan/tests.rs` and a separate browser path
-through `src/compiled_plan_wasm.rs` and `web/src/plan-*.ts`. Integrating the PCM input boundary is still
-the separate Gate B. See the [Gate A evidence](./2026-09-06-milestone-4-compiled-plan-evidence.md).
+through `src/compiled_plan_wasm.rs` and `web/src/plan-*.ts`. Gate B now routes the native and browser
+PCM adapters through that same compiler and renderer. Epoch rejection and ownership remain in
+`PreparedPcmInput`. See the [Milestone 4 evidence](./2026-09-06-milestone-4-compiled-plan-evidence.md).
 
 ## The mental model to keep
 

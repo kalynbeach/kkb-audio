@@ -1,8 +1,13 @@
-# Milestone 4 Gate A compiled-plan evidence
+# Milestone 4 compiled-plan evidence
 
 Date: 2026-09-06
-Status: Gate A complete within the automated and browser observations below; Gate B pending
-Branch: `feat/4-compiled-plan`, based on `b1bf745`
+Status: Gates A and B implemented within the automated and browser observations below
+Gate A branch: `feat/4-compiled-plan`, based on `b1bf745`
+Gate B branch: `feat/4-prepared-pcm-plan`, based on verified Gate A `a9c25735625b14246197002760587beafe7f1385`
+
+The original sections through Reproduction record the Gate A checkpoint, including its wire version
+and artifact hashes. The [Gate B section](#gate-b-pcm-integration) records the current PCM integration,
+wire version 2, validation, and shared operation-representation decision.
 
 ## Claim boundary
 
@@ -13,9 +18,9 @@ sample-timed gain events, and bounded output observations. The same Rust program
 offline tests and unshared Wasm, including a real `AudioWorklet` observation.
 
 The [canonical architecture](./2026-08-28-kkb-audio-system-architecture.md) remains the authority.
-There is no PCM-input plan integration, public graph API, live replacement, state migration,
-production synthesis claim, or new CPAL device run here. The existing Milestone 3 PCM implementations
-remain separate. Gate B and the shared operation-representation decision are still open.
+At the Gate A checkpoint there was no PCM-input plan integration, public graph API, live replacement,
+state migration, production synthesis claim, or new CPAL device run. The Milestone 3 PCM implementations
+remained separate. Gate B below closes PCM integration and records the operation-representation decision.
 
 ## Closed program and ownership
 
@@ -216,3 +221,185 @@ bun run serve:proof
 
 Use the pinned Bun 1.4.0 binary. Open `/plan.html`, prepare, then activate the muted proof. Close it
 after reading the result. The invalid-version control checks the local worklet rejection path.
+
+## Gate B PCM integration
+
+Date: 2026-09-06
+Base: `a9c25735625b14246197002760587beafe7f1385`, verified locally and through GitHub before branching
+
+The second closed program is:
+
+```text
+prepared PCM input -> linked gain 0.5 -> level observation -> mono or semantic L/R output
+```
+
+The compiler accepts four operations for this program, alongside the seven-operation Gate A program.
+Processor IDs are 10 for PCM, 20 for gain parameter 1, 60 for observation, and 70 for output. Static
+PCM configuration contains source identity, sample rate, and channel layout. Compilation rejects
+rate/layout mismatches, invalid topology, and invalid capacity before preparing an instance.
+
+The PCM program preserves distinct stereo planes. Gain uses the existing sample-timed set/ramp
+semantics and applies one value to both channels. Peak is the maximum absolute sample across the
+channels; RMS is the square root of the mean square across all channel samples in a 64-frame window.
+Observation intervals and the instance clock remain render coordinates. They are not media position,
+epoch-tagged playback observations, or seek-completion reports. The render clock and automation
+continue through starvation and end-of-stream silence.
+
+### Input and ownership boundary
+
+`RenderInstance::render_pcm` validates output layout, frame capacity, checked clock, source identity,
+rate, layout, and prepared input capacity before pulling PCM. A matching zero-frame call changes
+neither the plan nor the seam. Rejected output or incompatible input is silenced without consuming
+blocks, advancing events, changing meter state, or advancing the clock. An over-capacity output makes
+the render instance terminal. Missing or incompatible input returns `InvalidInput`; the Wasm binding
+maps this to code 6. The oscillator-only `WorkletPlan` binding rejects a PCM description at preparation.
+
+`PreparedPcmInput` remains the only owner of epoch filtering, block partition adaptation, starvation,
+end-of-stream handling, and retirement. It rejects stale queued blocks and the remaining tail of an
+old current block before the PCM operation reads its samples. Future epochs remain invalid. Native
+retirement backpressure retains ownership in the seam and produces silence until retirement succeeds.
+The operation reads only the instance's preallocated planes; it has no SPSC ring, `MessagePort`,
+transferable buffer, host clock, or host conditional.
+
+The two adapter paths now call that same seam and renderer:
+
+- Native worker -> `NativeSource` SPSC rings -> `PreparedPcmInput` -> `RenderInstance` -> CPAL mapping.
+- Browser worker -> recycled transferable buffers -> `FixedSlotSource` -> `PreparedPcmInput` ->
+  `RenderInstance` -> Web Audio mapping.
+
+Neither transport protocol changed. A transferred browser buffer returns after off-callback copying
+and admission. Its corresponding Wasm slot stays unavailable until rendering retires it. A rejected
+new block remains in the worker's bounded retry state. Malformed ownership messages still terminate
+the transport through the existing failure paths.
+
+The native proof keeps its 4,096-frame preparation bound; the browser proof keeps 1,024. The compiler
+allows at most 4,096 PCM frames, while the oscillator program remains bounded at 1,024. Each PCM
+instance allocates four sets of mono or stereo planes during preparation. No new runtime dependency,
+transport queue, reference counting, or callback-side final drop is introduced.
+
+### Compiled description and preparation
+
+Wire version 2 represents either four PCM operations or seven oscillator operations. The PCM record
+stores the stream rate, source ID as two `u32` words, and semantic channel count. Encoding remains
+pointer-free; decoding recompiles and checks canonical records, including reserved fields. Version 1
+is intentionally rejected. The native round-trip fixture preserves a source ID above JavaScript's
+safe-integer range.
+
+Both PCM hosts compile the same small fixed program during preparation. In the browser this bounded
+four-node work happens in worklet construction, before the existing ready/activation handshake.
+The Gate A oscillator proof still compiles in its dedicated worker and transfers its description.
+Gate B does not introduce a second browser compilation or transport protocol.
+
+### Gate B automated evidence
+
+The final Rust suite passes in debug and release: 47 tests pass, and the existing device-opening CPAL
+test is ignored. Five new conformance tests cover PCM compilation and wire validation; independent
+mono/stereo samples with gain sets and ramps; exact one-block, one-frame, and irregular partitions;
+channel-combined observations; source compatibility and atomic rejection; stale current/queued blocks;
+future epochs; starvation, recovery, and EOS; and retirement backpressure without allocator calls.
+
+A native worker-to-callback test runs real SPSC delivery through the compiled gain, verifies exact
+scaled samples across 17-, 257-, and 1,024-frame calls, and checks the render clock and observation.
+It covers mono and stereo. The existing callback allocator test now exercises the compiled PCM path.
+The warmed seam-to-plan allocation probe observes zero `alloc`, `alloc_zeroed`, `realloc`, and `dealloc`
+calls, including backpressured retirement, observation retrieval, zero calls, and rejection paths.
+
+`bun run check` passes with Bun 1.4.0: 39 unit tests, 725 assertions, strict TypeScript checks, both
+actual-Wasm programs, fixed-memory validation, and both worklet source audits. The expanded
+`tools/check-worklet-kernel.ts` adds:
+
+- 44.1 and 48 kHz, mono and stereo, 1,000-frame analytic PCM comparisons at gain 0.5
+- exact same-Wasm output across one block, one-frame blocks, and uneven block boundaries
+- partially consumed old-epoch rejection, stale/future queued blocks, starvation and recovery, EOS,
+  duplicate reservation rejection, slot reuse, and terminal capacity behavior
+- 10,000 PCM admission/render/recycle calls per configuration with stable memory identity and size
+- the built worklet with actual Wasm and a real Bun `MessageChannel`, checking sender detachment,
+  returned buffer ownership, full Wasm-slot rejection, retained retry, and exact output after recycling
+
+The transport fixture mocks only the AudioWorklet host. It does not mock the PCM protocol, fixed pool,
+Wasm renderer, or worklet adapter. The prior malformed-envelope tests in both transfer directions
+remain green. The Gate A actual-Wasm analytic check still reports maximum error zero with tolerance
+`1e-6`; this is not a cross-target bit-identity claim.
+
+The following commands passed:
+
+```sh
+cargo fmt --check
+cargo test --all-targets --all-features
+cargo test --release --all-targets --all-features
+cargo clippy --all-targets --all-features -- -D warnings
+cargo clippy --target wasm32-unknown-unknown --lib -- -D warnings
+bun run check
+git diff --check
+```
+
+### Gate B browser observation and limits
+
+A fresh muted stereo run used Codex's built-in Chromium browser on macOS 26.6.2, build 25G83, arm64.
+The browser's version was unavailable through this session's browser interface; an auxiliary local
+header-inspection page was blocked by the browser. This is a limited integration observation with
+incomplete browser-version metadata, not a browser support claim.
+
+Preparation completed while suspended and disconnected. Activation observed signal at 48 kHz with
+128-frame callbacks. The page sampled after its existing 300 ms timer and reported:
+
+```json
+{
+  "analyserObservedSignal": true,
+  "channelCount": 2,
+  "contextRenderQuantumSize": null,
+  "contextSampleRate": 48000,
+  "workerInitialExhaustionCount": 1,
+  "snapshot": {
+    "failureCode": 0,
+    "invalidBlockCount": 0,
+    "lastFrameCount": 128,
+    "memoryBytes": 16777216,
+    "processCount": 114,
+    "slotCount": 4,
+    "staleBlockCount": 0,
+    "starvationCount": 26
+  }
+}
+```
+
+The 26 starvation callbacks are observed gaps in prepared PCM supply. This run proves execution and
+starvation reporting under those conditions; it does not prove continuous playback or adequate
+production worker pacing. The context was closed, the temporary tab closed, and the task-local
+servers stopped after the observation. No new physical-device CPAL run or browser matrix was run.
+
+The observation preceded the final render-status mapping changes. It used Wasm SHA-256
+`4ddd6891c5eb026cd903877982b1ec6dcff7f1254f4158e4478ffa2e4dd78796` and worklet SHA-256
+`520bcfff3872eaa4f605764909a3f9fe01d5faa40c1ac3ff0d130fcc3f12f29c`. The final automated checks cover
+the later explicit clock-overflow and invalid-input mappings and the final artifacts below.
+
+Allocator probes and textual JavaScript audits are limited to the exercised paths. They do not
+establish deadline safety, JavaScript allocation profiling, sustained load, or freedom from page faults.
+The fixed Wasm memory remains unshared, with 256 initial and maximum pages, 16,777,216 bytes.
+
+### Gate B artifact identity
+
+The toolchain is unchanged from Gate A: Rust 1.98.0, wasm-bindgen crate/CLI 0.2.127, Bun 1.4.0,
+TypeScript 7.0.2, and `@types/bun` 1.4.0. No dependency or lockfile changed.
+
+| Built artifact | SHA-256 |
+|---|---|
+| `web/dist/kkb_audio_bg.wasm` | `e58cb79a965e4a0a7b30f8102a318aa4db47209f27a9b0a34ee25a8b55b5c69a` |
+| `web/dist/worklet-processor.js` | `aa04a9421ccf229b2c1b3aba3e0ca769908cfc8487a1acdbd6ecd91a88fb8bb1` |
+| `web/dist/plan-processor.js` | `3a4ce0318fa1336d734cb8b9250b5a2dfab2246a03b1c09bc5b584737a8588e2` |
+
+### Shared operation-representation decision
+
+An independent read-only review accepted the complete Gate B diff against
+`a9c25735625b14246197002760587beafe7f1385` with zero actionable standards or specification findings.
+The reviewer inspected the code, tests, documentation, final artifact hashes, and whitespace check;
+the suite results above were run by the writer.
+
+Retain the private `CompiledPlan` and `RenderInstance` split. Gates A and B demonstrate the same
+operation table and executor for native Rust and unshared Wasm, with both transports ending at the
+same prepared input seam. Transport mechanisms and host lifecycle remain outside rendering.
+
+Keep one prepared instance per active stream. Live replacement, state migration, production transport
+selection, and sustained performance remain unproven. The next scoped increment is same-rate local
+WAV with play, pause, position, bounded buffering, and starvation reporting. No decoder, seeking,
+resampling, compressed format, HTTP source, production storage, or UI redesign is added here.
