@@ -13,12 +13,30 @@ class FakeKernel implements WorkletKernelBinding {
   readonly #rightPointer: number;
   calls = 0;
   nextStatus: number = RenderStatus.Rendered;
+  readonly #reserved = [false, false, false, false];
 
   constructor(memory: MutableMemory, maximumFrames: number, rightPointer = 4_096) {
     this.#memory = memory;
     this.#maximumFrames = maximumFrames;
     this.#rightPointer = rightPointer;
   }
+
+  admit(_slotId: number, _epoch: bigint, _sourceFrameStart: bigint, _validFrames: number, _discontinuity: boolean, _endOfStream: boolean): number {
+    return RenderStatus.Rendered;
+  }
+
+  cancel_slot(slotId: number): void { this.#reserved[slotId] = false; }
+  invalid_count(): bigint { return 0n; }
+  reserve_slot(slotId: number): boolean {
+    if (this.#reserved[slotId] !== false) return false;
+    this.#reserved[slotId] = true;
+    return true;
+  }
+  slot_count(): number { return 4; }
+  slot_left_ptr(slotId: number): number { return 8_192 + slotId * this.#maximumFrames * 4; }
+  slot_right_ptr(slotId: number): number { return 16_384 + slotId * this.#maximumFrames * 4; }
+  stale_count(): bigint { return 0n; }
+  starvation_count(): bigint { return 0n; }
 
   render(frameCount: number): number {
     this.calls += 1;
@@ -54,7 +72,7 @@ class FakeKernel implements WorkletKernelBinding {
 class MutableMemory implements WorkletMemory {
   buffer: ArrayBuffer;
 
-  constructor(bytes = 16_384) {
+  constructor(bytes = 32_768) {
     this.buffer = new ArrayBuffer(bytes);
   }
 }
@@ -79,9 +97,13 @@ describe("PreparedPlanarAdapter", () => {
     expect(twoHundredFiftySeven[256]).toBe(256.25);
     expect(adapter.snapshot()).toEqual({
       failureCode: 0,
+      invalidBlockCount: 0,
       lastFrameCount: 257,
-      memoryBytes: 16_384,
+      memoryBytes: 32_768,
       processCount: 2,
+      slotCount: 4,
+      staleBlockCount: 0,
+      starvationCount: 0,
     });
   });
 
@@ -153,7 +175,6 @@ describe("PreparedPlanarAdapter", () => {
       [RenderStatus.InvalidLayout, HostFailure.WasmInvalidLayout],
       [RenderStatus.CapacityExceeded, HostFailure.WasmCapacityExceeded],
       [RenderStatus.Terminal, HostFailure.WasmTerminal],
-      [RenderStatus.ClockOverflow, HostFailure.WasmClockOverflow],
       [99, HostFailure.WasmUnknownStatus],
     ] as const;
 

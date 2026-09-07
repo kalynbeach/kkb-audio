@@ -1,28 +1,27 @@
-use crate::prepared_kernel::{Output, OutputLayout, PrepareError, PreparedKernel, RenderStatus};
+use crate::prepared_pcm::{
+    BlockMeta, ChannelLayout, FixedSlotSource, PcmOutput, PcmRenderStatus, PreparedPcmInput,
+    StreamSpec,
+};
 use wasm_bindgen::prelude::*;
 
 const LAYOUT_MONO: u32 = 1;
 const LAYOUT_STEREO: u32 = 2;
+const SLOT_COUNT: usize = 4;
 
 const STATUS_RENDERED: u32 = 0;
 const STATUS_INVALID_LAYOUT: u32 = 1;
 const STATUS_CAPACITY_EXCEEDED: u32 = 2;
 const STATUS_TERMINAL: u32 = 3;
-const STATUS_CLOCK_OVERFLOW: u32 = 4;
+const STATUS_REJECTED: u32 = 5;
 
 const ERROR_LAYOUT: u32 = 10;
 const ERROR_SAMPLE_RATE: u32 = 11;
-const ERROR_GAIN: u32 = 12;
-const ERROR_FREQUENCY: u32 = 13;
 
-/// Private proof adapter exported only in the Wasm artifact.
-///
-/// The host-facing ABI owns fixed planar storage. Rendering still enters the
-/// unchanged Milestone 1 `PreparedKernel::render` seam.
+/// Private fixed-memory adapter for the browser PCM transport proof.
 #[wasm_bindgen]
 pub struct WorkletKernel {
-    kernel: Option<PreparedKernel>,
-    layout: OutputLayout,
+    input: Option<PreparedPcmInput<FixedSlotSource<SLOT_COUNT>>>,
+    layout: ChannelLayout,
     left: Box<[f32]>,
     right: Box<[f32]>,
     preparation_status: u32,
@@ -34,38 +33,48 @@ impl WorkletKernel {
     #[wasm_bindgen(constructor)]
     pub fn new(
         layout: u32,
-        sample_rate: f64,
-        frequency: f64,
-        gain: f32,
+        sample_rate: u32,
+        source_id: u64,
+        epoch: u64,
         maximum_frames: usize,
+        slot_frames: usize,
     ) -> WorkletKernel {
-        let (layout, layout_status) = match layout {
-            LAYOUT_MONO => (OutputLayout::Mono, STATUS_RENDERED),
-            LAYOUT_STEREO => (OutputLayout::Stereo, STATUS_RENDERED),
-            _ => (OutputLayout::Mono, ERROR_LAYOUT),
+        let (layout, preparation_status) = match layout {
+            LAYOUT_MONO => (ChannelLayout::Mono, STATUS_RENDERED),
+            LAYOUT_STEREO => (ChannelLayout::Stereo, STATUS_RENDERED),
+            _ => (ChannelLayout::Mono, ERROR_LAYOUT),
         };
-        let prepared = if layout_status == STATUS_RENDERED {
-            PreparedKernel::prepare(layout, sample_rate, frequency, gain, maximum_frames)
-                .map_err(prepare_error_code)
+        let spec = StreamSpec {
+            layout,
+            sample_rate,
+            source_id,
+        };
+        let input = if preparation_status == STATUS_RENDERED && spec.validate() && slot_frames > 0 {
+            PreparedPcmInput::new(
+                spec,
+                epoch,
+                maximum_frames,
+                FixedSlotSource::new(layout, slot_frames),
+            )
         } else {
-            Err(layout_status)
+            None
         };
-        let (kernel, preparation_status) = match prepared {
-            Ok(kernel) => (Some(kernel), STATUS_RENDERED),
-            Err(status) => (None, status),
-        };
-
-        let left = vec![0.0; maximum_frames].into_boxed_slice();
-        let right = match layout {
-            OutputLayout::Mono => Box::default(),
-            OutputLayout::Stereo => vec![0.0; maximum_frames].into_boxed_slice(),
+        let preparation_status = if preparation_status != STATUS_RENDERED {
+            preparation_status
+        } else if input.is_none() {
+            ERROR_SAMPLE_RATE
+        } else {
+            STATUS_RENDERED
         };
 
         Self {
-            kernel,
+            input,
             layout,
-            left,
-            right,
+            left: vec![0.0; maximum_frames].into_boxed_slice(),
+            right: match layout {
+                ChannelLayout::Mono => Box::default(),
+                ChannelLayout::Stereo => vec![0.0; maximum_frames].into_boxed_slice(),
+            },
             preparation_status,
             terminal: false,
         }
@@ -73,6 +82,66 @@ impl WorkletKernel {
 
     pub fn preparation_status(&self) -> u32 {
         self.preparation_status
+    }
+
+    pub fn reserve_slot(&mut self, slot_id: u32) -> bool {
+        self.input
+            .as_mut()
+            .is_some_and(|input| input.source_mut().reserve(slot_id))
+    }
+
+    pub fn cancel_slot(&mut self, slot_id: u32) {
+        if let Some(input) = &mut self.input {
+            input.source_mut().cancel_reservation(slot_id);
+        }
+    }
+
+    pub fn slot_left_ptr(&mut self, slot_id: u32) -> *const f32 {
+        self.input
+            .as_mut()
+            .and_then(|input| input.source_mut().plane_ptrs(slot_id))
+            .map_or(std::ptr::null(), |pointers| pointers.0)
+    }
+
+    pub fn slot_right_ptr(&mut self, slot_id: u32) -> *const f32 {
+        self.input
+            .as_mut()
+            .and_then(|input| input.source_mut().plane_ptrs(slot_id))
+            .map_or(std::ptr::null(), |pointers| pointers.1)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn admit(
+        &mut self,
+        slot_id: u32,
+        epoch: u64,
+        source_frame_start: u64,
+        valid_frames: usize,
+        discontinuity: bool,
+        end_of_stream: bool,
+    ) -> u32 {
+        let Some(input) = &mut self.input else {
+            return STATUS_TERMINAL;
+        };
+        let accepted = input.source_mut().admit_reserved(BlockMeta {
+            slot_id,
+            epoch,
+            source_frame_start,
+            valid_frames,
+            discontinuity,
+            end_of_stream,
+        });
+        if accepted {
+            STATUS_RENDERED
+        } else {
+            STATUS_REJECTED
+        }
+    }
+
+    pub fn set_epoch(&mut self, epoch: u64) {
+        if let Some(input) = &mut self.input {
+            input.set_active_epoch(epoch);
+        }
     }
 
     pub fn render(&mut self, frame_count: usize) -> u32 {
@@ -89,54 +158,56 @@ impl WorkletKernel {
             self.terminal = true;
             return STATUS_CAPACITY_EXCEEDED;
         }
-        let Some(kernel) = &mut self.kernel else {
+        let Some(input) = &mut self.input else {
             self.terminal = true;
             return STATUS_TERMINAL;
         };
-
         let status = match self.layout {
-            OutputLayout::Mono => kernel.render(Output::Mono(&mut self.left[..frame_count])),
-            OutputLayout::Stereo => kernel.render(Output::Stereo {
+            ChannelLayout::Mono => input.render(PcmOutput::Mono(&mut self.left[..frame_count])),
+            ChannelLayout::Stereo => input.render(PcmOutput::Stereo {
                 left: &mut self.left[..frame_count],
                 right: &mut self.right[..frame_count],
             }),
         };
         if matches!(
             status,
-            RenderStatus::CapacityExceeded | RenderStatus::Terminal
+            PcmRenderStatus::CapacityExceeded | PcmRenderStatus::Terminal
         ) {
             self.terminal = true;
         }
-        render_status_code(status)
+        match status {
+            PcmRenderStatus::Rendered => STATUS_RENDERED,
+            PcmRenderStatus::InvalidLayout => STATUS_INVALID_LAYOUT,
+            PcmRenderStatus::CapacityExceeded => STATUS_CAPACITY_EXCEEDED,
+            PcmRenderStatus::Terminal => STATUS_TERMINAL,
+        }
     }
 
     pub fn left_ptr(&self) -> *const f32 {
         self.left.as_ptr()
     }
-
     pub fn right_ptr(&self) -> *const f32 {
         self.right.as_ptr()
     }
-
     pub fn maximum_frames(&self) -> usize {
         self.left.len()
     }
-}
-
-fn prepare_error_code(error: PrepareError) -> u32 {
-    match error {
-        PrepareError::SampleRate => ERROR_SAMPLE_RATE,
-        PrepareError::Gain => ERROR_GAIN,
-        PrepareError::Frequency => ERROR_FREQUENCY,
+    pub fn slot_count(&self) -> usize {
+        SLOT_COUNT
     }
-}
-
-fn render_status_code(status: RenderStatus) -> u32 {
-    match status {
-        RenderStatus::Rendered => STATUS_RENDERED,
-        RenderStatus::InvalidLayout => STATUS_INVALID_LAYOUT,
-        RenderStatus::CapacityExceeded => STATUS_CAPACITY_EXCEEDED,
-        RenderStatus::Terminal => STATUS_TERMINAL,
-        RenderStatus::ClockOverflow => STATUS_CLOCK_OVERFLOW,
+    pub fn starvation_count(&self) -> u64 {
+        self.input
+            .as_ref()
+            .map_or(0, |input| input.counters().starvation_callbacks)
+    }
+    pub fn stale_count(&self) -> u64 {
+        self.input
+            .as_ref()
+            .map_or(0, |input| input.counters().stale_blocks)
+    }
+    pub fn invalid_count(&self) -> u64 {
+        self.input
+            .as_ref()
+            .map_or(0, |input| input.counters().invalid_blocks)
     }
 }

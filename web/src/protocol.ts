@@ -12,6 +12,7 @@ export type ReadyMessage = {
   memoryPages: number;
   maximumFrames: number;
   sampleRate: number;
+  slotCount: number;
 };
 
 export type FailedMessage = {
@@ -25,6 +26,13 @@ export type GateResult =
   | { type: "pending" }
   | { type: "ready"; message: ReadyMessage }
   | { type: "failed"; code: number };
+
+export function runtimeFailureCode(value: unknown): number | undefined {
+  if (!isRecord(value)) return undefined;
+  return value.type === "runtime-failed" && isFiniteInteger(value.code)
+    ? value.code
+    : undefined;
+}
 
 export class InitializationGate {
   #result: GateResult = { type: "pending" };
@@ -53,6 +61,7 @@ export class InitializationGate {
       isFiniteInteger(value.memoryBytes) &&
       isFiniteInteger(value.memoryPages) &&
       isFiniteInteger(value.maximumFrames) &&
+      isFiniteInteger(value.slotCount) &&
       typeof value.sampleRate === "number" &&
       Number.isFinite(value.sampleRate) &&
       value.sampleRate > 0

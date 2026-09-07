@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   InitializationFailure,
   InitializationGate,
+  runtimeFailureCode,
   type ReadyMessage,
 } from "../src/protocol";
 
@@ -11,6 +12,7 @@ const ready: ReadyMessage = {
   memoryPages: 256,
   maximumFrames: 1_024,
   sampleRate: 48_000,
+  slotCount: 4,
 };
 
 describe("InitializationGate", () => {
@@ -54,5 +56,13 @@ describe("InitializationGate", () => {
       type: "failed",
       code: InitializationFailure.ProcessorError,
     });
+  });
+});
+
+describe("runtime failure protocol", () => {
+  test("accepts only coded runtime failure messages", () => {
+    expect(runtimeFailureCode({ type: "runtime-failed", code: 43 })).toBe(43);
+    expect(runtimeFailureCode({ type: "runtime-failed", code: -1 })).toBeUndefined();
+    expect(runtimeFailureCode({ type: "failed", code: 43 })).toBeUndefined();
   });
 });

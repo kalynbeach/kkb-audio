@@ -2,18 +2,18 @@ import { PreparationLifecycle } from "./preparation-lifecycle";
 import {
   InitializationFailure,
   InitializationGate,
+  runtimeFailureCode,
   type ReadyMessage,
 } from "./protocol";
 import type { RenderSnapshot } from "./render-adapter";
 
 type ProofOptions = {
   channelCount: 1 | 2;
-  frequency: number;
-  gain: number;
   injectPreparationFailure?: boolean;
   maximumFrames: number;
   timeoutMilliseconds?: number;
   wasmUrl?: string;
+  workerUrl?: string;
   workletUrl?: string;
 };
 
@@ -23,6 +23,7 @@ export type BrowserProofResult = {
   contextRenderQuantumSize: number | null;
   contextSampleRate: number;
   initialization: ReadyMessage;
+  workerInitialExhaustionCount: number;
   snapshot: RenderSnapshot;
 };
 
@@ -40,8 +41,11 @@ export class PreparedProof {
   readonly #gate: InitializationGate;
   readonly #node: AudioWorkletNode;
   readonly #ready: ReadyMessage;
+  readonly #worker: Worker | undefined;
+  readonly #workerInitialExhaustionCount: number;
   #activated = false;
   #closed = false;
+  #workerTerminated = false;
   #runtimeFailure = 0;
   #snapshotResolve: ((snapshot: RenderSnapshot) => void) | undefined;
   #snapshotReject: ((code: number) => void) | undefined;
@@ -51,11 +55,15 @@ export class PreparedProof {
     node: AudioWorkletNode,
     gate: InitializationGate,
     ready: ReadyMessage,
+    worker?: Worker,
+    workerInitialExhaustionCount = 0,
   ) {
     this.#context = context;
     this.#node = node;
     this.#gate = gate;
     this.#ready = ready;
+    this.#worker = worker;
+    this.#workerInitialExhaustionCount = workerInitialExhaustionCount;
   }
 
   get ready(): ReadyMessage {
@@ -67,10 +75,20 @@ export class PreparedProof {
       this.#snapshotResolve?.(value.snapshot);
       return;
     }
+    const failureCode = runtimeFailureCode(value);
+    if (failureCode !== undefined) {
+      this.failRuntime(failureCode);
+      return;
+    }
     const result = this.#gate.accept(value);
     if (result.type === "failed") {
       this.failRuntime(result.code);
     }
+  }
+
+  acceptWorkerMessage(value: unknown): void {
+    const code = workerFailureCode(value);
+    if (code !== undefined) this.failRuntime(code);
   }
 
   failRuntime(code: number): void {
@@ -79,6 +97,7 @@ export class PreparedProof {
     }
     this.#snapshotReject?.(this.#runtimeFailure);
     this.#node.disconnect();
+    this.#terminateWorker();
     if (!this.#closed) {
       void this.#context.suspend();
     }
@@ -91,14 +110,20 @@ export class PreparedProof {
     }
     this.#activated = true;
 
+    const splitter = new ChannelSplitterNode(this.#context, {
+      numberOfOutputs: this.#node.channelCount,
+    });
     const analyser = new AnalyserNode(this.#context, { fftSize: 2_048 });
     const mute = new GainNode(this.#context, { gain: 0 });
-    this.#node.connect(analyser).connect(mute).connect(this.#context.destination);
+    this.#node.connect(splitter);
+    splitter.connect(analyser, 0);
+    analyser.connect(mute).connect(this.#context.destination);
     await this.#context.resume();
     this.#throwIfUnavailable();
     if (this.#context.state !== "running") {
       throw new InitializationError(InitializationFailure.ContextState);
     }
+    this.#worker?.postMessage({ type: "activate" });
 
     await delay(300);
     this.#throwIfUnavailable();
@@ -114,9 +139,10 @@ export class PreparedProof {
     const snapshot = await this.#requestSnapshot();
     this.#throwIfUnavailable();
     if (snapshot.failureCode !== 0 || snapshot.processCount === 0) {
-      throw new InitializationError(
+      this.failRuntime(
         snapshot.failureCode || InitializationFailure.ContextState,
       );
+      this.#throwIfUnavailable();
     }
 
     const contextWithQuantum = this.#context as AudioContext & {
@@ -128,6 +154,7 @@ export class PreparedProof {
       contextRenderQuantumSize: contextWithQuantum.renderQuantumSize ?? null,
       contextSampleRate: this.#context.sampleRate,
       initialization: this.#ready,
+      workerInitialExhaustionCount: this.#workerInitialExhaustionCount,
       snapshot,
     };
   }
@@ -139,6 +166,7 @@ export class PreparedProof {
     this.#closed = true;
     this.#snapshotReject?.(InitializationFailure.ContextState);
     this.#node.disconnect();
+    this.#terminateWorker();
     await this.#context.close();
   }
 
@@ -150,6 +178,12 @@ export class PreparedProof {
     }
   }
 
+  #terminateWorker(): void {
+    if (this.#workerTerminated) return;
+    this.#workerTerminated = true;
+    this.#worker?.terminate();
+  }
+
   #requestSnapshot(): Promise<RenderSnapshot> {
     return new Promise((resolve, reject) => {
       const clearPendingSnapshot = () => {
@@ -159,6 +193,7 @@ export class PreparedProof {
       };
       const timeout = setTimeout(() => {
         clearPendingSnapshot();
+        this.failRuntime(InitializationFailure.Timeout);
         reject(new InitializationError(InitializationFailure.Timeout));
       }, 1_000);
       this.#snapshotResolve = (snapshot) => {
@@ -178,21 +213,56 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
   const context = new AudioContext();
   const timeoutMilliseconds = options.timeoutMilliseconds ?? 5_000;
   const wasmUrl = options.wasmUrl ?? "./kkb_audio_bg.wasm";
+  const workerUrl = options.workerUrl ?? "./pcm-worker.js";
   const workletUrl = options.workletUrl ?? "./worklet-processor.js";
+  let worker: Worker | undefined;
+  let prepared: PreparedProof | undefined;
+  let startupRuntimeFailure: number | undefined;
 
   try {
-    if (context.state !== "suspended") {
-      await context.suspend();
-    }
+    if (context.state !== "suspended") await context.suspend();
     const wasmResponse = await fetch(wasmUrl, { cache: "no-store" });
-    if (!wasmResponse.ok) {
-      throw new InitializationError(InitializationFailure.InvalidMessage);
-    }
+    if (!wasmResponse.ok) throw new InitializationError(InitializationFailure.InvalidMessage);
     const module = await WebAssembly.compile(await wasmResponse.arrayBuffer());
     await context.audioWorklet.addModule(workletUrl);
 
+    const config = {
+      channelCount: options.channelCount,
+      epoch: 1,
+      sampleRate: context.sampleRate,
+      slotCount: 4,
+      slotFrames: 256,
+      sourceId: 3,
+    } as const;
+    const channel = new MessageChannel();
+    worker = new Worker(workerUrl, { type: "module" });
+    const workerReady = new Promise<number>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new InitializationError(InitializationFailure.Timeout)), timeoutMilliseconds);
+      const failWorker = (code: number) => {
+        clearTimeout(timeout);
+        if (prepared === undefined) {
+          startupRuntimeFailure ??= code;
+          reject(new InitializationError(code));
+        } else {
+          prepared.failRuntime(code);
+        }
+      };
+      worker!.onmessage = (event: MessageEvent<unknown>) => {
+        const message = event.data as { type?: unknown; slotCount?: unknown; exhaustionCount?: unknown; invalidRecycleCount?: unknown } | null;
+        if (
+          message?.type === "worker-ready" && message.slotCount === config.slotCount &&
+          message.exhaustionCount === 1 && message.invalidRecycleCount === 0
+        ) {
+          clearTimeout(timeout); resolve(message.exhaustionCount);
+        } else if (message?.type === "worker-failed") {
+          failWorker(workerFailureCode(event.data) ?? InitializationFailure.InvalidMessage);
+        }
+      };
+      worker!.onerror = () => failWorker(InitializationFailure.InvalidMessage);
+    });
+    worker.postMessage({ type: "initialize", config, port: channel.port1 }, [channel.port1]);
+
     const gate = new InitializationGate();
-    let prepared: PreparedProof | undefined;
     const node = new AudioWorkletNode(context, "kkb-prepared-kernel", {
       channelCount: options.channelCount,
       channelCountMode: "explicit",
@@ -200,56 +270,62 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
       numberOfOutputs: 1,
       outputChannelCount: [options.channelCount],
       processorOptions: {
-        channelCount: options.channelCount,
-        frequency: options.frequency,
-        gain: options.gain,
+        ...config,
         injectPreparationFailure: options.injectPreparationFailure,
         maximumFrames: options.maximumFrames,
         module,
       },
     });
-
-    const ready = await new Promise<ReadyMessage>((resolve, reject) => {
+    const workletReady = new Promise<ReadyMessage>((resolve, reject) => {
       const timeout = setTimeout(() => {
         const result = gate.fail(InitializationFailure.Timeout);
         reject(new InitializationError(result.type === "failed" ? result.code : InitializationFailure.Timeout));
       }, timeoutMilliseconds);
-
       node.port.onmessage = (event: MessageEvent<unknown>) => {
-        if (prepared !== undefined) {
-          prepared.acceptRuntimeMessage(event.data);
+        if (prepared !== undefined) { prepared.acceptRuntimeMessage(event.data); return; }
+        const failureCode = runtimeFailureCode(event.data);
+        if (failureCode !== undefined) {
+          startupRuntimeFailure ??= failureCode;
+          clearTimeout(timeout);
+          reject(new InitializationError(failureCode));
           return;
         }
         const result = gate.accept(event.data);
-        if (result.type === "ready") {
-          clearTimeout(timeout);
-          resolve(result.message);
-        } else if (result.type === "failed") {
-          clearTimeout(timeout);
-          reject(new InitializationError(result.code));
-        }
+        if (result.type === "ready") { clearTimeout(timeout); resolve(result.message); }
+        else if (result.type === "failed") { clearTimeout(timeout); reject(new InitializationError(result.code)); }
       };
       node.addEventListener("processorerror", () => {
-        const result = gate.fail(InitializationFailure.ProcessorError);
-        clearTimeout(timeout);
-        if (prepared === undefined) {
-          reject(new InitializationError(result.type === "failed" ? result.code : InitializationFailure.ProcessorError));
-        } else {
-          prepared.failRuntime(InitializationFailure.ProcessorError);
-        }
+        const result = gate.fail(InitializationFailure.ProcessorError); clearTimeout(timeout);
+        if (prepared === undefined) reject(new InitializationError(result.type === "failed" ? result.code : InitializationFailure.ProcessorError));
+        else prepared.failRuntime(InitializationFailure.ProcessorError);
       });
       node.port.start();
+      node.port.postMessage({ type: "transport-port", port: channel.port2 }, [channel.port2]);
     });
 
+    const [ready, workerInitialExhaustionCount] = await Promise.all([workletReady, workerReady]);
+    if (startupRuntimeFailure !== undefined) {
+      throw new InitializationError(startupRuntimeFailure);
+    }
     if (context.state !== "suspended" || gate.result.type !== "ready") {
       throw new InitializationError(InitializationFailure.ContextState);
     }
-    prepared = new PreparedProof(context, node, gate, ready);
+    prepared = new PreparedProof(context, node, gate, ready, worker, workerInitialExhaustionCount);
     return prepared;
   } catch (error) {
+    worker?.terminate();
     await context.close();
     throw error;
   }
+}
+
+function workerFailureCode(value: unknown): number | undefined {
+  if (typeof value !== "object" || value === null) return undefined;
+  const message = value as { type?: unknown; code?: unknown };
+  if (message.type !== "worker-failed") return undefined;
+  return Number.isSafeInteger(message.code) && (message.code as number) >= 0
+    ? (message.code as number)
+    : InitializationFailure.InvalidMessage;
 }
 
 function isSnapshotMessage(
@@ -265,9 +341,13 @@ function isSnapshotMessage(
   const snapshot = message.snapshot as Partial<RenderSnapshot>;
   return (
     Number.isSafeInteger(snapshot.failureCode) &&
+    Number.isSafeInteger(snapshot.invalidBlockCount) &&
     Number.isSafeInteger(snapshot.lastFrameCount) &&
     Number.isSafeInteger(snapshot.memoryBytes) &&
-    Number.isSafeInteger(snapshot.processCount)
+    Number.isSafeInteger(snapshot.processCount) &&
+    Number.isSafeInteger(snapshot.slotCount) &&
+    Number.isSafeInteger(snapshot.staleBlockCount) &&
+    Number.isSafeInteger(snapshot.starvationCount)
   );
 }
 
@@ -286,8 +366,6 @@ prepareButton?.addEventListener("click", async () => {
   const preparation = proofLifecycle.tryReplace(() =>
     prepareProof({
       channelCount: 2,
-      frequency: 997,
-      gain: 0.125,
       maximumFrames: 1_024,
     }),
   );
@@ -326,8 +404,6 @@ failureButton?.addEventListener("click", async () => {
   const preparation = proofLifecycle.tryExclusive(async () => {
     const unexpectedProof = await prepareProof({
       channelCount: 1,
-      frequency: 440,
-      gain: 0.125,
       injectPreparationFailure: true,
       maximumFrames: 1_024,
     });

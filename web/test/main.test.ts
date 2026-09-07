@@ -24,10 +24,15 @@ class FakeAnalyserNode extends FakeAudioNode {
   }
 }
 
+class FakeChannelSplitterNode extends FakeAudioNode {}
 class FakeGainNode extends FakeAudioNode {}
 
 Object.defineProperties(globalThis, {
   AnalyserNode: { configurable: true, value: FakeAnalyserNode },
+  ChannelSplitterNode: {
+    configurable: true,
+    value: FakeChannelSplitterNode,
+  },
   document: {
     configurable: true,
     value: { querySelector: () => null },
@@ -35,22 +40,26 @@ Object.defineProperties(globalThis, {
   GainNode: { configurable: true, value: FakeGainNode },
 });
 
-const { PreparedProof } = await import("../src/main");
+const { PreparedProof, prepareProof } = await import("../src/main");
 
 class FakeContext {
   readonly destination = new FakeAudioNode();
   readonly sampleRate = 48_000;
   state: AudioContextState = "suspended";
+  closeCount = 0;
+  suspendCount = 0;
 
   async resume(): Promise<void> {
     this.state = "running";
   }
 
   async suspend(): Promise<void> {
+    this.suspendCount += 1;
     this.state = "suspended";
   }
 
   async close(): Promise<void> {
+    this.closeCount += 1;
     this.state = "closed";
   }
 }
@@ -64,21 +73,114 @@ class FakeWorkletNode extends FakeAudioNode {
   disconnect(): void {}
 }
 
+class FakeWorker {
+  readonly messages: unknown[] = [];
+  terminationCount = 0;
+
+  postMessage(message: unknown): void {
+    this.messages.push(message);
+  }
+
+  terminate(): void {
+    this.terminationCount += 1;
+  }
+}
+
+class StartupContext extends FakeContext {
+  static latest: StartupContext;
+  readonly audioWorklet = { addModule: async (_url: string) => {} };
+
+  constructor() {
+    super();
+    StartupContext.latest = this;
+  }
+}
+
+class StartupWorkletNode extends FakeAudioNode {
+  static latest: StartupWorkletNode;
+  readonly channelCount = 2;
+  disconnectCount = 0;
+
+  constructor() {
+    super();
+    StartupWorkletNode.latest = this;
+  }
+  readonly port = {
+    onmessage: null as ((event: MessageEvent<unknown>) => void) | null,
+    postMessage: (message: unknown) => {
+      if (
+        typeof message === "object" && message !== null &&
+        "type" in message && message.type === "snapshot"
+      ) {
+        this.send({
+          type: "snapshot",
+          snapshot: {
+            failureCode: 0,
+            invalidBlockCount: 0,
+            lastFrameCount: 128,
+            memoryBytes: 16_777_216,
+            processCount: 1,
+            slotCount: 4,
+            staleBlockCount: 0,
+            starvationCount: 0,
+          },
+        });
+      }
+    },
+    start: () => {},
+  };
+
+  addEventListener(_type: string, _listener: () => void): void {}
+  disconnect(): void { this.disconnectCount += 1; }
+  send(data: unknown): void {
+    this.port.onmessage?.({ data } as MessageEvent<unknown>);
+  }
+}
+
+let resolveStartupWorker: ((worker: StartupWorker) => void) | undefined;
+
+class StartupWorker {
+  onerror: (() => void) | null = null;
+  onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
+  terminationCount = 0;
+
+  constructor() {
+    resolveStartupWorker?.(this);
+  }
+
+  postMessage(_message: unknown): void {}
+  terminate(): void { this.terminationCount += 1; }
+
+  sendReady(): void {
+    this.onmessage?.({
+      data: {
+        type: "worker-ready",
+        slotCount: 4,
+        exhaustionCount: 1,
+        invalidRecycleCount: 0,
+      },
+    } as MessageEvent<unknown>);
+  }
+}
+
 const ready: ReadyMessage = {
   type: "ready",
   memoryBytes: 16_777_216,
   memoryPages: 256,
   maximumFrames: 1_024,
   sampleRate: 48_000,
+  slotCount: 4,
 };
 
 function preparedProof(): {
   context: FakeContext;
   node: FakeWorkletNode;
   proof: InstanceType<typeof PreparedProof>;
+  worker: FakeWorker;
 } {
   const context = new FakeContext();
   const node = new FakeWorkletNode();
+  const worker = new FakeWorker();
   const gate = new InitializationGate();
   gate.accept(ready);
   const proof = new PreparedProof(
@@ -86,8 +188,9 @@ function preparedProof(): {
     node as unknown as AudioWorkletNode,
     gate,
     ready,
+    worker as unknown as Worker,
   );
-  return { context, node, proof };
+  return { context, node, proof, worker };
 }
 
 function nextTask(): Promise<void> {
@@ -106,8 +209,49 @@ describe("PreparedProof activation", () => {
     });
   });
 
-  test("rejects a runtime failure raised during the snapshot request", async () => {
-    const { node, proof } = preparedProof();
+  test("routes a post-preparation worker failure through runtime cleanup once", async () => {
+    const { context, proof, worker } = preparedProof();
+
+    proof.acceptWorkerMessage({ type: "worker-failed", code: 50 });
+    await expect(proof.activate()).rejects.toMatchObject({ code: 50 });
+    expect(worker.terminationCount).toBe(1);
+    expect(context.suspendCount).toBe(1);
+
+    await proof.close();
+    await proof.close();
+    expect(worker.terminationCount).toBe(1);
+    expect(context.closeCount).toBe(1);
+  });
+
+  test("routes a worklet transport failure through runtime cleanup with its code", async () => {
+    const { context, proof, worker } = preparedProof();
+
+    proof.acceptRuntimeMessage({ type: "runtime-failed", code: 43 });
+    await expect(proof.activate()).rejects.toMatchObject({ code: 43 });
+    expect(worker.terminationCount).toBe(1);
+    expect(context.suspendCount).toBe(1);
+
+    await proof.close();
+    expect(worker.terminationCount).toBe(1);
+  });
+
+  test("routes snapshot timeout through runtime cleanup before rejecting", async () => {
+    const { context, proof, worker } = preparedProof();
+
+    await expect(proof.activate()).rejects.toMatchObject({
+      code: InitializationFailure.Timeout,
+    });
+    expect(worker.terminationCount).toBe(1);
+    expect(context.suspendCount).toBe(1);
+
+    await proof.close();
+    await proof.close();
+    expect(worker.terminationCount).toBe(1);
+    expect(context.closeCount).toBe(1);
+  });
+
+  test("rejects a runtime failure raised during the snapshot request and terminates its worker once", async () => {
+    const { node, proof, worker } = preparedProof();
     node.port.postMessage = () => {
       proof.failRuntime(InitializationFailure.ProcessorError);
     };
@@ -115,6 +259,141 @@ describe("PreparedProof activation", () => {
     await expect(proof.activate()).rejects.toMatchObject({
       code: InitializationFailure.ProcessorError,
     });
+    expect(worker.terminationCount).toBe(1);
     await proof.close();
+    expect(worker.terminationCount).toBe(1);
   });
+
+  test("routes a terminal snapshot through runtime cleanup before rejecting", async () => {
+    const { node, proof, worker } = preparedProof();
+    node.port.postMessage = () => {
+      proof.acceptRuntimeMessage({
+        type: "snapshot",
+        snapshot: {
+          failureCode: 36,
+          invalidBlockCount: 0,
+          lastFrameCount: 128,
+          memoryBytes: 16_777_216,
+          processCount: 1,
+          slotCount: 4,
+          staleBlockCount: 0,
+          starvationCount: 0,
+        },
+      });
+    };
+
+    await expect(proof.activate()).rejects.toMatchObject({ code: 36 });
+    expect(worker.terminationCount).toBe(1);
+    expect(worker.messages).toEqual([{ type: "activate" }]);
+    await proof.close();
+    expect(worker.terminationCount).toBe(1);
+  });
+
+  test("preserves a worklet runtime failure while worker readiness is pending", async () => {
+    await withStartupProof(async ({ preparation, worker, node, context }) => {
+      node.send(ready);
+      node.send({ type: "runtime-failed", code: 43 });
+      worker.sendReady();
+
+      await expect(preparation).rejects.toMatchObject({ code: 43 });
+      expect(worker.terminationCount).toBe(1);
+      expect(context.closeCount).toBe(1);
+    });
+  });
+
+  test.each(["worker-failed", "error"] as const)(
+    "preserves %s after worker readiness while worklet readiness is pending",
+    async (failure) => {
+      await withStartupProof(async ({ preparation, worker, node, context }) => {
+        worker.sendReady();
+        await nextTask();
+        if (failure === "worker-failed") {
+          worker.onmessage?.({ data: { type: "worker-failed", code: 50 } } as MessageEvent<unknown>);
+        } else {
+          worker.onerror?.();
+        }
+        node.send(ready);
+
+        await expect(preparation).rejects.toMatchObject({
+          code: failure === "worker-failed" ? 50 : InitializationFailure.InvalidMessage,
+        });
+        expect(worker.terminationCount).toBe(1);
+        expect(context.closeCount).toBe(1);
+      });
+    },
+  );
+
+  test.each(["prepared", "active"])(
+    "routes worker errors through runtime cleanup when %s",
+    async (state) => {
+      await withStartupProof(async ({ preparation, worker, node, context }) => {
+        worker.sendReady();
+        node.send(ready);
+        const proof = await preparation;
+        if (state === "active") await proof.activate();
+
+        worker.onerror?.();
+
+        expect(context.state).toBe("suspended");
+        expect(context.suspendCount).toBe(1);
+        expect(node.disconnectCount).toBe(1);
+        expect(worker.terminationCount).toBe(1);
+        await expect(proof.activate()).rejects.toMatchObject({
+          code: InitializationFailure.InvalidMessage,
+        });
+        await proof.close();
+        expect(worker.terminationCount).toBe(1);
+        expect(context.closeCount).toBe(1);
+      });
+    },
+  );
 });
+
+async function withStartupProof(run: (fixture: {
+  preparation: Promise<InstanceType<typeof PreparedProof>>;
+  worker: StartupWorker;
+  node: StartupWorkletNode;
+  context: StartupContext;
+}) => Promise<void>): Promise<void> {
+  const originalAudioContext = globalThis.AudioContext;
+  const originalAudioWorkletNode = globalThis.AudioWorkletNode;
+  const originalFetch = globalThis.fetch;
+  const originalMessageChannel = globalThis.MessageChannel;
+  const originalWorker = globalThis.Worker;
+  class StartupMessageChannel {
+    readonly port1 = {};
+    readonly port2 = {};
+  }
+  Object.defineProperties(globalThis, {
+    AudioContext: { configurable: true, value: StartupContext },
+    AudioWorkletNode: { configurable: true, value: StartupWorkletNode },
+    fetch: {
+      configurable: true,
+      value: async () => new Response(
+        new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]),
+      ),
+    },
+    MessageChannel: { configurable: true, value: StartupMessageChannel },
+    Worker: { configurable: true, value: StartupWorker },
+  });
+
+  const startupWorkerCreated = new Promise<StartupWorker>((resolve) => {
+    resolveStartupWorker = resolve;
+  });
+  const preparation = prepareProof({ channelCount: 2, maximumFrames: 1_024, timeoutMilliseconds: 1_000 });
+  try {
+    const worker = await startupWorkerCreated;
+    await run({ preparation, worker, node: StartupWorkletNode.latest, context: StartupContext.latest });
+  } finally {
+    const proof = await preparation.catch(() => undefined);
+    await proof?.close();
+    resolveStartupWorker = undefined;
+    Object.defineProperties(globalThis, {
+      AudioContext: { configurable: true, value: originalAudioContext },
+      AudioWorkletNode: { configurable: true, value: originalAudioWorkletNode },
+      fetch: { configurable: true, value: originalFetch },
+      MessageChannel: { configurable: true, value: originalMessageChannel },
+      Worker: { configurable: true, value: originalWorker },
+    });
+  }
+}
