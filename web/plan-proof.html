@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>KKB compiled-plan proof</title>
+    <style>
+      body { font: 16px/1.5 system-ui, sans-serif; margin: 2rem; max-width: 48rem; }
+      button { margin: 0 0.5rem 0.5rem 0; padding: 0.5rem 0.75rem; }
+      pre { background: #f2f2f2; min-height: 10rem; overflow: auto; padding: 1rem; }
+    </style>
+  </head>
+  <body>
+    <h1>KKB compiled-plan proof</h1>
+    <p>Two oscillators, separate gains, mixing, sample-timed gain automation, and a bounded output-level observation. Preparation compiles in a worker and validates locally in the worklet.</p>
+    <p>The context stays suspended and the node disconnected until preparation succeeds. Activation measures muted output.</p>
+    <button id="prepare" type="button">Prepare stereo plan</button>
+    <button id="activate" type="button" disabled>Activate muted proof</button>
+    <button id="invalid" type="button">Reject invalid plan version</button>
+    <button id="close" type="button">Close</button>
+    <pre id="result" aria-live="polite">idle</pre>
+    <script type="module" src="./plan-main.js"></script>
+  </body>
+</html>

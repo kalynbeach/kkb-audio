@@ -1,6 +1,7 @@
+use crate::compiled_plan::{CompiledPlan, RenderInstance};
+use crate::prepared_kernel::{Output, RenderStatus};
 use crate::prepared_pcm::{
-    BlockMeta, ChannelLayout, FixedSlotSource, PcmOutput, PcmRenderStatus, PreparedPcmInput,
-    StreamSpec,
+    BlockMeta, ChannelLayout, FixedSlotSource, PreparedPcmInput, StreamSpec,
 };
 use wasm_bindgen::prelude::*;
 
@@ -12,15 +13,20 @@ const STATUS_RENDERED: u32 = 0;
 const STATUS_INVALID_LAYOUT: u32 = 1;
 const STATUS_CAPACITY_EXCEEDED: u32 = 2;
 const STATUS_TERMINAL: u32 = 3;
+const STATUS_CLOCK_OVERFLOW: u32 = 4;
 const STATUS_REJECTED: u32 = 5;
+const STATUS_INVALID_INPUT: u32 = 6;
 
 const ERROR_LAYOUT: u32 = 10;
 const ERROR_SAMPLE_RATE: u32 = 11;
+const ERROR_PLAN: u32 = 60;
 
-/// Private fixed-memory adapter for the browser PCM transport proof.
+/// Private fixed-memory adapter. Browser slots end at PreparedPcmInput; the same
+/// compiled PCM program used by the native adapter consumes that seam.
 #[wasm_bindgen]
 pub struct WorkletKernel {
     input: Option<PreparedPcmInput<FixedSlotSource<SLOT_COUNT>>>,
+    instance: Option<RenderInstance>,
     layout: ChannelLayout,
     left: Box<[f32]>,
     right: Box<[f32]>,
@@ -59,16 +65,24 @@ impl WorkletKernel {
         } else {
             None
         };
+        let instance = input.as_ref().and_then(|_| {
+            CompiledPlan::pcm_proof(spec, maximum_frames)
+                .ok()
+                .map(|plan| RenderInstance::prepare(&plan))
+        });
         let preparation_status = if preparation_status != STATUS_RENDERED {
             preparation_status
         } else if input.is_none() {
             ERROR_SAMPLE_RATE
+        } else if instance.is_none() {
+            ERROR_PLAN
         } else {
             STATUS_RENDERED
         };
 
         Self {
             input,
+            instance,
             layout,
             left: vec![0.0; maximum_frames].into_boxed_slice(),
             right: match layout {
@@ -158,29 +172,40 @@ impl WorkletKernel {
             self.terminal = true;
             return STATUS_CAPACITY_EXCEEDED;
         }
-        let Some(input) = &mut self.input else {
+        let (Some(input), Some(instance)) = (&mut self.input, &mut self.instance) else {
             self.terminal = true;
             return STATUS_TERMINAL;
         };
         let status = match self.layout {
-            ChannelLayout::Mono => input.render(PcmOutput::Mono(&mut self.left[..frame_count])),
-            ChannelLayout::Stereo => input.render(PcmOutput::Stereo {
-                left: &mut self.left[..frame_count],
-                right: &mut self.right[..frame_count],
-            }),
+            ChannelLayout::Mono => {
+                instance.render_pcm(input, Output::Mono(&mut self.left[..frame_count]))
+            }
+            ChannelLayout::Stereo => instance.render_pcm(
+                input,
+                Output::Stereo {
+                    left: &mut self.left[..frame_count],
+                    right: &mut self.right[..frame_count],
+                },
+            ),
         };
         if matches!(
             status,
-            PcmRenderStatus::CapacityExceeded | PcmRenderStatus::Terminal
+            RenderStatus::CapacityExceeded | RenderStatus::Terminal
         ) {
             self.terminal = true;
         }
         match status {
-            PcmRenderStatus::Rendered => STATUS_RENDERED,
-            PcmRenderStatus::InvalidLayout => STATUS_INVALID_LAYOUT,
-            PcmRenderStatus::CapacityExceeded => STATUS_CAPACITY_EXCEEDED,
-            PcmRenderStatus::Terminal => STATUS_TERMINAL,
+            RenderStatus::Rendered => STATUS_RENDERED,
+            RenderStatus::InvalidLayout => STATUS_INVALID_LAYOUT,
+            RenderStatus::CapacityExceeded => STATUS_CAPACITY_EXCEEDED,
+            RenderStatus::Terminal => STATUS_TERMINAL,
+            RenderStatus::ClockOverflow => STATUS_CLOCK_OVERFLOW,
+            RenderStatus::InvalidInput => STATUS_INVALID_INPUT,
         }
+    }
+
+    pub fn next_frame(&self) -> u64 {
+        self.instance.as_ref().map_or(0, RenderInstance::next_frame)
     }
 
     pub fn left_ptr(&self) -> *const f32 {

@@ -175,6 +175,8 @@ describe("PreparedPlanarAdapter", () => {
       [RenderStatus.InvalidLayout, HostFailure.WasmInvalidLayout],
       [RenderStatus.CapacityExceeded, HostFailure.WasmCapacityExceeded],
       [RenderStatus.Terminal, HostFailure.WasmTerminal],
+      [RenderStatus.ClockOverflow, HostFailure.WasmClockOverflow],
+      [RenderStatus.InvalidInput, HostFailure.WasmInvalidInput],
       [99, HostFailure.WasmUnknownStatus],
     ] as const;
 

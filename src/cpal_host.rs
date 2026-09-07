@@ -1,6 +1,7 @@
+use crate::compiled_plan::{CompiledPlan, RenderInstance};
+use crate::prepared_kernel::{Output, RenderStatus};
 use crate::prepared_pcm::{
-    BlockMeta, ChannelLayout, OwnedPcmBlock, PcmOutput, PcmRenderStatus, PreparedBlockSource,
-    PreparedPcmInput, StreamSpec,
+    BlockMeta, ChannelLayout, OwnedPcmBlock, PreparedBlockSource, PreparedPcmInput, StreamSpec,
 };
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, Sample, SampleFormat, SizedSample};
@@ -260,6 +261,7 @@ fn spawn_pcm_worker(layout: ChannelLayout) -> (NativeSource, WorkerControl) {
 
 struct CallbackProcessor {
     input: PreparedPcmInput<NativeSource>,
+    instance: RenderInstance,
     layout: ChannelLayout,
     channels: usize,
     sample_rate: u32,
@@ -300,6 +302,9 @@ impl CallbackProcessor {
             source,
         )
         .ok_or(AdapterPrepareError::Stream)?;
+        let plan = CompiledPlan::pcm_proof(input.spec(), maximum_frames)
+            .map_err(|_| AdapterPrepareError::Stream)?;
+        let instance = RenderInstance::prepare(&plan);
 
         // Allocation and first writes happen before the processor enters a callback.
         let left = vec![0.0; maximum_frames].into_boxed_slice();
@@ -310,6 +315,7 @@ impl CallbackProcessor {
 
         Ok(Self {
             input,
+            instance,
             layout,
             channels,
             sample_rate,
@@ -359,7 +365,8 @@ impl CallbackProcessor {
                 let Some(left) = self.left.get_mut(..frame_count) else {
                     return self.finish_silent(FailureCode::CapacityExceeded, frame_count, started);
                 };
-                self.input.render(PcmOutput::Mono(left))
+                self.instance
+                    .render_pcm(&mut self.input, Output::Mono(left))
             }
             ChannelLayout::Stereo => {
                 let Some(left) = self.left.get_mut(..frame_count) else {
@@ -368,11 +375,12 @@ impl CallbackProcessor {
                 let Some(right) = self.right.get_mut(..frame_count) else {
                     return self.finish_silent(FailureCode::CapacityExceeded, frame_count, started);
                 };
-                self.input.render(PcmOutput::Stereo { left, right })
+                self.instance
+                    .render_pcm(&mut self.input, Output::Stereo { left, right })
             }
         };
 
-        if render_status != PcmRenderStatus::Rendered {
+        if render_status != RenderStatus::Rendered {
             return self.finish_silent(FailureCode::Render, frame_count, started);
         }
 
@@ -625,6 +633,52 @@ mod tests {
             crate::prepared_pcm::deterministic_sample(recycled.meta.source_frame_start, 0)
         );
         worker.stop();
+    }
+
+    #[test]
+    fn native_worker_pcm_runs_through_compiled_gain_and_observation() {
+        for layout in [ChannelLayout::Mono, ChannelLayout::Stereo] {
+            let (source, worker) = spawn_pcm_worker(layout);
+            let ready_deadline = Instant::now() + Duration::from_secs(5);
+            while !worker.ready.load(Ordering::Acquire) {
+                assert!(
+                    Instant::now() < ready_deadline,
+                    "PCM worker readiness timed out"
+                );
+                std::thread::yield_now();
+            }
+            let mut processor = CallbackProcessor::prepare(
+                48_000,
+                layout.channels(),
+                PROOF_MAXIMUM_FRAMES,
+                source,
+                Arc::new(SharedObservation::new()),
+            )
+            .unwrap();
+            let mut start = 0;
+            for frames in [17, 257, 1_024] {
+                let mut output = vec![f32::NAN; frames * layout.channels()];
+                assert_eq!(processor.process(&mut output), ProcessStatus::Rendered);
+                for frame in 0..frames {
+                    for channel in 0..layout.channels() {
+                        assert_eq!(
+                            output[frame * layout.channels() + channel],
+                            crate::prepared_pcm::deterministic_sample(
+                                (start + frame) as u64,
+                                channel
+                            ) * 0.5
+                        );
+                    }
+                }
+                start += frames;
+            }
+            assert_eq!(processor.instance.next_frame(), start as u64);
+            let observation = processor.instance.take_observation().unwrap();
+            assert_eq!((observation.start, observation.end), (1_216, 1_280));
+            assert!(observation.peak > 0.0);
+            assert_eq!(processor.input.counters().starvation_callbacks, 0);
+            worker.stop();
+        }
     }
 
     #[test]

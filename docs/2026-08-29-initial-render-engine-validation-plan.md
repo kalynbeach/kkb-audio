@@ -268,6 +268,10 @@ then evaluate `SharedArrayBuffer`, a narrower browser shared center, or another 
 
 ## Milestone 4: minimal compiled plan
 
+Gate A and Gate B are implemented. Their native Rust, Wasm, and built-in-browser results are recorded
+in the [compiled-plan evidence](./2026-09-06-milestone-4-compiled-plan-evidence.md). The private shared
+operation representation is retained within that evidence's limits; same-rate local WAV is next.
+
 ### Question
 
 Does a private `CompiledPlan` and single-owner `RenderInstance` provide useful leverage across
@@ -325,6 +329,12 @@ inside the same explicitly chosen operation, and the plan does not acquire host 
 
 Gate B is separate so a transport decision cannot hide behind oscillator-only plan evidence.
 
+Implemented on 2026-09-06 as `PCM input -> linked gain -> level observation -> output`. Both native
+SPSC blocks and browser fixed slots terminate at `PreparedPcmInput`. It owns epoch rejection before
+the input operation reads its prepared planes, including rejection of partially consumed old blocks.
+The plan carries stream identity, layout, and rate, with no host transport types. See the
+[Gate B evidence](./2026-09-06-milestone-4-compiled-plan-evidence.md#gate-b-pcm-integration).
+
 ### Shared operation-representation decision
 
 Only after Gate A and Gate B decide whether offline, native, and browser hosts can use the same
@@ -335,6 +345,11 @@ compiled operation representation without host conditions entering the renderer.
   and conformance fixtures.
 - If replacement cannot avoid callback-side final drops, keep one immutable instance per active node
   or stream and defer live replacement.
+
+Decision, 2026-09-06: retain the private `CompiledPlan`/`RenderInstance` split. The same operation
+table and executor handle oscillator and prepared-PCM programs in native Rust and unshared Wasm.
+Native and browser lifecycle and transport remain outside the renderer. Keep one prepared instance
+per active stream; production transport, sustained performance, and live replacement remain unproven.
 
 ## Playback validation after the four milestones
 

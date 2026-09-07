@@ -170,6 +170,14 @@ impl<S: PreparedBlockSource> PreparedPcmInput<S> {
         &mut self.source
     }
 
+    pub(crate) fn spec(&self) -> StreamSpec {
+        self.spec
+    }
+
+    pub(crate) fn maximum_frames(&self) -> usize {
+        self.maximum_frames
+    }
+
     pub(crate) fn counters(&self) -> PcmCounters {
         self.counters
     }

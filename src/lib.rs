@@ -27,6 +27,7 @@ mod prepared_kernel {
         CapacityExceeded,
         Terminal,
         ClockOverflow,
+        InvalidInput,
     }
 
     pub(crate) enum Output<'a> {
@@ -166,11 +167,18 @@ mod prepared_kernel {
 #[allow(dead_code)]
 mod prepared_pcm;
 
+// Gate A remains private and does not consume the prepared PCM seam.
+#[allow(dead_code)]
+mod compiled_plan;
+
 #[cfg(all(test, target_os = "macos"))]
 mod cpal_host;
 
 #[cfg(target_arch = "wasm32")]
 mod worklet_wasm;
+
+#[cfg(target_arch = "wasm32")]
+mod compiled_plan_wasm;
 
 #[cfg(test)]
 mod tests {
