@@ -151,6 +151,8 @@ body {
   overscroll-behavior-inline: contain;
   scrollbar-width: thin;
 }
+/* Base UI focuses the hidden range input; show its focus on the visible thumb. */
+.lab-page [data-slot="slider-thumb"]:has(> input:focus-visible),
 .lab-graph-scroll:focus-visible,
 .lab-scope:focus-visible,
 .lab-comparison:focus-visible {

@@ -81,6 +81,7 @@ function waveform(
       const first = start + Math.floor((pixel / width) * count),
         end = Math.min(
           samples.length,
+          start + count,
           start + Math.ceil(((pixel + 1) / width) * count),
         );
       let lo = Infinity,

@@ -134,6 +134,27 @@ Review fixes preserve event-selector keyboard focus, keep diagnostics available 
 contain horizontal control groups and expose graph scrolling at tablet widths. Coincident events
 retain their lines while only the selected event receives a waveform annotation.
 
+### September 7 PR #5 review fixes
+
+Lab CSS now outlines the visible slider thumb when Base UI's nested range input receives keyboard
+focus; the vendored component remains unchanged. The sample microscope also clamps every min/max
+bin to the selected sample window, including the final bin at fractional canvas widths.
+
+`tools/check-lab-canvas.test.ts` exercises the real drawing path with a recording canvas context.
+It rejects an impulse immediately outside a 2,048-sample window while preserving its final visible
+sample, both at frame zero and at an offset. Both cases failed before the fix and pass afterward.
+The suite runs with `check:lab`, separately from the React suite that mocks canvas drawing.
+
+`bun run check` passes under Bun 1.4.0 with 53 tests, including those two new cases. TypeScript,
+actual-Wasm conformance, fixed-memory checks and both worklet audits remain green. No Rust code
+changed; the native suites were not rerun for these frontend-only corrections.
+
+Headless Chromium 152 on macOS confirmed a 3px outline on all five sliders in Dark mode at
+1280×900, Tab navigation into Source A Gain, and arrow-key editing. At 390×844, the Light-mode
+listening-volume focus outline was visually confirmed. Partition comparison still reports an exact
+match across all 672,000 node samples, with no page JavaScript errors. No audio was played during
+this focused verification; the temporary browser and loopback server were closed afterward.
+
 ### Original September 6 implementation
 
 The original implementation passed the same native and actual-Wasm engine checks before React.
