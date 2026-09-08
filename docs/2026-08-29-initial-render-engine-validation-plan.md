@@ -368,6 +368,16 @@ Playback proceeds through small, ordered increments:
    bounds, UI coordinate, automation, provenance, readiness, and underrun behavior.
 7. **Compressed loops.** Add only where codec, trim, and seek evidence supports the declared result.
 
+Implementation status, 2026-09-08: the private same-rate local WAV slice accepts PCM16/24 RIFF PCM
+mono/stereo through the existing browser/native transports. Pause acknowledgment freezes consumption
+and render time; media position is the next source frame to consume and freezes on starvation.
+Empty/malformed files and source/active-host rate or unsupported layout mismatches are rejected; EOS
+requires explicit reload, with no resampling, seeking or loops. Automated conformance, browser runtime
+and physical macOS output observations complete increment 1 within the
+[dated WAV evidence](./2026-09-08-local-wav-playback-evidence.md). Unforced browser starvation remains
+observable; this does not establish gap-free sustained playback, production transport or a public
+session API. Prepared sample-rate conversion is the next ordered increment.
+
 `PlaybackSession` remains provisional until local WAV, seek epochs, and at least one browser path pass
 the same behavioral fixtures.
 

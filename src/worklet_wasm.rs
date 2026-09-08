@@ -204,6 +204,22 @@ impl WorkletKernel {
         }
     }
 
+    pub fn source_position(&self) -> u64 {
+        self.input
+            .as_ref()
+            .map_or(0, PreparedPcmInput::source_position)
+    }
+
+    pub fn ended(&self) -> bool {
+        self.input.as_ref().is_some_and(PreparedPcmInput::ended)
+    }
+
+    pub fn slot_free(&mut self, slot_id: u32) -> bool {
+        self.input
+            .as_mut()
+            .is_some_and(|input| input.source_mut().state(slot_id) == Some(0))
+    }
+
     pub fn next_frame(&self) -> u64 {
         self.instance.as_ref().map_or(0, RenderInstance::next_frame)
     }

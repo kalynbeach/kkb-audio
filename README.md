@@ -14,11 +14,18 @@ Its tests establish frame and phase semantics, partition-independent output, bou
 
 Milestone 2 is complete for the recorded browser and macOS native configurations. The unshared, fixed-memory Wasm `AudioWorklet` proof and the private CPAL proof run around the same kernel seam. Browser results do not declare minimum-version or branded-browser support, and the five-second native observation does not declare broad macOS device support or sustained deadline behavior. See the [Milestone 2 evidence](docs/2026-08-29-milestone-2-dual-host-kernel-evidence.md) for exact configurations, claims, and limitations.
 
-Milestone 3 is complete within its bounded-PCM ownership and delivery claim for the exact recorded macOS CPAL and managed headless Chrome proofs. One private prepared-block seam is fed by one native worker through fixed SPSC rings and by one browser worker through a direct `MessageChannel` and four recycled transferable buffers. Variable callback partitions, epochs, starvation, ownership rejection, backpressure, callback allocator instrumentation, fixed Wasm memory, and worklet source constraints are covered. This does not establish a production transport, production performance, sustained-load or deadline behavior, branded-browser compatibility, or broad host support. See the [Milestone 3 evidence](docs/2026-09-01-milestone-3-bounded-pcm-transport-evidence.md) for the exact configurations and limitations. There is no public engine API or playback application yet.
+Milestone 3 is complete within its bounded-PCM ownership and delivery claim for the exact recorded macOS CPAL and managed headless Chrome proofs. One private prepared-block seam is fed by one native worker through fixed SPSC rings and by one browser worker through a direct `MessageChannel` and four recycled transferable buffers. Variable callback partitions, epochs, starvation, ownership rejection, backpressure, callback allocator instrumentation, fixed Wasm memory, and worklet source constraints are covered. This does not establish a production transport, production performance, sustained-load or deadline behavior, branded-browser compatibility, or broad host support. See the [Milestone 3 evidence](docs/2026-09-01-milestone-3-bounded-pcm-transport-evidence.md) for the exact configurations and limitations. There is no public engine API or playback application.
 
 Milestone 4 Gate A adds a private compiled plan for two oscillators, separate gains, mixing, post-master peak/RMS observations, and sample-timed gain automation. Native Rust tests and the Wasm proof cover independent instances, exact same-build partition comparisons, and bounded rendering. A separate browser proof compiles in a worker, validates and prepares locally in the worklet, and measures muted output.
 
 Gate B adds prepared PCM, linked gain, observation, and output to the same compiler and renderer. Both existing transports feed `PreparedPcmInput`, which retains epoch rejection and block ownership. The native and browser PCM proofs now apply a compiled gain of 0.5 and preserve distinct L/R channels. The private shared operation representation is retained for the next increment, same-rate local WAV playback. See the [Milestone 4 evidence](docs/2026-09-06-milestone-4-compiled-plan-evidence.md#gate-b-pcm-integration), including the short browser run's starvation and host-coverage limits.
+
+Issue #9 adds private same-rate local WAV proofs for the browser and macOS: PCM16/24 mono/stereo,
+bounded worker decoding, compiled gain/output, play/pause/resume, next-consumed-source position and
+consumed EOS. Unsupported rates/layouts/encodings and empty/malformed files are rejected; there is no
+resampling or implicit rewind. Automated checks and recorded browser/macOS playback observations pass
+within the [WAV evidence limits](docs/2026-09-08-local-wav-playback-evidence.md). Browser starvation
+remains observable; gap-free sustained playback and production readiness are not established.
 
 See the canonical [system architecture](docs/2026-08-28-kkb-audio-system-architecture.md) and [initial validation plan](docs/2026-08-29-initial-render-engine-validation-plan.md).
 
@@ -35,6 +42,7 @@ cargo fmt --check
 cargo test --all-targets --all-features
 cargo test --release --all-targets --all-features
 cargo clippy --all-targets --all-features -- -D warnings
+cargo clippy --target wasm32-unknown-unknown --all-targets --all-features -- -D warnings
 bun run check
 ```
 
@@ -44,7 +52,15 @@ Run the local proof after `bun run build:worklet`:
 bun run serve:proof
 ```
 
-Open `/` for the PCM transport through the compiled plan, or `/plan.html` for the oscillator plan. Both pages prepare a suspended, disconnected node before activation and mute output after the analyser. The oscillator page also displays its output-level observation.
+Open `/` for the PCM transport and local WAV controls, or `/plan.html` for the oscillator plan.
+The deterministic and oscillator proof activations remain muted. **WAV Play emits sound** at compiled
+gain 0.5; lower system volume first. Load prepares a suspended, disconnected node; Pause freezes media
+and render time without discarding PCM. WAV status distinguishes consumed position, render frames,
+starvation and EOS. Reload explicitly after end. The oscillator page also displays its level observation.
+
+A private native interactive entry and a safe low-amplitude fixture generator are documented in the
+[WAV reproduction guide](docs/2026-09-08-local-wav-playback-evidence.md#safe-reproduction).
+Normal checks never open audio devices; device-opening tests must be explicitly selected.
 
 ## Audio-engine learning lab
 
