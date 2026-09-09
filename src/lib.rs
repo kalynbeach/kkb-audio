@@ -167,6 +167,9 @@ mod prepared_kernel {
 #[allow(dead_code)]
 mod prepared_pcm;
 
+#[allow(dead_code)]
+mod local_wav;
+
 // Gate A remains private and does not consume the prepared PCM seam.
 #[allow(dead_code)]
 mod compiled_plan;

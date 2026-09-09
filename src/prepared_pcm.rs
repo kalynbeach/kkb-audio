@@ -141,6 +141,7 @@ pub(crate) struct PreparedPcmInput<S: PreparedBlockSource> {
     current_offset: usize,
     pending_retire: Option<S::Block>,
     ended: bool,
+    source_position: u64,
     terminal: bool,
     counters: PcmCounters,
 }
@@ -161,6 +162,7 @@ impl<S: PreparedBlockSource> PreparedPcmInput<S> {
             current_offset: 0,
             pending_retire: None,
             ended: false,
+            source_position: 0,
             terminal: false,
             counters: PcmCounters::default(),
         })
@@ -182,6 +184,14 @@ impl<S: PreparedBlockSource> PreparedPcmInput<S> {
         self.counters
     }
 
+    pub(crate) fn source_position(&self) -> u64 {
+        self.source_position
+    }
+
+    pub(crate) fn ended(&self) -> bool {
+        self.ended
+    }
+
     pub(crate) fn active_epoch(&self) -> u64 {
         self.active_epoch
     }
@@ -189,6 +199,7 @@ impl<S: PreparedBlockSource> PreparedPcmInput<S> {
     pub(crate) fn set_active_epoch(&mut self, epoch: u64) {
         self.active_epoch = epoch;
         self.ended = false;
+        self.source_position = 0;
     }
 
     pub(crate) fn render(&mut self, mut output: PcmOutput<'_>) -> PcmRenderStatus {
@@ -262,6 +273,8 @@ impl<S: PreparedBlockSource> PreparedPcmInput<S> {
                 let available = meta.valid_frames - self.current_offset;
                 let copied = available.min(frame_count - written);
                 output.copy_from(written, self.current_offset, copied, block.planes());
+                self.source_position =
+                    meta.source_frame_start + (self.current_offset + copied) as u64;
                 (copied, copied == available, meta.end_of_stream)
             };
             written += copied;

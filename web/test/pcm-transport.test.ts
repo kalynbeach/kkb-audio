@@ -6,10 +6,7 @@ import {
   type PcmStreamConfig,
 } from "../src/pcm-protocol";
 import {
-  FixedPcmProducer,
   FixedTransferPool,
-  PCM_WORKER_FAILURE_CODE,
-  PROOF_REJECTION_RETRY_LIMIT,
 } from "../src/pcm-worker-pool";
 
 const config: PcmStreamConfig = {
@@ -68,84 +65,6 @@ describe("PCM transferable protocol", () => {
     expect(pool.snapshot().invalidRecycleCount).toBe(1);
   });
 
-  test("suspended returns stay quiescent and active pumping uses one positively paced timer", () => {
-    const sent: NonNullable<ReturnType<FixedTransferPool["takeNext"]>>[] = [];
-    const failures: number[] = [];
-    const scheduled: Array<{ callback: () => void; delayMilliseconds: number }> = [];
-    const producer = new FixedPcmProducer(
-      config,
-      (block) => sent.push(block),
-      (code) => failures.push(code),
-      (callback, delayMilliseconds) => scheduled.push({ callback, delayMilliseconds }),
-    );
-
-    producer.prefill(config.slotCount);
-    expect(sent.map((block) => block.sourceFrameStart)).toEqual([0, 4, 8, 12]);
-    expect(producer.snapshot().exhaustionCount).toBe(1);
-    for (const block of sent.slice()) {
-      expect(producer.acceptAdmissionResult(admissionResult(block, true))).toBe(true);
-    }
-    expect(sent).toHaveLength(4);
-    expect(scheduled).toHaveLength(0);
-
-    producer.activate();
-    producer.activate();
-    expect(scheduled).toHaveLength(1);
-    expect(scheduled[0]?.delayMilliseconds).toBe(
-      Math.ceil((config.slotFrames * 1_000) / config.sampleRate),
-    );
-    expect(scheduled[0]?.delayMilliseconds).toBeGreaterThan(0);
-    scheduled.shift()?.callback();
-    expect(sent).toHaveLength(5);
-    expect(failures).toEqual([]);
-  });
-
-  test("preserves a rejected block through the bounded retries then fails once and stops scheduling", () => {
-    const sent: NonNullable<ReturnType<FixedTransferPool["takeNext"]>>[] = [];
-    const failures: number[] = [];
-    const scheduled: Array<() => void> = [];
-    const singleSlotConfig = { ...config, slotCount: 1 };
-    const producer = new FixedPcmProducer(
-      singleSlotConfig,
-      (block) => sent.push(block),
-      (code) => failures.push(code),
-      (callback) => scheduled.push(callback),
-    );
-
-    producer.prefill(1);
-    const original = sent[0]!;
-    expect(producer.acceptAdmissionResult(admissionResult(original, true))).toBe(true);
-    producer.activate();
-    scheduled.shift()?.();
-    const rejected = sent[1]!;
-    const metadata = {
-      type: rejected.type,
-      slotId: rejected.slotId,
-      epoch: rejected.epoch,
-      sourceFrameStart: rejected.sourceFrameStart,
-      validFrames: rejected.validFrames,
-      discontinuity: rejected.discontinuity,
-      endOfStream: rejected.endOfStream,
-    };
-
-    for (let rejection = 1; rejection <= PROOF_REJECTION_RETRY_LIMIT; rejection += 1) {
-      expect(producer.acceptAdmissionResult(admissionResult(sent.at(-1)!, false))).toBe(true);
-      if (rejection < PROOF_REJECTION_RETRY_LIMIT) {
-        expect(scheduled).toHaveLength(1);
-        scheduled.shift()?.();
-        expect(sent.at(-1)).toMatchObject(metadata);
-        expect(sent.at(-1)?.buffer).toBe(rejected.buffer);
-      }
-    }
-
-    expect(failures).toEqual([PCM_WORKER_FAILURE_CODE]);
-    expect(scheduled).toHaveLength(0);
-    producer.activate();
-    expect(producer.acceptAdmissionResult(admissionResult(sent.at(-1)!, false))).toBe(false);
-    expect(failures).toEqual([PCM_WORKER_FAILURE_CODE]);
-    expect(scheduled).toHaveLength(0);
-  });
-
   test("MessageChannel transfer detaches each sender and reuses returned ownership", async () => {
     const singleSlotConfig = { ...config, slotCount: 1 };
     const pool = new FixedTransferPool(singleSlotConfig);
@@ -184,47 +103,6 @@ describe("PCM transferable protocol", () => {
     expect(resumed.buffer).toBe(result.buffer);
     expect(resumed.buffer.byteLength).toBe(2 * 4 * 4);
     expect(resumed.sourceFrameStart).toBe(4);
-    channel.port1.close();
-    channel.port2.close();
-  });
-
-  test("terminally fails a malformed admission return after ownership transfers back", async () => {
-    const singleSlotConfig = { ...config, slotCount: 1 };
-    const failures: number[] = [];
-    const scheduled: Array<() => void> = [];
-    const channel = new MessageChannel();
-    const producer = new FixedPcmProducer(
-      singleSlotConfig,
-      (block) => channel.port1.postMessage(block, [block.buffer]),
-      (code) => failures.push(code),
-      (callback) => scheduled.push(callback),
-    );
-
-    const handled = new Promise<boolean>((resolve) => {
-      channel.port1.onmessage = (event: MessageEvent<unknown>) => {
-        resolve(producer.acceptAdmissionResult(event.data));
-      };
-      channel.port2.onmessage = (event: MessageEvent<{ slotId: number; buffer: ArrayBuffer }>) => {
-        const malformed = {
-          type: "admission-result",
-          slotId: event.data.slotId,
-          accepted: 1,
-          buffer: event.data.buffer,
-        };
-        channel.port2.postMessage(malformed, [malformed.buffer]);
-      };
-      channel.port1.start();
-      channel.port2.start();
-    });
-
-    producer.prefill(1);
-    expect(await handled).toBe(false);
-    expect(failures).toEqual([PCM_WORKER_FAILURE_CODE]);
-    producer.activate();
-    expect(scheduled).toHaveLength(0);
-    expect(producer.acceptAdmissionResult(null)).toBe(false);
-    expect(failures).toEqual([PCM_WORKER_FAILURE_CODE]);
-    expect(producer.snapshot().invalidRecycleCount).toBe(1);
     channel.port1.close();
     channel.port2.close();
   });

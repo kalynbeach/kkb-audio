@@ -8,6 +8,7 @@ import {
 import type { RenderSnapshot } from "./render-adapter";
 
 type ProofOptions = {
+  file?: File;
   channelCount: 1 | 2;
   injectPreparationFailure?: boolean;
   maximumFrames: number;
@@ -23,7 +24,7 @@ export type BrowserProofResult = {
   contextRenderQuantumSize: number | null;
   contextSampleRate: number;
   initialization: ReadyMessage;
-  workerInitialExhaustionCount: number;
+  workerInitialAdmittedBlocks: number;
   snapshot: RenderSnapshot;
 };
 
@@ -42,11 +43,13 @@ export class PreparedProof {
   readonly #node: AudioWorkletNode;
   readonly #ready: ReadyMessage;
   readonly #worker: Worker | undefined;
-  readonly #workerInitialExhaustionCount: number;
+  readonly #workerInitialAdmittedBlocks: number;
+  readonly totalFrames: number | undefined;
   #activated = false;
   #closed = false;
   #workerTerminated = false;
   #runtimeFailure = 0;
+  producerObservation: unknown;
   #snapshotResolve: ((snapshot: RenderSnapshot) => void) | undefined;
   #snapshotReject: ((code: number) => void) | undefined;
 
@@ -56,15 +59,19 @@ export class PreparedProof {
     gate: InitializationGate,
     ready: ReadyMessage,
     worker?: Worker,
-    workerInitialExhaustionCount = 0,
+    workerInitialAdmittedBlocks = 0,
+    totalFrames?: number,
   ) {
+    this.totalFrames = totalFrames;
     this.#context = context;
     this.#node = node;
     this.#gate = gate;
     this.#ready = ready;
     this.#worker = worker;
-    this.#workerInitialExhaustionCount = workerInitialExhaustionCount;
+    this.#workerInitialAdmittedBlocks = workerInitialAdmittedBlocks;
   }
+
+  get paused(): boolean { return this.#context.state === "suspended"; }
 
   get ready(): ReadyMessage {
     return this.#ready;
@@ -72,6 +79,7 @@ export class PreparedProof {
 
   acceptRuntimeMessage(value: unknown): void {
     if (isSnapshotMessage(value)) {
+      if (value.snapshot.failureCode !== 0) { this.failRuntime(value.snapshot.failureCode); return; }
       this.#snapshotResolve?.(value.snapshot);
       return;
     }
@@ -87,6 +95,7 @@ export class PreparedProof {
   }
 
   acceptWorkerMessage(value: unknown): void {
+    if ((value as { type?: string } | null)?.type === "producer-status") this.producerObservation = value;
     const code = workerFailureCode(value);
     if (code !== undefined) this.failRuntime(code);
   }
@@ -105,7 +114,7 @@ export class PreparedProof {
 
   async activate(): Promise<BrowserProofResult> {
     this.#throwIfUnavailable();
-    if (this.#activated || this.#gate.result.type !== "ready") {
+    if (this.totalFrames !== undefined || this.#activated || this.#gate.result.type !== "ready") {
       throw new InitializationError(InitializationFailure.ContextState);
     }
     this.#activated = true;
@@ -154,10 +163,38 @@ export class PreparedProof {
       contextRenderQuantumSize: contextWithQuantum.renderQuantumSize ?? null,
       contextSampleRate: this.#context.sampleRate,
       initialization: this.#ready,
-      workerInitialExhaustionCount: this.#workerInitialExhaustionCount,
+      workerInitialAdmittedBlocks: this.#workerInitialAdmittedBlocks,
       snapshot,
     };
   }
+
+  async play(): Promise<RenderSnapshot> {
+    this.#throwIfUnavailable();
+    if (this.totalFrames === undefined) throw new Error("Load a WAV first");
+    if (!this.#activated) { this.#node.connect(this.#context.destination); this.#activated = true; }
+    const snapshot = await this.status();
+    if (!snapshot.ended) {
+      this.#worker?.postMessage({ type: "activate" });
+      await this.#context.resume();
+      this.#throwIfUnavailable();
+    }
+    return this.status();
+  }
+
+  async pause(): Promise<RenderSnapshot> {
+    this.#throwIfUnavailable();
+    await this.#context.suspend();
+    return this.status();
+  }
+
+  async status(): Promise<RenderSnapshot> {
+    this.#throwIfUnavailable();
+    if (this.#snapshotResolve) throw new Error("Status request already pending");
+    this.#worker?.postMessage({ type: "producer-status" });
+    return this.#requestSnapshot();
+  }
+
+  stall(value: boolean): void { this.#throwIfUnavailable(); this.#worker?.postMessage({ type: "stall", value }); }
 
   async close(): Promise<void> {
     if (this.#closed) {
@@ -226,8 +263,25 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
     const module = await WebAssembly.compile(await wasmResponse.arrayBuffer());
     await context.audioWorklet.addModule(workletUrl);
 
+    worker = new Worker(workerUrl, { type: "module" });
+    let totalFrames: number | undefined;
+    let channelCount = options.channelCount;
+    if (options.file) {
+      const metadata = await new Promise<{ channelCount: 1 | 2; totalFrames: number }>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error("WAV inspection timed out")), timeoutMilliseconds);
+        worker!.onerror = () => { clearTimeout(timeout); reject(new Error("WAV worker failed")); };
+        worker!.onmessage = event => {
+          clearTimeout(timeout);
+          if (event.data?.type === "metadata") resolve(event.data);
+          else reject(new Error(event.data?.detail ?? "Unsupported or malformed WAV"));
+        };
+        worker!.postMessage({ type: "inspect", file: options.file, module, sampleRate: context.sampleRate });
+      });
+      channelCount = metadata.channelCount;
+      totalFrames = metadata.totalFrames;
+    }
     const config = {
-      channelCount: options.channelCount,
+      channelCount,
       epoch: 1,
       sampleRate: context.sampleRate,
       slotCount: 4,
@@ -235,7 +289,6 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
       sourceId: 3,
     } as const;
     const channel = new MessageChannel();
-    worker = new Worker(workerUrl, { type: "module" });
     const workerReady = new Promise<number>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new InitializationError(InitializationFailure.Timeout)), timeoutMilliseconds);
       const failWorker = (code: number) => {
@@ -248,12 +301,13 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
         }
       };
       worker!.onmessage = (event: MessageEvent<unknown>) => {
-        const message = event.data as { type?: unknown; slotCount?: unknown; exhaustionCount?: unknown; invalidRecycleCount?: unknown } | null;
+        if (prepared !== undefined) { prepared.acceptWorkerMessage(event.data); return; }
+        const message = event.data as { type?: unknown; slotCount?: unknown; initialAdmittedBlocks?: unknown } | null;
         if (
           message?.type === "worker-ready" && message.slotCount === config.slotCount &&
-          message.exhaustionCount === 1 && message.invalidRecycleCount === 0
+          message.initialAdmittedBlocks === Math.min(config.slotCount, Math.ceil((totalFrames ?? Number.MAX_SAFE_INTEGER) / config.slotFrames))
         ) {
-          clearTimeout(timeout); resolve(message.exhaustionCount);
+          clearTimeout(timeout); resolve(message.initialAdmittedBlocks as number);
         } else if (message?.type === "worker-failed") {
           failWorker(workerFailureCode(event.data) ?? InitializationFailure.InvalidMessage);
         }
@@ -264,11 +318,11 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
 
     const gate = new InitializationGate();
     const node = new AudioWorkletNode(context, "kkb-prepared-kernel", {
-      channelCount: options.channelCount,
+      channelCount,
       channelCountMode: "explicit",
       numberOfInputs: 0,
       numberOfOutputs: 1,
-      outputChannelCount: [options.channelCount],
+      outputChannelCount: [channelCount],
       processorOptions: {
         ...config,
         injectPreparationFailure: options.injectPreparationFailure,
@@ -303,14 +357,14 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
       node.port.postMessage({ type: "transport-port", port: channel.port2 }, [channel.port2]);
     });
 
-    const [ready, workerInitialExhaustionCount] = await Promise.all([workletReady, workerReady]);
+    const [ready, workerInitialAdmittedBlocks] = await Promise.all([workletReady, workerReady]);
     if (startupRuntimeFailure !== undefined) {
       throw new InitializationError(startupRuntimeFailure);
     }
     if (context.state !== "suspended" || gate.result.type !== "ready") {
       throw new InitializationError(InitializationFailure.ContextState);
     }
-    prepared = new PreparedProof(context, node, gate, ready, worker, workerInitialExhaustionCount);
+    prepared = new PreparedProof(context, node, gate, ready, worker, workerInitialAdmittedBlocks, totalFrames);
     return prepared;
   } catch (error) {
     worker?.terminate();
@@ -340,6 +394,9 @@ function isSnapshotMessage(
   }
   const snapshot = message.snapshot as Partial<RenderSnapshot>;
   return (
+    Number.isSafeInteger(snapshot.sourcePosition) &&
+    Number.isSafeInteger(snapshot.renderFrame) &&
+    typeof snapshot.ended === "boolean" &&
     Number.isSafeInteger(snapshot.failureCode) &&
     Number.isSafeInteger(snapshot.invalidBlockCount) &&
     Number.isSafeInteger(snapshot.lastFrameCount) &&
@@ -361,6 +418,7 @@ const failureButton = document.querySelector<HTMLButtonElement>("#failure");
 const closeButton = document.querySelector<HTMLButtonElement>("#close");
 const output = document.querySelector<HTMLElement>("#result");
 const proofLifecycle = new PreparationLifecycle<PreparedProof>();
+let controlsPending = false;
 
 prepareButton?.addEventListener("click", async () => {
   const preparation = proofLifecycle.tryReplace(() =>
@@ -388,6 +446,7 @@ prepareButton?.addEventListener("click", async () => {
     outputText(errorText(error));
   } finally {
     setPreparationControlsDisabled(false);
+    updateWavControls();
   }
 });
 
@@ -423,18 +482,28 @@ failureButton?.addEventListener("click", async () => {
     );
   } finally {
     setPreparationControlsDisabled(false);
+    updateWavControls();
   }
 });
 
 closeButton?.addEventListener("click", async () => {
-  await proofLifecycle.closeActive();
-  if (activateButton !== null) {
-    activateButton.disabled = true;
+  setPreparationControlsDisabled(true);
+  try {
+    await proofLifecycle.closeActive();
+    if (activateButton !== null) activateButton.disabled = true;
+    outputText("closed");
+  } catch (error) {
+    outputText(errorText(error));
+  } finally {
+    setPreparationControlsDisabled(false);
   }
-  outputText("closed");
 });
 
 function setPreparationControlsDisabled(disabled: boolean): void {
+  controlsPending = disabled;
+  updateWavControls();
+  const load = document.querySelector("#wav-load") as HTMLButtonElement | null;
+  if (load) load.disabled = disabled;
   if (prepareButton !== null) {
     prepareButton.disabled = disabled;
   }
@@ -455,3 +524,42 @@ function outputText(text: string): void {
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
+
+const wavFile = document.querySelector<HTMLInputElement>("#wav-file");
+const wavStall = document.querySelector<HTMLInputElement>("#wav-stall");
+const wavControls = ["wav-play", "wav-pause", "wav-status"].map(id => document.querySelector(`#${id}`) as HTMLButtonElement);
+function updateWavControls(): void {
+  const unavailable = proofLifecycle.active?.totalFrames === undefined;
+  for (const control of wavControls) if (control) control.disabled = controlsPending || unavailable;
+  if (wavStall) { wavStall.disabled = controlsPending || unavailable; if (unavailable) wavStall.checked = false; }
+}
+function wavStatus(proof: PreparedProof, snapshot: RenderSnapshot): void {
+  outputText(JSON.stringify({ state: snapshot.ended ? "ended" : proof.paused ? "paused" : "playing", totalFrames: proof.totalFrames, producerLastObserved: proof.producerObservation, ...snapshot }, null, 2));
+}
+document.querySelector("#wav-load")?.addEventListener("click", async () => {
+  const file = wavFile?.files?.[0];
+  if (!file) { outputText("Choose a local WAV file first."); return; }
+  const pending = proofLifecycle.tryReplace(() => prepareProof({ file, channelCount: 2, maximumFrames: 1024 }));
+  if (!pending) return;
+  setPreparationControlsDisabled(true);
+  if (activateButton) activateButton.disabled = true;
+  outputText("Reading WAV headers and preparing bounded PCM…");
+  try { const proof = await pending; if (wavStall) wavStall.checked = false; wavStatus(proof, await proof.status()); }
+  catch (error) { outputText(errorText(error)); }
+  finally { setPreparationControlsDisabled(false); updateWavControls(); }
+});
+for (const [id, action] of [["wav-play", "play"], ["wav-pause", "pause"], ["wav-status", "status"]] as const) {
+  document.querySelector(`#${id}`)?.addEventListener("click", async () => {
+    const pending = proofLifecycle.tryExclusive(async () => {
+      const proof = proofLifecycle.active;
+      if (proof?.totalFrames !== undefined) wavStatus(proof, await proof[action]());
+    });
+    if (!pending) return;
+    setPreparationControlsDisabled(true);
+    try { await pending; } catch (error) { outputText(errorText(error)); }
+    finally { setPreparationControlsDisabled(false); }
+  });
+}
+wavStall?.addEventListener("change", () => {
+  try { proofLifecycle.active?.stall(wavStall.checked); } catch (error) { outputText(errorText(error)); }
+});

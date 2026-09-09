@@ -27,6 +27,18 @@ class FakeAnalyserNode extends FakeAudioNode {
 class FakeChannelSplitterNode extends FakeAudioNode {}
 class FakeGainNode extends FakeAudioNode {}
 
+class ProofControl {
+  disabled = false;
+  checked = false;
+  files: File[] = [];
+  textContent = "";
+  readonly listeners = new Map<string, () => void | Promise<void>>();
+  addEventListener(type: string, listener: () => void | Promise<void>): void { this.listeners.set(type, listener); }
+  async click(): Promise<void> { if (!this.disabled) await this.listeners.get("click")?.(); }
+}
+const controls = new Map(["prepare", "activate", "failure", "close", "result", "wav-file", "wav-stall", "wav-load", "wav-play", "wav-pause", "wav-status"].map(id => [`#${id}`, new ProofControl()]));
+const proofDocument = { querySelector: (selector: string) => controls.get(selector) ?? null };
+
 Object.defineProperties(globalThis, {
   AnalyserNode: { configurable: true, value: FakeAnalyserNode },
   ChannelSplitterNode: {
@@ -35,7 +47,7 @@ Object.defineProperties(globalThis, {
   },
   document: {
     configurable: true,
-    value: { querySelector: () => null },
+    value: proofDocument,
   },
   GainNode: { configurable: true, value: FakeGainNode },
 });
@@ -115,6 +127,7 @@ class StartupWorkletNode extends FakeAudioNode {
         this.send({
           type: "snapshot",
           snapshot: {
+          sourcePosition: 0, renderFrame: 0, ended: false,
             failureCode: 0,
             invalidBlockCount: 0,
             lastFrameCount: 128,
@@ -156,7 +169,7 @@ class StartupWorker {
       data: {
         type: "worker-ready",
         slotCount: 4,
-        exhaustionCount: 1,
+        initialAdmittedBlocks: 4,
         invalidRecycleCount: 0,
       },
     } as MessageEvent<unknown>);
@@ -172,7 +185,7 @@ const ready: ReadyMessage = {
   slotCount: 4,
 };
 
-function preparedProof(): {
+function preparedProof(totalFrames?: number): {
   context: FakeContext;
   node: FakeWorkletNode;
   proof: InstanceType<typeof PreparedProof>;
@@ -189,6 +202,8 @@ function preparedProof(): {
     gate,
     ready,
     worker as unknown as Worker,
+    0,
+    totalFrames,
   );
   return { context, node, proof, worker };
 }
@@ -270,6 +285,7 @@ describe("PreparedProof activation", () => {
       proof.acceptRuntimeMessage({
         type: "snapshot",
         snapshot: {
+          sourcePosition: 0, renderFrame: 0, ended: false,
           failureCode: 36,
           invalidBlockCount: 0,
           lastFrameCount: 128,
@@ -397,3 +413,88 @@ async function withStartupProof(run: (fixture: {
     });
   }
 }
+
+
+test("local WAV controls suspend at acknowledgment, retain the instance, and never rewind consumed EOS", async () => {
+  const { context, node, proof, worker } = preparedProof(17);
+  let position = 0;
+  let ended = false;
+  node.port.postMessage = () => proof.acceptRuntimeMessage({ type: "snapshot", snapshot: {
+    sourcePosition: position, renderFrame: position, ended, failureCode: 0, invalidBlockCount: 0,
+    lastFrameCount: 1, memoryBytes: 16777216, processCount: position, slotCount: 4, staleBlockCount: 0, starvationCount: 0,
+  } });
+  await proof.play(); expect(context.state).toBe("running");
+  position = 3;
+  expect((await proof.pause()).sourcePosition).toBe(3); expect(context.state).toBe("suspended");
+  expect((await proof.status()).sourcePosition).toBe(3);
+  await proof.play(); expect(context.state).toBe("running");
+  position = 17; ended = true;
+  await proof.pause(); const activations = worker.messages.filter(m => (m as { type: string }).type === "activate").length;
+  expect((await proof.play()).ended).toBe(true); expect(context.state).toBe("suspended");
+  expect(worker.messages.filter(m => (m as { type: string }).type === "activate")).toHaveLength(activations);
+  await proof.close(); expect(worker.terminationCount).toBe(1); expect(context.closeCount).toBe(1);
+  await expect(proof.play()).rejects.toMatchObject({ code: InitializationFailure.ContextState });
+});
+
+
+test("proof-page Status disables Pause/reload/Close until its deferred snapshot settles", async () => {
+  Object.defineProperty(globalThis, "document", { configurable: true, value: proofDocument });
+  const control = (id: string) => controls.get(`#${id}`)!;
+  await withStartupProof(async ({ preparation, worker, node }) => {
+    worker.sendReady(); node.send(ready); await preparation;
+    control("wav-file").files = [new File([], "fixture.wav")];
+    async function loadFromPage() {
+      const created = new Promise<StartupWorker>(resolve => { resolveStartupWorker = resolve; });
+      const loading = control("wav-load").click();
+      expect(control("wav-load").disabled).toBe(true);
+      expect(control("close").disabled).toBe(true);
+      expect(control("wav-play").disabled).toBe(true);
+      const wavWorker = await created;
+      wavWorker.onmessage?.({ data: { type: "metadata", channelCount: 2, totalFrames: 1024 } } as MessageEvent<unknown>);
+      await nextTask();
+      const wavNode = StartupWorkletNode.latest;
+      wavWorker.sendReady(); wavNode.send(ready);
+      await loading;
+      expect(control("wav-play").disabled).toBe(false);
+      expect(control("close").disabled).toBe(false);
+      return { wavWorker, wavNode, context: StartupContext.latest };
+    }
+    const first = await loadFromPage();
+    await control("wav-play").click();
+    expect(first.context.state).toBe("running");
+    const sendSnapshot = first.wavNode.port.postMessage;
+    let deferred: unknown;
+    first.wavNode.port.postMessage = message => { deferred = message; };
+    const status = control("wav-status").click();
+    // Disabled synchronously, before the exclusive action's first microtask runs.
+    for (const id of ["wav-play", "wav-pause", "wav-status", "wav-load", "close", "prepare", "failure", "wav-stall"]) expect(control(id).disabled).toBe(true);
+    await control("wav-pause").click();
+    await control("wav-load").click();
+    await control("close").click();
+    expect(first.context.state).toBe("running");
+    expect(first.context.closeCount).toBe(0);
+    expect(first.wavWorker.terminationCount).toBe(0);
+    await nextTask();
+    expect(deferred).toEqual({ type: "snapshot" });
+    first.wavNode.port.postMessage = sendSnapshot;
+    sendSnapshot(deferred);
+    await status;
+    expect(control("wav-pause").disabled).toBe(false);
+    await control("wav-pause").click();
+    expect(first.context.state).toBe("suspended");
+    expect(first.context.suspendCount).toBe(1);
+
+    const second = await loadFromPage();
+    expect(first.context.closeCount).toBe(1);
+    expect(first.wavWorker.terminationCount).toBe(1);
+    const closing = control("close").click();
+    expect(control("wav-load").disabled).toBe(true);
+    expect(control("wav-play").disabled).toBe(true);
+    await closing;
+    expect(second.context.closeCount).toBe(1);
+    expect(second.wavWorker.terminationCount).toBe(1);
+    expect(control("wav-load").disabled).toBe(false);
+    expect(control("wav-play").disabled).toBe(true);
+    expect(control("wav-pause").disabled).toBe(true);
+  });
+});

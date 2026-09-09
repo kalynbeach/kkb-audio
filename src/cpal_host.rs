@@ -44,6 +44,11 @@ enum ProcessStatus {
 
 struct SharedObservation {
     host_failed: AtomicBool,
+    playback_command: AtomicU64,
+    acknowledged_command: AtomicU64,
+    source_position: AtomicU64,
+    render_frame: AtomicU64,
+    ended: AtomicBool,
     callback_count: AtomicU64,
     minimum_frames: AtomicUsize,
     maximum_frames: AtomicUsize,
@@ -62,6 +67,11 @@ impl SharedObservation {
     fn new() -> Self {
         Self {
             host_failed: AtomicBool::new(false),
+            playback_command: AtomicU64::new(0),
+            acknowledged_command: AtomicU64::new(0),
+            source_position: AtomicU64::new(0),
+            render_frame: AtomicU64::new(0),
+            ended: AtomicBool::new(false),
             callback_count: AtomicU64::new(0),
             minimum_frames: AtomicUsize::new(usize::MAX),
             maximum_frames: AtomicUsize::new(0),
@@ -161,6 +171,8 @@ struct WorkerControl {
     stop: Arc<AtomicBool>,
     ready: Arc<AtomicBool>,
     backpressure: Arc<AtomicU64>,
+    stalled: Arc<AtomicBool>,
+    failed: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -184,11 +196,23 @@ impl Drop for WorkerControl {
 }
 
 fn spawn_pcm_worker(layout: ChannelLayout) -> (NativeSource, WorkerControl) {
+    spawn_worker(layout, None)
+}
+
+fn spawn_worker(
+    layout: ChannelLayout,
+    mut wav_file: Option<(std::fs::File, crate::local_wav::LocalWav)>,
+) -> (NativeSource, WorkerControl) {
+    use std::io::{Read, Seek, SeekFrom};
     let (mut ready_producer, ready_consumer) = RingBuffer::new(PCM_SLOT_COUNT);
     let (retired_producer, mut retired_consumer) = RingBuffer::<OwnedPcmBlock>::new(PCM_SLOT_COUNT);
     let stop = Arc::new(AtomicBool::new(false));
     let ready = Arc::new(AtomicBool::new(false));
     let backpressure = Arc::new(AtomicU64::new(0));
+    let stalled = Arc::new(AtomicBool::new(false));
+    let failed = Arc::new(AtomicBool::new(false));
+    let worker_stalled = Arc::clone(&stalled);
+    let worker_failed = Arc::clone(&failed);
     let worker_stop = Arc::clone(&stop);
     let worker_ready = Arc::clone(&ready);
     let worker_backpressure = Arc::clone(&backpressure);
@@ -198,9 +222,16 @@ fn spawn_pcm_worker(layout: ChannelLayout) -> (NativeSource, WorkerControl) {
         });
         let mut next_frame = 0_u64;
         let mut exhausted = false;
+        let mut bytes = [0_u8; PCM_SLOT_FRAMES * 6];
+        let total_frames = wav_file
+            .as_ref()
+            .map_or(u64::MAX, |(_, wav)| wav.total_frames());
         while !worker_stop.load(Ordering::Acquire) {
             let mut made_progress = false;
             for free_slot in &mut free {
+                if next_frame == total_frames || worker_stalled.load(Ordering::Acquire) {
+                    break;
+                }
                 let Some(mut block) = free_slot.take() else {
                     continue;
                 };
@@ -208,14 +239,34 @@ fn spawn_pcm_worker(layout: ChannelLayout) -> (NativeSource, WorkerControl) {
                     slot_id: block.meta.slot_id,
                     epoch: PROOF_EPOCH,
                     source_frame_start: next_frame,
-                    valid_frames: PCM_SLOT_FRAMES,
+                    valid_frames: (total_frames - next_frame).min(PCM_SLOT_FRAMES as u64) as usize,
                     discontinuity: next_frame == 0,
-                    end_of_stream: false,
+                    end_of_stream: total_frames - next_frame <= PCM_SLOT_FRAMES as u64,
                 };
-                block.fill_deterministic();
+                if let Some((file, wav)) = &mut wav_file {
+                    let length = block.meta.valid_frames * wav.block_align() as usize;
+                    let result = file
+                        .seek(SeekFrom::Start(
+                            wav.data_offset() + next_frame * u64::from(wav.block_align()),
+                        ))
+                        .and_then(|_| file.read_exact(&mut bytes[..length]));
+                    let decoded = result.ok().and_then(|_| wav.decode(&bytes[..length]).ok());
+                    let Some(decoded) = decoded else {
+                        worker_failed.store(true, Ordering::Release);
+                        return;
+                    };
+                    let frames = block.meta.valid_frames;
+                    block.left[..frames].copy_from_slice(&decoded[..frames]);
+                    if layout == ChannelLayout::Stereo {
+                        block.right[..frames].copy_from_slice(&decoded[frames..]);
+                    }
+                } else {
+                    block.fill_deterministic();
+                }
+                let valid_frames = block.meta.valid_frames;
                 match ready_producer.push(block) {
                     Ok(()) => {
-                        next_frame = next_frame.saturating_add(PCM_SLOT_FRAMES as u64);
+                        next_frame = next_frame.saturating_add(valid_frames as u64);
                         made_progress = true;
                     }
                     Err(PushError::Full(block)) => {
@@ -223,7 +274,7 @@ fn spawn_pcm_worker(layout: ChannelLayout) -> (NativeSource, WorkerControl) {
                     }
                 }
             }
-            if free.iter().all(Option::is_none) {
+            if free.iter().all(Option::is_none) || next_frame == total_frames {
                 worker_ready.store(true, Ordering::Release);
             }
             match retired_consumer.pop() {
@@ -241,7 +292,7 @@ fn spawn_pcm_worker(layout: ChannelLayout) -> (NativeSource, WorkerControl) {
                 }
             }
             if !made_progress {
-                std::thread::yield_now();
+                std::thread::sleep(Duration::from_millis(1));
             }
         }
     });
@@ -254,6 +305,8 @@ fn spawn_pcm_worker(layout: ChannelLayout) -> (NativeSource, WorkerControl) {
             stop,
             ready,
             backpressure,
+            stalled,
+            failed,
             thread: Some(thread),
         },
     )
@@ -359,6 +412,14 @@ impl CallbackProcessor {
             return self.finish_silent(FailureCode::CapacityExceeded, frame_count, started);
         }
         self.record_frame_count(frame_count);
+        let command = self.shared.playback_command.load(Ordering::Acquire);
+        if command & 1 != 0 {
+            self.publish(started, frame_count, FailureCode::None);
+            self.shared
+                .acknowledged_command
+                .store(command, Ordering::Release);
+            return ProcessStatus::Rendered;
+        }
 
         let render_status = match self.layout {
             ChannelLayout::Mono => {
@@ -404,6 +465,9 @@ impl CallbackProcessor {
         }
 
         self.publish(started, frame_count, FailureCode::None);
+        self.shared
+            .acknowledged_command
+            .store(command, Ordering::Release);
         ProcessStatus::Rendered
     }
 
@@ -474,6 +538,15 @@ impl CallbackProcessor {
         self.shared
             .deadline_overruns
             .store(self.deadline_overruns, Ordering::Relaxed);
+        self.shared
+            .source_position
+            .store(self.input.source_position(), Ordering::Relaxed);
+        self.shared
+            .render_frame
+            .store(self.instance.next_frame(), Ordering::Relaxed);
+        self.shared
+            .ended
+            .store(self.input.ended(), Ordering::Relaxed);
         let counters = self.input.counters();
         self.shared
             .starvation_callbacks
@@ -493,6 +566,21 @@ impl CallbackProcessor {
                 .store(failure as u32, Ordering::Relaxed);
         }
     }
+}
+
+fn validate_wav_host(
+    wav: &crate::local_wav::LocalWav,
+    rate: u32,
+    channels: u16,
+) -> Result<(), String> {
+    if wav.sample_rate() != rate || wav.channels() != u32::from(channels) {
+        return Err(format!(
+            "source {} Hz / {} channels does not match active host {rate} Hz / {channels} channels; no conversion",
+            wav.sample_rate(),
+            wav.channels()
+        ));
+    }
+    Ok(())
 }
 
 fn build_stream<T>(
@@ -682,6 +770,33 @@ mod tests {
     }
 
     #[test]
+    fn paused_start_records_callback_sizes_without_advancing_either_clock() {
+        let (mut processor, shared) = prepared_processor(2, 128);
+        shared.playback_command.store(1, Ordering::Release);
+        let mut output = [1.0_f32; 256];
+        assert_eq!(processor.process(&mut output), ProcessStatus::Rendered);
+        assert_eq!(shared.acknowledged_command.load(Ordering::Acquire), 1);
+        assert_positive_zero(&output);
+        let snapshot = shared.snapshot();
+        assert_eq!(snapshot.callback_count, 1);
+        assert_eq!(snapshot.minimum_frames, 128);
+        assert_eq!(snapshot.maximum_frames, 128);
+        assert_eq!(snapshot.observed_frame_sizes, vec![128]);
+
+        processor.process(&mut output[..34]);
+        let snapshot = shared.snapshot();
+        assert_eq!(snapshot.callback_count, 2);
+        assert_eq!(snapshot.minimum_frames, 17);
+        assert_eq!(snapshot.maximum_frames, 128);
+        assert_eq!(snapshot.observed_frame_sizes, vec![128, 17]);
+        assert_eq!(processor.instance.next_frame(), 0);
+        assert_eq!(processor.input.source_position(), 0);
+        assert_eq!(shared.render_frame.load(Ordering::Relaxed), 0);
+        assert_eq!(shared.source_position.load(Ordering::Relaxed), 0);
+        assert_eq!(snapshot.starvation_callbacks, 0);
+    }
+
+    #[test]
     fn mono_and_stereo_mapping_derive_actual_variable_frame_counts() {
         let (mut mono, mono_shared) = prepared_processor(1, 257);
         let mut mono_output = [f32::NAN; 17];
@@ -808,6 +923,10 @@ mod tests {
         reset_allocator_counts();
         MEASURE_ALLOCATIONS.with(|active| active.set(true));
         black_box(valid.process(black_box(&mut valid_output)));
+        valid.shared.playback_command.store(1, Ordering::Release);
+        black_box(valid.process(black_box(&mut valid_output)));
+        valid.shared.playback_command.store(2, Ordering::Release);
+        black_box(valid.process(black_box(&mut valid_output)));
         black_box(malformed.process(black_box(&mut malformed_output)));
         black_box(capacity.process(black_box(&mut oversized)));
         black_box(host.process(black_box(&mut host_output)));
@@ -843,6 +962,267 @@ mod tests {
             ),
             Err(AdapterPrepareError::Channels)
         ));
+    }
+
+    fn wav_source(bits: u16, channels: u16, frames: usize) -> (NativeSource, WorkerControl) {
+        use std::io::Write;
+        static FILE_ID: AtomicU64 = AtomicU64::new(0);
+        let path = std::env::temp_dir().join(format!(
+            "kkb-wav-test-{}-{}.wav",
+            std::process::id(),
+            FILE_ID.fetch_add(1, Ordering::Relaxed)
+        ));
+        let mut file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .unwrap();
+        std::fs::remove_file(&path).unwrap();
+        file.write_all(&crate::local_wav::tests::fixture(
+            bits, channels, 48_000, frames,
+        ))
+        .unwrap();
+        let wav = crate::local_wav::read_header(&mut file).unwrap();
+        let result = spawn_worker(
+            if channels == 1 {
+                ChannelLayout::Mono
+            } else {
+                ChannelLayout::Stereo
+            },
+            Some((file, wav)),
+        );
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !result.1.ready.load(Ordering::Acquire) {
+            assert!(!result.1.failed.load(Ordering::Acquire));
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        result
+    }
+
+    #[test]
+    fn local_wav_rejects_source_device_rate_and_layout_mismatch_without_conversion() {
+        for channels in [1, 2] {
+            for rate in [44_100, 48_000] {
+                let bytes = crate::local_wav::tests::fixture(24, channels, rate, 17);
+                let wav = crate::local_wav::tests::parse(&bytes).unwrap();
+                assert!(validate_wav_host(&wav, rate, channels).is_ok());
+                assert!(
+                    validate_wav_host(&wav, if rate == 48_000 { 44_100 } else { 48_000 }, channels)
+                        .is_err()
+                );
+                for host_channels in [0, 1, 2, 3, 6] {
+                    assert_eq!(
+                        validate_wav_host(&wav, rate, host_channels).is_ok(),
+                        host_channels == channels
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn local_wav_worker_short_exact_partial_tails_pause_resume_and_consumed_eos() {
+        for bits in [16, 24] {
+            for channels in [1, 2] {
+                for total in [1, 17, 1024, 1025, 4096, 5003] {
+                    let (source, worker) = wav_source(bits, channels, total);
+                    let shared = Arc::new(SharedObservation::new());
+                    let mut processor = CallbackProcessor::prepare(
+                        48_000,
+                        channels as usize,
+                        PROOF_MAXIMUM_FRAMES,
+                        source,
+                        Arc::clone(&shared),
+                    )
+                    .unwrap();
+                    let mut position = 0;
+                    let pattern = [1, 17, 257, 13, 1024];
+                    let mut index = 0;
+                    while position < total {
+                        // Device-free host waits outside rendering for sufficient supply, then proves exact samples.
+                        let deadline = Instant::now() + Duration::from_secs(5);
+                        while processor.input.source_mut().ready.slots() == 0
+                            && processor.input.source_position().is_multiple_of(1024)
+                        {
+                            assert!(Instant::now() < deadline);
+                            std::thread::sleep(Duration::from_millis(1));
+                        }
+                        let frames = pattern[index % pattern.len()]
+                            .min(total - position)
+                            .min(1024 - position % 1024);
+                        let mut output = vec![f32::NAN; frames * channels as usize];
+                        let clock = processor.instance.next_frame();
+                        let command = (index as u64 + 1) * 2 + 1;
+                        shared.playback_command.store(command, Ordering::Release);
+                        assert_eq!(processor.process(&mut output), ProcessStatus::Rendered);
+                        assert_eq!(shared.acknowledged_command.load(Ordering::Acquire), command);
+                        assert_positive_zero(&output);
+                        assert_eq!(processor.input.source_position(), position as u64);
+                        assert_eq!(processor.instance.next_frame(), clock);
+                        shared
+                            .playback_command
+                            .store(command + 1, Ordering::Release);
+                        processor.process(&mut output);
+                        for frame in 0..frames {
+                            for channel in 0..channels as usize {
+                                assert_eq!(
+                                    output[frame * channels as usize + channel],
+                                    crate::local_wav::tests::expected(
+                                        position + frame,
+                                        channel,
+                                        bits
+                                    ) * 0.5
+                                );
+                            }
+                        }
+                        position += frames;
+                        index += 1;
+                        assert_eq!(processor.input.source_position(), position as u64);
+                        assert_eq!(processor.input.ended(), position == total);
+                    }
+                    let mut silence = [1.0_f32; 16];
+                    for _ in 0..3 {
+                        processor.process(&mut silence);
+                        assert_positive_zero(&silence);
+                    }
+                    assert_eq!(processor.input.source_position(), total as u64);
+                    assert!(processor.input.ended());
+                    assert_eq!(processor.input.counters().starvation_callbacks, 0);
+                    worker.stop();
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn local_wav_worker_starvation_freezes_media_not_render_clock_and_recovers() {
+        let (source, worker) = wav_source(24, 2, 5000);
+        worker.stalled.store(true, Ordering::Release);
+        let shared = Arc::new(SharedObservation::new());
+        let mut processor =
+            CallbackProcessor::prepare(48_000, 2, PROOF_MAXIMUM_FRAMES, source, shared).unwrap();
+        let mut first = [0.0_f32; 8192];
+        processor.process(&mut first);
+        assert_eq!(processor.input.source_position(), 4096);
+        let mut silence = [1.0_f32; 34];
+        processor.process(&mut silence);
+        assert_positive_zero(&silence);
+        assert_eq!(processor.input.source_position(), 4096);
+        assert_eq!(processor.instance.next_frame(), 4113);
+        assert_eq!(processor.input.counters().starvation_callbacks, 1);
+        worker.stalled.store(false, Ordering::Release);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while processor.input.source_mut().ready.slots() == 0 {
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        let mut tail = [0.0_f32; 1808];
+        processor.process(&mut tail);
+        for frame in 0..904 {
+            for channel in 0..2 {
+                assert_eq!(
+                    tail[frame * 2 + channel],
+                    crate::local_wav::tests::expected(4096 + frame, channel, 24) * 0.5
+                );
+            }
+        }
+        assert_eq!(processor.input.source_position(), 5000);
+        assert!(processor.input.ended());
+        worker.stop();
+    }
+
+    #[test]
+    #[ignore = "interactive local WAV proof: opens default output; explicit play emits sound"]
+    fn local_wav_playback() -> Result<(), String> {
+        use std::io::BufRead;
+        let path = std::env::var("KKB_WAV").map_err(|_| "set KKB_WAV to a local WAV path")?;
+        let mut file = std::fs::File::open(path).map_err(|e| e.to_string())?;
+        let wav = crate::local_wav::read_header(&mut file)?;
+        let device = cpal::default_host()
+            .default_output_device()
+            .ok_or("no default output device")?;
+        let supported = device.default_output_config().map_err(|e| e.to_string())?;
+        validate_wav_host(&wav, supported.sample_rate(), supported.channels())?;
+        let total = wav.total_frames();
+        let layout = if wav.channels() == 1 {
+            ChannelLayout::Mono
+        } else {
+            ChannelLayout::Stereo
+        };
+        let shared = Arc::new(SharedObservation::new());
+        shared.playback_command.store(1, Ordering::Release);
+        let (source, worker) = spawn_worker(layout, Some((file, wav)));
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !worker.ready.load(Ordering::Acquire) {
+            if worker.failed.load(Ordering::Acquire) || Instant::now() > deadline {
+                return Err("WAV worker preparation failed".into());
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        let processor = CallbackProcessor::prepare(
+            supported.sample_rate(),
+            layout.channels(),
+            PROOF_MAXIMUM_FRAMES,
+            source,
+            Arc::clone(&shared),
+        )
+        .map_err(|e| format!("{e:?}"))?;
+        let stream = build_stream_for_format(
+            &device,
+            supported.config(),
+            supported.sample_format(),
+            processor,
+            Arc::clone(&shared),
+        )?;
+        stream.play().map_err(|e| e.to_string())?;
+        println!(
+            "device={} rate={} channels={} format={:?} totalFrames={total}; prepared paused. Commands: play, pause, status, stall, feed, close. Play emits sound at compiled gain 0.5; lower system volume first.",
+            device,
+            supported.sample_rate(),
+            supported.channels(),
+            supported.sample_format()
+        );
+        for line in std::io::stdin().lock().lines() {
+            match line.map_err(|e| e.to_string())?.trim() {
+                action @ ("play" | "pause") => {
+                    if action == "pause" || !shared.ended.load(Ordering::Relaxed) {
+                        let command = ((shared.playback_command.load(Ordering::Relaxed) + 2) & !1)
+                            | u64::from(action == "pause");
+                        shared.playback_command.store(command, Ordering::Release);
+                        let deadline = Instant::now() + Duration::from_secs(2);
+                        while shared.acknowledged_command.load(Ordering::Acquire) != command {
+                            if Instant::now() > deadline {
+                                return Err("playback acknowledgment timed out".into());
+                            }
+                            std::thread::sleep(Duration::from_millis(1));
+                        }
+                    }
+                }
+                "stall" => worker.stalled.store(true, Ordering::Release),
+                "feed" => worker.stalled.store(false, Ordering::Release),
+                "close" => break,
+                "status" => {}
+                _ => println!("commands: play, pause, status, stall, feed, close"),
+            }
+            println!(
+                "paused={} position={}/{} renderFrame={} ended={} workerFailed={} observation={:?}",
+                shared.acknowledged_command.load(Ordering::Acquire) & 1 != 0,
+                shared.source_position.load(Ordering::Relaxed),
+                total,
+                shared.render_frame.load(Ordering::Relaxed),
+                shared.ended.load(Ordering::Relaxed),
+                worker.failed.load(Ordering::Acquire),
+                shared.snapshot()
+            );
+            if worker.failed.load(Ordering::Acquire) || shared.host_failed.load(Ordering::Relaxed) {
+                return Err("WAV playback failed".into());
+            }
+        }
+        drop(stream);
+        worker.stop();
+        Ok(())
     }
 
     #[test]

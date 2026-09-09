@@ -12,6 +12,10 @@ class FakeWorkletKernel {
     _slotFrames: number,
   ) {}
 
+  source_position(): bigint { return 0n; }
+  next_frame(): bigint { return 0n; }
+  ended(): boolean { return false; }
+  slot_free(): boolean { return true; }
   preparation_status(): number { return 0; }
   maximum_frames(): number { return 1_024; }
   slot_count(): number { return 4; }

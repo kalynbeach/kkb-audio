@@ -8,12 +8,9 @@ const FREE = 0;
 const IN_FLIGHT = 1;
 const RETRY = 2;
 
-export const PCM_WORKER_FAILURE_CODE = 50;
-export const PROOF_REJECTION_RETRY_LIMIT = 64;
-
 type PendingBlock = Omit<PcmBlockMessage, "buffer">;
-type Schedule = (callback: () => void, delayMilliseconds: number) => void;
 
+// Deterministic ownership/fault-injection fixture. Live workers use LocalPcmProducer.
 export class FixedTransferPool {
   readonly #buffers: ArrayBuffer[];
   readonly #config: PcmStreamConfig;
@@ -104,95 +101,6 @@ export class FixedTransferPool {
       this.#exhausted = true;
     }
     return undefined;
-  }
-}
-
-export class FixedPcmProducer {
-  readonly #config: PcmStreamConfig;
-  readonly #pool: FixedTransferPool;
-  readonly #postBlock: (block: PcmBlockMessage) => void;
-  readonly #postFailure: (code: number) => void;
-  readonly #schedule: Schedule;
-  readonly #pacingDelayMilliseconds: number;
-  #activated = false;
-  #scheduled = false;
-  #failed = false;
-  #consecutiveRejections = 0;
-
-  constructor(
-    config: PcmStreamConfig,
-    postBlock: (block: PcmBlockMessage) => void,
-    postFailure: (code: number) => void,
-    schedule: Schedule = (callback, delayMilliseconds) => {
-      setTimeout(callback, delayMilliseconds);
-    },
-  ) {
-    this.#config = config;
-    this.#pool = new FixedTransferPool(config);
-    this.#postBlock = postBlock;
-    this.#postFailure = postFailure;
-    this.#schedule = schedule;
-    this.#pacingDelayMilliseconds = Math.max(
-      1,
-      Math.ceil((config.slotFrames * 1_000) / config.sampleRate),
-    );
-  }
-
-  prefill(slotCount: number): void {
-    for (let count = 0; count < slotCount; count += 1) {
-      const block = this.#pool.takeNext();
-      if (block === undefined) break;
-      this.#postBlock(block);
-    }
-    this.#pool.takeNext();
-  }
-
-  activate(): void {
-    if (this.#activated) return;
-    this.#activated = true;
-    this.#schedulePump();
-  }
-
-  acceptAdmissionResult(value: unknown): boolean {
-    if (this.#failed) return false;
-    const valid = this.#pool.acceptAdmissionResult(value);
-    if (!valid) {
-      this.#fail();
-      return false;
-    }
-
-    if (isAdmissionResultMessage(value, this.#config) && value.accepted) {
-      this.#consecutiveRejections = 0;
-    } else {
-      this.#consecutiveRejections += 1;
-      if (this.#consecutiveRejections >= PROOF_REJECTION_RETRY_LIMIT) {
-        this.#fail();
-        return true;
-      }
-    }
-    if (this.#activated && !this.#failed) this.#schedulePump();
-    return true;
-  }
-
-  snapshot(): { exhaustionCount: number; invalidRecycleCount: number } {
-    return this.#pool.snapshot();
-  }
-
-  #schedulePump(): void {
-    if (this.#scheduled || this.#failed) return;
-    this.#scheduled = true;
-    this.#schedule(() => {
-      this.#scheduled = false;
-      if (!this.#activated || this.#failed) return;
-      const block = this.#pool.takeNext();
-      if (block !== undefined) this.#postBlock(block);
-    }, this.#pacingDelayMilliseconds);
-  }
-
-  #fail(): void {
-    if (this.#failed) return;
-    this.#failed = true;
-    this.#postFailure(PCM_WORKER_FAILURE_CODE);
   }
 }
 

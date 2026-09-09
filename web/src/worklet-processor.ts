@@ -63,6 +63,10 @@ class KkbPreparedKernelProcessor extends AudioWorkletProcessor {
         ) {
           const transportPort = event.data.port;
           transportPort.onmessage = (transportEvent: MessageEvent<unknown>) => {
+            if ((transportEvent.data as { type?: string } | null)?.type === "supply") {
+              transportPort.postMessage({ type: "supply", free: [kernel.slot_free(0), kernel.slot_free(1), kernel.slot_free(2), kernel.slot_free(3)] });
+              return;
+            }
             if (!isPcmBlockMessage(transportEvent.data, processorOptions)) {
               this.#failRuntime(ProcessorFailure.InvalidTransportMessage);
               transportPort.onmessage = null;
@@ -124,7 +128,7 @@ class KkbPreparedKernelProcessor extends AudioWorkletProcessor {
         ? snapshot
         : { ...snapshot, failureCode: this.#failureCode };
     }
-    return { failureCode: this.#failureCode, invalidBlockCount: 0, lastFrameCount: 0, memoryBytes: 0, processCount: 0, slotCount: 0, staleBlockCount: 0, starvationCount: 0 };
+    return { sourcePosition: 0, renderFrame: 0, ended: false, failureCode: this.#failureCode, invalidBlockCount: 0, lastFrameCount: 0, memoryBytes: 0, processCount: 0, slotCount: 0, staleBlockCount: 0, starvationCount: 0 };
   }
 }
 

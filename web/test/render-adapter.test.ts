@@ -11,6 +11,10 @@ class FakeKernel implements WorkletKernelBinding {
   readonly #memory: MutableMemory;
   readonly #maximumFrames: number;
   readonly #rightPointer: number;
+  source_position(): bigint { return 0n; }
+  next_frame(): bigint { return 0n; }
+  ended(): boolean { return false; }
+  slot_free(): boolean { return true; }
   calls = 0;
   nextStatus: number = RenderStatus.Rendered;
   readonly #reserved = [false, false, false, false];
@@ -96,6 +100,7 @@ describe("PreparedPlanarAdapter", () => {
     expect(adapter.process([[twoHundredFiftySeven]])).toBe(true);
     expect(twoHundredFiftySeven[256]).toBe(256.25);
     expect(adapter.snapshot()).toEqual({
+      sourcePosition: 0, renderFrame: 0, ended: false,
       failureCode: 0,
       invalidBlockCount: 0,
       lastFrameCount: 257,
