@@ -45,6 +45,7 @@ export class PreparedProof {
   readonly #worker: Worker | undefined;
   readonly #workerInitialAdmittedBlocks: number;
   readonly totalFrames: number | undefined;
+  readonly sourceRate: number | undefined;
   #activated = false;
   #closed = false;
   #workerTerminated = false;
@@ -61,8 +62,10 @@ export class PreparedProof {
     worker?: Worker,
     workerInitialAdmittedBlocks = 0,
     totalFrames?: number,
+    sourceRate?: number,
   ) {
     this.totalFrames = totalFrames;
+    this.sourceRate = sourceRate;
     this.#context = context;
     this.#node = node;
     this.#gate = gate;
@@ -265,9 +268,11 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
 
     worker = new Worker(workerUrl, { type: "module" });
     let totalFrames: number | undefined;
+    let totalPcmFrames: number | undefined;
+    let sourceRate: number | undefined;
     let channelCount = options.channelCount;
     if (options.file) {
-      const metadata = await new Promise<{ channelCount: 1 | 2; totalFrames: number }>((resolve, reject) => {
+      const metadata = await new Promise<{ channelCount: 1 | 2; totalFrames: number; totalPcmFrames: number; sampleRate: number }>((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error("WAV inspection timed out")), timeoutMilliseconds);
         worker!.onerror = () => { clearTimeout(timeout); reject(new Error("WAV worker failed")); };
         worker!.onmessage = event => {
@@ -279,6 +284,8 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
       });
       channelCount = metadata.channelCount;
       totalFrames = metadata.totalFrames;
+      totalPcmFrames = metadata.totalPcmFrames;
+      sourceRate = metadata.sampleRate;
     }
     const config = {
       channelCount,
@@ -287,6 +294,8 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
       slotCount: 4,
       slotFrames: 256,
       sourceId: 3,
+      sourceRate,
+      sourceFrames: totalFrames,
     } as const;
     const channel = new MessageChannel();
     const workerReady = new Promise<number>((resolve, reject) => {
@@ -305,7 +314,7 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
         const message = event.data as { type?: unknown; slotCount?: unknown; initialAdmittedBlocks?: unknown } | null;
         if (
           message?.type === "worker-ready" && message.slotCount === config.slotCount &&
-          message.initialAdmittedBlocks === Math.min(config.slotCount, Math.ceil((totalFrames ?? Number.MAX_SAFE_INTEGER) / config.slotFrames))
+          message.initialAdmittedBlocks === Math.min(config.slotCount, Math.ceil((totalPcmFrames ?? totalFrames ?? Number.MAX_SAFE_INTEGER) / config.slotFrames))
         ) {
           clearTimeout(timeout); resolve(message.initialAdmittedBlocks as number);
         } else if (message?.type === "worker-failed") {
@@ -364,7 +373,7 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
     if (context.state !== "suspended" || gate.result.type !== "ready") {
       throw new InitializationError(InitializationFailure.ContextState);
     }
-    prepared = new PreparedProof(context, node, gate, ready, worker, workerInitialAdmittedBlocks, totalFrames);
+    prepared = new PreparedProof(context, node, gate, ready, worker, workerInitialAdmittedBlocks, totalFrames, sourceRate);
     return prepared;
   } catch (error) {
     worker?.terminate();
@@ -395,6 +404,7 @@ function isSnapshotMessage(
   const snapshot = message.snapshot as Partial<RenderSnapshot>;
   return (
     Number.isSafeInteger(snapshot.sourcePosition) &&
+    Number.isSafeInteger(snapshot.pcmPosition) &&
     Number.isSafeInteger(snapshot.renderFrame) &&
     typeof snapshot.ended === "boolean" &&
     Number.isSafeInteger(snapshot.failureCode) &&
@@ -534,7 +544,7 @@ function updateWavControls(): void {
   if (wavStall) { wavStall.disabled = controlsPending || unavailable; if (unavailable) wavStall.checked = false; }
 }
 function wavStatus(proof: PreparedProof, snapshot: RenderSnapshot): void {
-  outputText(JSON.stringify({ state: snapshot.ended ? "ended" : proof.paused ? "paused" : "playing", totalFrames: proof.totalFrames, producerLastObserved: proof.producerObservation, ...snapshot }, null, 2));
+  outputText(JSON.stringify({ state: snapshot.ended ? "ended" : proof.paused ? "paused" : "playing", totalFrames: proof.totalFrames, sourceRate: proof.sourceRate, producerLastObserved: proof.producerObservation, ...snapshot }, null, 2));
 }
 document.querySelector("#wav-load")?.addEventListener("click", async () => {
   const file = wavFile?.files?.[0];

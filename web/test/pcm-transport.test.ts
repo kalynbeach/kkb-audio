@@ -34,7 +34,7 @@ describe("PCM transferable protocol", () => {
   test("accepts only exact fixed-capacity blocks and admission results", () => {
     const buffer = new ArrayBuffer(2 * 4 * 4);
     const block = {
-      type: "pcm", slotId: 0, epoch: 7, sourceFrameStart: 0,
+      type: "pcm", slotId: 0, epoch: 7, pcmFrameStart: 0,
       validFrames: 4, discontinuity: true, endOfStream: false, buffer,
     };
     expect(isPcmBlockMessage(block, config)).toBe(true);
@@ -61,7 +61,7 @@ describe("PCM transferable protocol", () => {
     const resumed = pool.takeNext();
     expect(resumed?.slotId).toBe(first.slotId);
     expect(resumed?.buffer).toBe(first.buffer);
-    expect(resumed?.sourceFrameStart).toBe(16);
+    expect(resumed?.pcmFrameStart).toBe(16);
     expect(pool.snapshot().invalidRecycleCount).toBe(1);
   });
 
@@ -102,7 +102,7 @@ describe("PCM transferable protocol", () => {
     const resumed = pool.takeNext()!;
     expect(resumed.buffer).toBe(result.buffer);
     expect(resumed.buffer.byteLength).toBe(2 * 4 * 4);
-    expect(resumed.sourceFrameStart).toBe(4);
+    expect(resumed.pcmFrameStart).toBe(4);
     channel.port1.close();
     channel.port2.close();
   });

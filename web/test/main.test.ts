@@ -127,7 +127,7 @@ class StartupWorkletNode extends FakeAudioNode {
         this.send({
           type: "snapshot",
           snapshot: {
-          sourcePosition: 0, renderFrame: 0, ended: false,
+          sourcePosition: 0, pcmPosition: 0, renderFrame: 0, ended: false,
             failureCode: 0,
             invalidBlockCount: 0,
             lastFrameCount: 128,
@@ -285,7 +285,7 @@ describe("PreparedProof activation", () => {
       proof.acceptRuntimeMessage({
         type: "snapshot",
         snapshot: {
-          sourcePosition: 0, renderFrame: 0, ended: false,
+          sourcePosition: 0, pcmPosition: 0, renderFrame: 0, ended: false,
           failureCode: 36,
           invalidBlockCount: 0,
           lastFrameCount: 128,
@@ -420,7 +420,7 @@ test("local WAV controls suspend at acknowledgment, retain the instance, and nev
   let position = 0;
   let ended = false;
   node.port.postMessage = () => proof.acceptRuntimeMessage({ type: "snapshot", snapshot: {
-    sourcePosition: position, renderFrame: position, ended, failureCode: 0, invalidBlockCount: 0,
+    sourcePosition: position, pcmPosition: position, renderFrame: position, ended, failureCode: 0, invalidBlockCount: 0,
     lastFrameCount: 1, memoryBytes: 16777216, processCount: position, slotCount: 4, staleBlockCount: 0, starvationCount: 0,
   } });
   await proof.play(); expect(context.state).toBe("running");

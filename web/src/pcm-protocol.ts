@@ -5,13 +5,15 @@ export type PcmStreamConfig = {
   slotCount: number;
   slotFrames: number;
   sourceId: number;
+  sourceRate?: number;
+  sourceFrames?: number;
 };
 
 export type PcmBlockMessage = {
   type: "pcm";
   slotId: number;
   epoch: number;
-  sourceFrameStart: number;
+  pcmFrameStart: number;
   validFrames: number;
   discontinuity: boolean;
   endOfStream: boolean;
@@ -51,7 +53,7 @@ export function isPcmBlockMessage(
     nonNegativeSafeInteger(value.slotId) &&
     value.slotId < config.slotCount &&
     nonNegativeSafeInteger(value.epoch) &&
-    nonNegativeSafeInteger(value.sourceFrameStart) &&
+    nonNegativeSafeInteger(value.pcmFrameStart) &&
     nonNegativeSafeInteger(value.validFrames) &&
     value.validFrames > 0 &&
     value.validFrames <= config.slotFrames &&

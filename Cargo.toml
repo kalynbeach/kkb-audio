@@ -8,6 +8,8 @@ rust-version = "1.98"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+rubato = { version = "=5.0.0", default-features = false, features = ["fft_resampler"] }
+audioadapter-buffers = "=5.1.0"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 cpal = "=0.18.2"

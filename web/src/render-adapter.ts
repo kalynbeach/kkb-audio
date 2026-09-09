@@ -23,10 +23,11 @@ export const HostFailure = {
 
 export interface WorkletKernelBinding {
   source_position(): bigint;
+  pcm_position(): bigint;
   next_frame(): bigint;
   ended(): boolean;
   slot_free(slotId: number): boolean;
-  admit(slotId: number, epoch: bigint, sourceFrameStart: bigint, validFrames: number, discontinuity: boolean, endOfStream: boolean): number;
+  admit(slotId: number, epoch: bigint, pcmFrameStart: bigint, validFrames: number, discontinuity: boolean, endOfStream: boolean): number;
   cancel_slot(slotId: number): void;
   invalid_count(): bigint;
   render(frameCount: number): number;
@@ -45,6 +46,7 @@ export interface WorkletMemory { readonly buffer: ArrayBuffer; }
 
 export type RenderSnapshot = {
   sourcePosition: number;
+  pcmPosition: number;
   renderFrame: number;
   ended: boolean;
   failureCode: number;
@@ -119,7 +121,7 @@ export class PreparedPlanarAdapter {
       const status = this.#kernel.admit(
         message.slotId,
         BigInt(message.epoch),
-        BigInt(message.sourceFrameStart),
+        BigInt(message.pcmFrameStart),
         message.validFrames,
         message.discontinuity,
         message.endOfStream,
@@ -165,6 +167,7 @@ export class PreparedPlanarAdapter {
   snapshot(): RenderSnapshot {
     return {
       sourcePosition: Number(this.#kernel.source_position()),
+      pcmPosition: Number(this.#kernel.pcm_position()),
       renderFrame: Number(this.#kernel.next_frame()),
       ended: this.#kernel.ended(),
       failureCode: this.#failureCode,

@@ -1,7 +1,7 @@
 import { isAdmissionResultMessage, type PcmBlockMessage, type PcmStreamConfig } from "./pcm-protocol";
 
 // Admission returns transfer ownership, never consumption credit. Only an off-process
-// free-slot reply permits reuse. One read/admission at a time fixes source ordering.
+// free-slot reply permits reuse. All producer coordinates are output-rate PCM frames. One read/admission at a time fixes source ordering.
 export class LocalPcmProducer {
   readonly buffers: ArrayBuffer[];
   #slot = 0;
@@ -18,12 +18,12 @@ export class LocalPcmProducer {
   #failed = false;
   #credits: boolean[];
   polls = 0;
-  readFrames = 0;
-  admittedFrames = 0;
+  preparedPcmFrames = 0;
+  admittedPcmFrames = 0;
   rejections = 0;
   constructor(
     readonly config: PcmStreamConfig,
-    readonly totalFrames: number,
+    readonly totalPcmFrames: number,
     readonly fill: (buffer: ArrayBuffer, start: number, frames: number) => Promise<void>,
     readonly post: (message: unknown, transfer?: Transferable[]) => void,
     readonly ready: () => void,
@@ -45,12 +45,12 @@ export class LocalPcmProducer {
       this.#busy = false;
       if (value.accepted) {
         this.#position += this.#pending.validFrames;
-        this.admittedFrames = this.#position;
+        this.admittedPcmFrames = this.#position;
         this.#pending = undefined;
         this.#slot = (this.#slot + 1) % this.config.slotCount;
         if (!this.#ready) this.initialAdmittedBlocks += 1;
       } else { this.rejections += 1; }
-      if (!this.#ready && (this.initialAdmittedBlocks === this.config.slotCount || this.#position === this.totalFrames)) {
+      if (!this.#ready && (this.initialAdmittedBlocks === this.config.slotCount || this.#position === this.totalPcmFrames)) {
         this.#ready = true; this.ready();
       }
       if (value.accepted && (!this.#ready || this.#active) && this.#credits[this.#slot]) void this.#pump();
@@ -66,23 +66,23 @@ export class LocalPcmProducer {
     } else this.#failure("invalid supply reply");
   }
   async #pump(): Promise<void> {
-    if (this.#busy || this.#failed || this.#stalled || this.#position === this.totalFrames) return;
+    if (this.#busy || this.#failed || this.#stalled || this.#position === this.totalPcmFrames) return;
     if (!this.#credits[this.#slot]) { this.#schedule(); return; }
     this.#busy = true;
     this.#credits[this.#slot] = false;
     try {
       if (this.#pending === undefined) {
         const buffer = this.buffers[this.#slot]!;
-        const frames = Math.min(this.config.slotFrames, this.totalFrames - this.#position);
+        const frames = Math.min(this.config.slotFrames, this.totalPcmFrames - this.#position);
         await this.fill(buffer, this.#position, frames);
-        this.readFrames = this.#position + frames;
-        this.#pending = { type: "pcm", slotId: this.#slot, epoch: this.config.epoch, sourceFrameStart: this.#position, validFrames: frames, discontinuity: this.#position === 0, endOfStream: this.#position + frames === this.totalFrames, buffer };
+        this.preparedPcmFrames = this.#position + frames;
+        this.#pending = { type: "pcm", slotId: this.#slot, epoch: this.config.epoch, pcmFrameStart: this.#position, validFrames: frames, discontinuity: this.#position === 0, endOfStream: this.#position + frames === this.totalPcmFrames, buffer };
       }
       this.post(this.#pending, [this.#pending.buffer]);
     } catch (error) { this.#failure(error); }
   }
   #schedule(): void {
-    if (this.#timer || this.#pollPending || !this.#active || this.#failed || this.#stalled || this.#position === this.totalFrames) return;
+    if (this.#timer || this.#pollPending || !this.#active || this.#failed || this.#stalled || this.#position === this.totalPcmFrames) return;
     this.#timer = true;
     const scheduledAt = performance.now();
     this.schedule(() => {
