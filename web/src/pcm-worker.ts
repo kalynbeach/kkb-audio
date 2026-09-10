@@ -13,6 +13,37 @@ let wav: LocalWav | undefined;
 let converter: PreparedRateConverter | undefined;
 let memory: WebAssembly.Memory | undefined;
 let outputRate: number | undefined;
+let transport: MessagePort | undefined;
+let latestSeek: { epoch: number; target: number } | undefined;
+let seeking = false;
+let seekReady: (() => void) | undefined;
+let transitionReply: ((value: { pcmFrame: number }) => void) | undefined;
+
+function transition(type: "begin-seek" | "finish-seek", epoch: number, target: number): Promise<{ pcmFrame: number }> {
+  return new Promise(resolve => { transitionReply = resolve; transport!.postMessage({ type, epoch, target }); });
+}
+async function runSeeks(): Promise<void> {
+  if (seeking) return;
+  seeking = true;
+  try {
+    while (latestSeek) {
+      await producer!.quiesce();
+      const request = latestSeek;
+      latestSeek = undefined;
+      const { pcmFrame } = await transition("begin-seek", request.epoch, request.target);
+      if (latestSeek) continue;
+      converter!.seek(BigInt(request.target));
+      const ready = new Promise<void>(resolve => { seekReady = resolve; });
+      producer!.reset(request.epoch, pcmFrame);
+      await ready;
+      seekReady = undefined;
+      if (latestSeek) continue;
+      await transition("finish-seek", request.epoch, request.target);
+      if (!latestSeek) self.postMessage({ type: "seek-complete", epoch: request.epoch, requestedFrame: request.target, pcmFrame });
+    }
+  } catch (error) { fail(error); }
+  finally { seeking = false; }
+}
 const fail = (error: unknown) => self.postMessage({ type: "worker-failed", code: 70, detail: typeof error === "number" ? error === 71 ? "Unsupported sample-rate conversion (71): expected same rate or 44100 ↔ 48000 Hz." : "Unsupported or malformed WAV: expected nonempty little-endian RIFF PCM16/24 mono/stereo with consistent chunk bounds." : String(error) });
 self.onmessage = async (event: MessageEvent) => {
   try {
@@ -31,15 +62,24 @@ self.onmessage = async (event: MessageEvent) => {
       self.postMessage({ type: "metadata", channelCount: wav.channels(), totalFrames: Number(wav.total_frames()), sampleRate: wav.sample_rate(), totalPcmFrames: Number(converter.total_pcm_frames()) });
       return;
     }
+    if (value.type === "seek") {
+      if (!producer || !wav || !Number.isSafeInteger(value.epoch) || value.epoch <= producer.config.epoch || !Number.isSafeInteger(value.target) || value.target < 0 || value.target > Number(wav.total_frames())) throw new Error("invalid seek");
+      latestSeek = { epoch: value.epoch, target: value.target };
+      self.postMessage({ type: "seek-accepted", epoch: value.epoch });
+      seekReady?.();
+      void runSeeks();
+      return;
+    }
     if (value.type === "activate") { producer?.activate(); return; }
     if (value.type === "stall") { producer?.stall(value.value === true); return; }
     if (value.type === "producer-status") {
-      self.postMessage({ type: "producer-status", polls: producer?.polls, preparedPcmFrames: producer?.preparedPcmFrames, initialAdmittedBlocks: producer?.initialAdmittedBlocks, admittedPcmFrames: producer?.admittedPcmFrames, rejections: producer?.rejections, maxPollDelayMilliseconds: producer?.maxPollDelayMilliseconds, sourceFramesRead: converter ? Number(converter.source_frames_read()) : undefined }); return;
+      self.postMessage({ type: "producer-status", epoch: producer?.config.epoch, polls: producer?.polls, preparedPcmFrames: producer?.preparedPcmFrames, initialAdmittedBlocks: producer?.initialAdmittedBlocks, admittedPcmFrames: producer?.admittedPcmFrames, rejections: producer?.rejections, maxPollDelayMilliseconds: producer?.maxPollDelayMilliseconds, sourceFramesRead: converter ? Number(converter.source_frames_read()) : undefined }); return;
     }
     if (producer !== undefined || value.type !== "initialize" || !isPcmStreamConfig(value.config) || !(value.port instanceof MessagePort)) throw new Error("invalid initialization");
     const config = value.config;
     if (wav && (config.sampleRate !== outputRate || config.channelCount !== wav.channels())) throw new Error("WAV initialization does not match prepared conversion");
     const port: MessagePort = value.port;
+    transport = port;
     producer = new LocalPcmProducer(config, converter ? Number(converter.total_pcm_frames()) : Number.MAX_SAFE_INTEGER,
       async (buffer, start, frames) => {
         if (!wav || !file) { fillDeterministic(buffer, config, start); return; }
@@ -62,9 +102,16 @@ self.onmessage = async (event: MessageEvent) => {
         }
       },
       (message, transfer = []) => port.postMessage(message, transfer),
-      () => self.postMessage({ type: "worker-ready", slotCount: config.slotCount, initialAdmittedBlocks: producer!.initialAdmittedBlocks }),
+      () => {
+        if (seeking) seekReady?.();
+        else self.postMessage({ type: "worker-ready", slotCount: config.slotCount, initialAdmittedBlocks: producer!.initialAdmittedBlocks });
+      },
       fail);
-    port.onmessage = message => producer?.accept(message.data);
+    port.onmessage = message => {
+      if (message.data?.type === "seek-transition") {
+        const resolve = transitionReply; transitionReply = undefined; resolve?.(message.data);
+      } else producer?.accept(message.data);
+    };
     port.start();
     producer.start();
   } catch (error) { fail(error); }

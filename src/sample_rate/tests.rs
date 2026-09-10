@@ -18,7 +18,8 @@ fn drive(
 ) -> Vec<Vec<f32>> {
     let mut output = vec![Vec::new(); input.len()];
     let mut turn = 0;
-    while output[0].len() < converter.total_pcm_frames() as usize {
+    let remaining = (converter.total_pcm_frames() - converter.pcm_consumed) as usize;
+    while output[0].len() < remaining {
         let needed = converter
             .input_frames_needed()
             .min(partition[turn % partition.len()]);
@@ -78,6 +79,56 @@ fn finite_length_partition_independence_same_rate_bypass_and_reset() {
             assert_eq!(reference, drive(&mut converter, &input, &[257]));
             converter.reset();
             assert_eq!(reference, drive(&mut converter, &input, &[64, 3]));
+        }
+    }
+}
+
+#[test]
+fn seeks_match_uninterrupted_output_including_fft_boundaries_and_finite_tails() {
+    for (source, target) in [(44100, 48000), (48000, 44100), (48000, 48000)] {
+        for total in [1_usize, 2, 17, 1176, 1280, 5003, 12001] {
+            let input: Vec<Vec<f32>> = (0..2)
+                .map(|ch| {
+                    (0..total)
+                        .map(|i| ((i * 7919 + ch * 13) % 32768) as f32 / 16384.0 - 1.0)
+                        .collect()
+                })
+                .collect();
+            let reference = convert(source, target, &input, &[257, 17]);
+            let mut converter =
+                PreparedRateConverter::new(source, target, 2, total as u64).unwrap();
+            for seek in [
+                0,
+                total - 1,
+                total,
+                total / 2,
+                1,
+                587,
+                588,
+                639,
+                640,
+                1175,
+                1176,
+                1279,
+                1280,
+                7001,
+                0,
+            ] {
+                if seek > total {
+                    continue;
+                }
+                let pcm = converter.seek(seek as u64).unwrap() as usize;
+                assert!(seek.saturating_sub(converter.source_frames_read() as usize) <= 2560);
+                let actual = drive(&mut converter, &input, &[1, 1024, 37]);
+                for ch in 0..2 {
+                    assert_eq!(
+                        actual[ch],
+                        reference[ch][pcm..],
+                        "{source}->{target} total={total} seek={seek}"
+                    );
+                }
+            }
+            assert_eq!(converter.seek(total as u64 + 1), Err(INVALID_CONVERSION));
         }
     }
 }

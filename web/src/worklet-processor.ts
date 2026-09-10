@@ -66,7 +66,19 @@ class KkbPreparedKernelProcessor extends AudioWorkletProcessor {
         ) {
           const transportPort = event.data.port;
           transportPort.onmessage = (transportEvent: MessageEvent<unknown>) => {
-            if ((transportEvent.data as { type?: string } | null)?.type === "supply") {
+            const control = transportEvent.data as { type?: string; epoch?: number; target?: number } | null;
+            if (control?.type === "begin-seek" || control?.type === "finish-seek") {
+              try {
+                if (!Number.isSafeInteger(control.epoch) || !Number.isSafeInteger(control.target) || control.epoch! < 0 || control.target! < 0) throw new Error("invalid seek");
+                const pcmFrame = control.type === "begin-seek"
+                  ? Number(kernel.begin_seek(BigInt(control.epoch!), BigInt(control.target!)))
+                  : Number(kernel.pcm_position());
+                if (control.type === "finish-seek" && !kernel.finish_seek(BigInt(control.epoch!))) throw new Error("stale seek");
+                transportPort.postMessage({ type: "seek-transition", epoch: control.epoch, pcmFrame });
+              } catch { this.#failRuntime(ProcessorFailure.InvalidTransportMessage); }
+              return;
+            }
+            if (control?.type === "supply") {
               transportPort.postMessage({ type: "supply", free: [kernel.slot_free(0), kernel.slot_free(1), kernel.slot_free(2), kernel.slot_free(3)] });
               return;
             }
@@ -131,7 +143,7 @@ class KkbPreparedKernelProcessor extends AudioWorkletProcessor {
         ? snapshot
         : { ...snapshot, failureCode: this.#failureCode };
     }
-    return { pcmPosition: 0, sourcePosition: 0, renderFrame: 0, ended: false, failureCode: this.#failureCode, invalidBlockCount: 0, lastFrameCount: 0, memoryBytes: 0, processCount: 0, slotCount: 0, staleBlockCount: 0, starvationCount: 0 };
+    return { epoch: 0, presentationTime: null, ready: false, pcmPosition: 0, sourcePosition: 0, renderFrame: 0, ended: false, failureCode: this.#failureCode, invalidBlockCount: 0, lastFrameCount: 0, memoryBytes: 0, processCount: 0, slotCount: 0, staleBlockCount: 0, starvationCount: 0 };
   }
 }
 

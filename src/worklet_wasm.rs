@@ -142,6 +142,10 @@ impl WorkletKernel {
         let Some(input) = &mut self.input else {
             return STATUS_TERMINAL;
         };
+        if epoch != input.active_epoch() {
+            input.source_mut().cancel_reservation(slot_id);
+            return STATUS_REJECTED;
+        }
         let accepted = input.source_mut().admit_reserved(BlockMeta {
             slot_id,
             epoch,
@@ -161,6 +165,38 @@ impl WorkletKernel {
         if let Some(input) = &mut self.input {
             input.set_active_epoch(epoch);
         }
+    }
+
+    pub fn begin_seek(&mut self, epoch: u64, source_frame: u64) -> Result<u64, u32> {
+        let timeline = self.timeline.as_ref().ok_or(71_u32)?;
+        let pcm = timeline.seek_pcm_frame(source_frame)?;
+        let input = self.input.as_mut().ok_or(71_u32)?;
+        if epoch <= input.active_epoch() {
+            return Err(71);
+        }
+        input.begin_seek(epoch, pcm, pcm == timeline.total_pcm_frames());
+        if let Some(instance) = &mut self.instance {
+            instance.clear_source_observations();
+        }
+        Ok(pcm)
+    }
+    pub fn finish_seek(&mut self, epoch: u64) -> bool {
+        let Some(input) = &mut self.input else {
+            return false;
+        };
+        if input.active_epoch() != epoch {
+            return false;
+        }
+        input.finish_seek();
+        true
+    }
+    pub fn ready(&self) -> bool {
+        self.input.as_ref().is_some_and(|input| !input.preparing())
+    }
+    pub fn epoch(&self) -> u64 {
+        self.input
+            .as_ref()
+            .map_or(0, PreparedPcmInput::active_epoch)
     }
 
     pub fn render(&mut self, frame_count: usize) -> u32 {
