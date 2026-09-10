@@ -17,7 +17,7 @@ export class FixedTransferPool {
   readonly #pending: Array<PendingBlock | undefined>;
   readonly #states: Uint8Array;
   #nextSlot = 0;
-  #sourceFrame = 0;
+  #pcmFrame = 0;
   #exhaustionCount = 0;
   #invalidRecycleCount = 0;
   #exhausted = false;
@@ -78,18 +78,18 @@ export class FixedTransferPool {
       if (buffer === undefined || buffer.byteLength === 0) continue;
       let pending = this.#pending[slotId];
       if (pending === undefined) {
-        fillDeterministic(buffer, this.#config, this.#sourceFrame);
+        fillDeterministic(buffer, this.#config, this.#pcmFrame);
         pending = {
           type: "pcm",
           slotId,
           epoch: this.#config.epoch,
-          sourceFrameStart: this.#sourceFrame,
+          pcmFrameStart: this.#pcmFrame,
           validFrames: this.#config.slotFrames,
-          discontinuity: this.#sourceFrame === 0,
+          discontinuity: this.#pcmFrame === 0,
           endOfStream: false,
         };
         this.#pending[slotId] = pending;
-        this.#sourceFrame += this.#config.slotFrames;
+        this.#pcmFrame += this.#config.slotFrames;
       }
       this.#states[slotId] = IN_FLIGHT;
       this.#nextSlot = (slotId + 1) % this.#config.slotCount;
@@ -107,13 +107,13 @@ export class FixedTransferPool {
 export function fillDeterministic(
   buffer: ArrayBuffer,
   config: PcmStreamConfig,
-  sourceFrameStart: number,
+  pcmFrameStart: number,
 ): void {
   const samples = new Float32Array(buffer);
   for (let channel = 0; channel < config.channelCount; channel += 1) {
     const planeStart = channel * config.slotFrames;
     for (let frame = 0; frame < config.slotFrames; frame += 1) {
-      const base = (((sourceFrameStart + frame) & 1_023) - 512) / 16_384;
+      const base = (((pcmFrameStart + frame) & 1_023) - 512) / 16_384;
       samples[planeStart + frame] = channel === 0 ? base : -base;
     }
   }

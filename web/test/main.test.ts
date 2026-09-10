@@ -127,7 +127,7 @@ class StartupWorkletNode extends FakeAudioNode {
         this.send({
           type: "snapshot",
           snapshot: {
-          sourcePosition: 0, renderFrame: 0, ended: false,
+          sourcePosition: 0, pcmPosition: 0, renderFrame: 0, ended: false,
             failureCode: 0,
             invalidBlockCount: 0,
             lastFrameCount: 128,
@@ -164,12 +164,12 @@ class StartupWorker {
   postMessage(_message: unknown): void {}
   terminate(): void { this.terminationCount += 1; }
 
-  sendReady(): void {
+  sendReady(initialAdmittedBlocks = 4): void {
     this.onmessage?.({
       data: {
         type: "worker-ready",
         slotCount: 4,
-        initialAdmittedBlocks: 4,
+        initialAdmittedBlocks,
         invalidRecycleCount: 0,
       },
     } as MessageEvent<unknown>);
@@ -285,7 +285,7 @@ describe("PreparedProof activation", () => {
       proof.acceptRuntimeMessage({
         type: "snapshot",
         snapshot: {
-          sourcePosition: 0, renderFrame: 0, ended: false,
+          sourcePosition: 0, pcmPosition: 0, renderFrame: 0, ended: false,
           failureCode: 36,
           invalidBlockCount: 0,
           lastFrameCount: 128,
@@ -420,7 +420,7 @@ test("local WAV controls suspend at acknowledgment, retain the instance, and nev
   let position = 0;
   let ended = false;
   node.port.postMessage = () => proof.acceptRuntimeMessage({ type: "snapshot", snapshot: {
-    sourcePosition: position, renderFrame: position, ended, failureCode: 0, invalidBlockCount: 0,
+    sourcePosition: position, pcmPosition: position, renderFrame: position, ended, failureCode: 0, invalidBlockCount: 0,
     lastFrameCount: 1, memoryBytes: 16777216, processCount: position, slotCount: 4, staleBlockCount: 0, starvationCount: 0,
   } });
   await proof.play(); expect(context.state).toBe("running");
@@ -453,7 +453,8 @@ test("proof-page Status disables Pause/reload/Close until its deferred snapshot 
       wavWorker.onmessage?.({ data: { type: "metadata", channelCount: 2, totalFrames: 1024 } } as MessageEvent<unknown>);
       await nextTask();
       const wavNode = StartupWorkletNode.latest;
-      wavWorker.sendReady(); wavNode.send(ready);
+      // This finite 1024-frame fixture now fits in one prepared transport slot.
+      wavWorker.sendReady(1); wavNode.send(ready);
       await loading;
       expect(control("wav-play").disabled).toBe(false);
       expect(control("close").disabled).toBe(false);

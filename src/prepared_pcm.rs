@@ -32,7 +32,8 @@ impl StreamSpec {
 pub(crate) struct BlockMeta {
     pub(crate) slot_id: u32,
     pub(crate) epoch: u64,
-    pub(crate) source_frame_start: u64,
+    /// Frame coordinate at StreamSpec.sample_rate, after any worker-side conversion.
+    pub(crate) pcm_frame_start: u64,
     pub(crate) valid_frames: usize,
     pub(crate) discontinuity: bool,
     pub(crate) end_of_stream: bool,
@@ -141,7 +142,7 @@ pub(crate) struct PreparedPcmInput<S: PreparedBlockSource> {
     current_offset: usize,
     pending_retire: Option<S::Block>,
     ended: bool,
-    source_position: u64,
+    pcm_position: u64,
     terminal: bool,
     counters: PcmCounters,
 }
@@ -162,7 +163,7 @@ impl<S: PreparedBlockSource> PreparedPcmInput<S> {
             current_offset: 0,
             pending_retire: None,
             ended: false,
-            source_position: 0,
+            pcm_position: 0,
             terminal: false,
             counters: PcmCounters::default(),
         })
@@ -184,8 +185,8 @@ impl<S: PreparedBlockSource> PreparedPcmInput<S> {
         self.counters
     }
 
-    pub(crate) fn source_position(&self) -> u64 {
-        self.source_position
+    pub(crate) fn pcm_position(&self) -> u64 {
+        self.pcm_position
     }
 
     pub(crate) fn ended(&self) -> bool {
@@ -199,7 +200,7 @@ impl<S: PreparedBlockSource> PreparedPcmInput<S> {
     pub(crate) fn set_active_epoch(&mut self, epoch: u64) {
         self.active_epoch = epoch;
         self.ended = false;
-        self.source_position = 0;
+        self.pcm_position = 0;
     }
 
     pub(crate) fn render(&mut self, mut output: PcmOutput<'_>) -> PcmRenderStatus {
@@ -273,8 +274,7 @@ impl<S: PreparedBlockSource> PreparedPcmInput<S> {
                 let available = meta.valid_frames - self.current_offset;
                 let copied = available.min(frame_count - written);
                 output.copy_from(written, self.current_offset, copied, block.planes());
-                self.source_position =
-                    meta.source_frame_start + (self.current_offset + copied) as u64;
+                self.pcm_position = meta.pcm_frame_start + (self.current_offset + copied) as u64;
                 (copied, copied == available, meta.end_of_stream)
             };
             written += copied;
@@ -316,7 +316,7 @@ impl<S: PreparedBlockSource> PreparedPcmInput<S> {
         if !layout_valid
             || meta.valid_frames == 0
             || meta
-                .source_frame_start
+                .pcm_frame_start
                 .checked_add(meta.valid_frames as u64)
                 .is_none()
         {
@@ -382,10 +382,10 @@ impl OwnedPcmBlock {
 
     pub(crate) fn fill_deterministic(&mut self) {
         for frame in 0..self.meta.valid_frames {
-            self.left[frame] = deterministic_sample(self.meta.source_frame_start + frame as u64, 0);
+            self.left[frame] = deterministic_sample(self.meta.pcm_frame_start + frame as u64, 0);
             if self.layout == ChannelLayout::Stereo {
                 self.right[frame] =
-                    deterministic_sample(self.meta.source_frame_start + frame as u64, 1);
+                    deterministic_sample(self.meta.pcm_frame_start + frame as u64, 1);
             }
         }
     }
@@ -473,7 +473,7 @@ impl<const N: usize> FixedSlotSource<N> {
         if meta.valid_frames == 0
             || meta.valid_frames > slot.capacity()
             || meta
-                .source_frame_start
+                .pcm_frame_start
                 .checked_add(meta.valid_frames as u64)
                 .is_none()
         {
@@ -523,8 +523,8 @@ impl<const N: usize> PreparedBlockSource for FixedSlotSource<N> {
 }
 
 /// Exactly representable deterministic fixture sample shared by both hosts.
-pub(crate) fn deterministic_sample(source_frame: u64, channel: usize) -> f32 {
-    let base = ((source_frame & 1_023) as f32 - 512.0) / 16_384.0;
+pub(crate) fn deterministic_sample(pcm_frame: u64, channel: usize) -> f32 {
+    let base = ((pcm_frame & 1_023) as f32 - 512.0) / 16_384.0;
     if channel == 0 { base } else { -base }
 }
 
@@ -590,7 +590,7 @@ mod tests {
             meta: BlockMeta {
                 slot_id: slot,
                 epoch,
-                source_frame_start: start,
+                pcm_frame_start: start,
                 valid_frames: valid,
                 discontinuity: start == 0,
                 end_of_stream: end,
@@ -630,7 +630,7 @@ mod tests {
             let meta = BlockMeta {
                 slot_id,
                 epoch: 2,
-                source_frame_start: start,
+                pcm_frame_start: start,
                 valid_frames: 250,
                 discontinuity: slot_id == 0,
                 end_of_stream: slot_id == 3,
@@ -715,7 +715,7 @@ mod tests {
     }
 
     #[test]
-    fn accepts_noncontiguous_source_frames_without_a_discontinuity() {
+    fn accepts_noncontiguous_pcm_frames_without_a_discontinuity() {
         let mut input = input([
             Some(block(0, 2, 10, 4, false)),
             Some(block(1, 2, 30, 4, true)),
@@ -778,7 +778,7 @@ mod tests {
                 meta: BlockMeta {
                     slot_id: 1,
                     epoch: 3,
-                    source_frame_start: 40,
+                    pcm_frame_start: 40,
                     valid_frames: 2,
                     discontinuity: true,
                     end_of_stream: true,
@@ -844,7 +844,7 @@ mod tests {
         assert!(source.admit_reserved(BlockMeta {
             slot_id: 0,
             epoch: 1,
-            source_frame_start: 0,
+            pcm_frame_start: 0,
             valid_frames: 4,
             discontinuity: true,
             end_of_stream: false,

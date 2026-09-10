@@ -131,12 +131,12 @@ test("48 kHz ten-second simulated host outlasts prefill: bounded credit pacing, 
       if (++callbacks > 5000) throw new Error("pacing failed to reach EOS");
     }
     expect(deliberatelyStalled && pauseChecked).toBe(true); expect(naturalStarvation).toBe(0); expect(kernel.starvation_count() > 0n).toBe(true);
-    expect(producer.rejections).toBe(0); expect(producer.admittedFrames).toBe(total); expect(producer.buffers).toHaveLength(4); expect(maxTimers).toBe(1);
+    expect(producer.rejections).toBe(0); expect(producer.admittedPcmFrames).toBe(total); expect(producer.buffers).toHaveLength(4); expect(maxTimers).toBe(1);
     console.log(JSON.stringify({ simulatedRate: 48000, totalFrames: total, callbacks, naturalStarvation, injectedStarvationCallbacks: Number(kernel.starvation_count()), supplyPolls: producer.polls, rejectedBlocks: producer.rejections, maximumPendingTimers: maxTimers, browserDeadlineClaim: false }));
   } finally { kernel.free(); wav.free(); }
 });
 
-test("built browser worker reads bounded File slices, rejects rate mismatch and admits a short tail before ready", async () => {
+test("built browser worker reads bounded File slices, rejects unsupported conversion and admits a short tail before ready", async () => {
   const reads: number[] = [];
   class TrackedFile extends File {
     override slice(start?: number, end?: number, contentType?: string): Blob {
@@ -149,8 +149,8 @@ test("built browser worker reads bounded File slices, rejects rate mismatch and 
     const host = { onmessage: undefined as ((event: { data: unknown }) => Promise<void>) | undefined, postMessage: (message: typeof messages[number]) => messages.push(message) };
     Object.defineProperty(globalThis, "self", { configurable: true, value: host });
     await import(`data:text/javascript;base64,${Buffer.from((await Bun.file("web/dist/pcm-worker.js").text()) + `\n// case ${mismatch}`).toString("base64")}`);
-    await host.onmessage!({ data: { type: "inspect", file: new TrackedFile([wavFixture(24, 2, 48000, 257)], "short.wav"), module, sampleRate: mismatch ? 44100 : 48000 } });
-    if (mismatch) { expect(messages[0]?.type).toBe("worker-failed"); expect(messages[0]?.detail).toContain("does not match active host"); continue; }
+    await host.onmessage!({ data: { type: "inspect", file: new TrackedFile([wavFixture(24, 2, 48000, 257)], "short.wav"), module, sampleRate: mismatch ? 32000 : 48000 } });
+    if (mismatch) { expect(messages[0]?.type).toBe("worker-failed"); expect(messages[0]?.detail).toContain("71"); continue; }
     expect(messages[0]?.type).toBe("metadata");
     const kernel = new WorkletKernel(2, 48000, 3n, 1n, 1024, 256);
     const adapter = new PreparedPlanarAdapter(2, kernel, exports.memory, 256);
@@ -176,6 +176,6 @@ test("built browser worker reads bounded File slices, rejects rate mismatch and 
       expect(kernel.ended()).toBe(true); expect(kernel.source_position()).toBe(257n);
     } finally { channel.port1.close(); channel.port2.close(); kernel.free(); }
   }
-  expect(Math.max(...reads)).toBe(1536);
-  expect(reads.filter(length => length > 16)).toEqual([1536]);
+  expect(Math.max(...reads)).toBe(257 * 6);
+  expect(reads.filter(length => length > 16)).toEqual([257 * 6]);
 });

@@ -25,7 +25,7 @@ export function expectedWavSample(bits: 16 | 24, frame: number, channel: number)
 }
 if (import.meta.main) {
   const [path, rate = "48000", bits = "24", channels = "2", seconds = "10"] = Bun.argv.slice(2);
-  if (!path || !["44100", "48000"].includes(rate) || !["16", "24"].includes(bits) || !["1", "2"].includes(channels) || !(Number(seconds) > 0 && Number(seconds) <= 60)) throw new Error("usage: bun tools/local-wav-fixture.ts PATH [44100|48000] [16|24] [1|2] [seconds <= 60]");
+  if (!path || !["44100", "48000"].includes(rate) || !["16", "24"].includes(bits) || !["1", "2"].includes(channels) || !(Number(seconds) > 0 && Number(seconds) <= 600)) throw new Error("usage: bun tools/local-wav-fixture.ts PATH [44100|48000] [16|24] [1|2] [seconds <= 600]");
   await Bun.write(path, wavFixture(Number(bits) as 16 | 24, Number(channels) as 1 | 2, Number(rate), Math.round(Number(rate) * Number(seconds)), true));
   console.log(`Wrote ${path}: peak source amplitude 0.02; playback compiled gain 0.5. Lower system volume before Play.`);
 }

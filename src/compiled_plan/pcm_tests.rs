@@ -52,7 +52,7 @@ fn block(
     block.meta = BlockMeta {
         slot_id,
         epoch,
-        source_frame_start: start,
+        pcm_frame_start: start,
         valid_frames: frames,
         discontinuity: slot_id == 0,
         end_of_stream: false,

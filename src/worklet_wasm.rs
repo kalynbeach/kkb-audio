@@ -3,6 +3,7 @@ use crate::prepared_kernel::{Output, RenderStatus};
 use crate::prepared_pcm::{
     BlockMeta, ChannelLayout, FixedSlotSource, PreparedPcmInput, StreamSpec,
 };
+use crate::sample_rate::PcmTimeline;
 use wasm_bindgen::prelude::*;
 
 const LAYOUT_MONO: u32 = 1;
@@ -32,6 +33,8 @@ pub struct WorkletKernel {
     right: Box<[f32]>,
     preparation_status: u32,
     terminal: bool,
+    timeline: Option<PcmTimeline>,
+    sample_rate: u32,
 }
 
 #[wasm_bindgen]
@@ -91,6 +94,8 @@ impl WorkletKernel {
             },
             preparation_status,
             terminal: false,
+            timeline: None,
+            sample_rate,
         }
     }
 
@@ -129,7 +134,7 @@ impl WorkletKernel {
         &mut self,
         slot_id: u32,
         epoch: u64,
-        source_frame_start: u64,
+        pcm_frame_start: u64,
         valid_frames: usize,
         discontinuity: bool,
         end_of_stream: bool,
@@ -140,7 +145,7 @@ impl WorkletKernel {
         let accepted = input.source_mut().admit_reserved(BlockMeta {
             slot_id,
             epoch,
-            source_frame_start,
+            pcm_frame_start,
             valid_frames,
             discontinuity,
             end_of_stream,
@@ -204,10 +209,26 @@ impl WorkletKernel {
         }
     }
 
+    pub fn set_media_timeline(&mut self, source_rate: u32, source_frames: u64) -> Result<(), u32> {
+        self.timeline = Some(PcmTimeline::new(
+            source_rate,
+            self.sample_rate,
+            source_frames,
+        )?);
+        Ok(())
+    }
+
     pub fn source_position(&self) -> u64 {
+        let pcm = self.pcm_position();
+        self.timeline
+            .as_ref()
+            .map_or(pcm, |timeline| timeline.source_position(pcm))
+    }
+
+    pub fn pcm_position(&self) -> u64 {
         self.input
             .as_ref()
-            .map_or(0, PreparedPcmInput::source_position)
+            .map_or(0, PreparedPcmInput::pcm_position)
     }
 
     pub fn ended(&self) -> bool {

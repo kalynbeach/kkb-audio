@@ -31,13 +31,13 @@ test("short/exact/partial finite prefill waits for admission, not all four slots
     const h = harness(total); h.producer.start(); await flush();
     for (let start = 0; start < total; start += 256) {
       expect(h.ready).toBe(0);
-      expect(h.sent.at(-1)).toMatchObject({ sourceFrameStart: start, validFrames: Math.min(256, total - start), endOfStream: start + 256 >= total });
+      expect(h.sent.at(-1)).toMatchObject({ pcmFrameStart: start, validFrames: Math.min(256, total - start), endOfStream: start + 256 >= total });
       h.ack(); await flush();
     }
     expect(h.ready).toBe(1);
     h.producer.activate();
     expect(h.scheduled).toHaveLength(0);
-    expect(h.producer.admittedFrames).toBe(total);
+    expect(h.producer.admittedPcmFrames).toBe(total);
     expect(h.failures).toEqual([]);
   }
 });
@@ -59,7 +59,7 @@ test("admission is not consumption credit; pause/full slots cannot rejection-spi
   expect(h.sent.at(-1)).toEqual(rejected);
   expect(new Float32Array(h.sent.at(-1)!.buffer)[0]).toBe(1280);
   h.ack(); await flush();
-  expect(h.sent.map(b => b.sourceFrameStart)).toEqual([0, 256, 512, 768, 1024, 1024]);
+  expect(h.sent.map(b => b.pcmFrameStart)).toEqual([0, 256, 512, 768, 1024, 1024]);
   h.producer.stall(true); h.scheduled.shift()?.(); await flush();
   expect(h.scheduled).toHaveLength(0);
   h.producer.stall(false); expect(h.scheduled).toHaveLength(1);

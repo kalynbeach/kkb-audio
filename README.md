@@ -22,10 +22,18 @@ Gate B adds prepared PCM, linked gain, observation, and output to the same compi
 
 Issue #9 adds private same-rate local WAV proofs for the browser and macOS: PCM16/24 mono/stereo,
 bounded worker decoding, compiled gain/output, play/pause/resume, next-consumed-source position and
-consumed EOS. Unsupported rates/layouts/encodings and empty/malformed files are rejected; there is no
-resampling or implicit rewind. Automated checks and recorded browser/macOS playback observations pass
-within the [WAV evidence limits](docs/2026-09-08-local-wav-playback-evidence.md). Browser starvation
-remains observable; gap-free sustained playback and production readiness are not established.
+consumed EOS. Its original same-rate checks and recorded browser/macOS playback observations pass
+within the [WAV evidence limits](docs/2026-09-08-local-wav-playback-evidence.md).
+
+Issue #11 adds private prepared **44100 ↔ 48000 Hz** conversion in both workers, exact same-rate bypass,
+bounded chunk/history storage, delay trimming and finite-file flushing. Status distinguishes consumed
+output-rate PCM from a floor-rounded source-media cursor. Unsupported conversions/layouts/encodings
+and empty/malformed files are rejected; EOS still requires explicit reload. Extended tests exposed
+browser starvation, addressed by four 1024-frame slots and independently bounded 1024-frame reads.
+Automated checks, ten-minute physical output in both directions, and final-build browser checks
+pass within the [conversion evidence limits](docs/2026-09-09-prepared-sample-rate-conversion-evidence.md)
+(ten-minute same-rate/up-conversion; one-minute reverse confirmation). Subjective listening quality,
+broad host support and production readiness are not established.
 
 See the canonical [system architecture](docs/2026-08-28-kkb-audio-system-architecture.md) and [initial validation plan](docs/2026-08-29-initial-render-engine-validation-plan.md).
 
@@ -55,8 +63,8 @@ bun run serve:proof
 Open `/` for the PCM transport and local WAV controls, or `/plan.html` for the oscillator plan.
 The deterministic and oscillator proof activations remain muted. **WAV Play emits sound** at compiled
 gain 0.5; lower system volume first. Load prepares a suspended, disconnected node; Pause freezes media
-and render time without discarding PCM. WAV status distinguishes consumed position, render frames,
-starvation and EOS. Reload explicitly after end. The oscillator page also displays its level observation.
+and render time without discarding PCM or converter history. WAV status distinguishes source-media
+position, consumed PCM position, render frames, starvation and EOS. Reload explicitly after end. The oscillator page also displays its level observation.
 
 A private native interactive entry and a safe low-amplitude fixture generator are documented in the
 [WAV reproduction guide](docs/2026-09-08-local-wav-playback-evidence.md#safe-reproduction).

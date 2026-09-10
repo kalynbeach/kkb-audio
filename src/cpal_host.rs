@@ -3,6 +3,7 @@ use crate::prepared_kernel::{Output, RenderStatus};
 use crate::prepared_pcm::{
     BlockMeta, ChannelLayout, OwnedPcmBlock, PreparedBlockSource, PreparedPcmInput, StreamSpec,
 };
+use crate::sample_rate::{PcmTimeline, PreparedRateConverter};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, Sample, SampleFormat, SizedSample};
 use rtrb::{Consumer, PopError, Producer, PushError, RingBuffer};
@@ -47,6 +48,7 @@ struct SharedObservation {
     playback_command: AtomicU64,
     acknowledged_command: AtomicU64,
     source_position: AtomicU64,
+    pcm_position: AtomicU64,
     render_frame: AtomicU64,
     ended: AtomicBool,
     callback_count: AtomicU64,
@@ -70,6 +72,7 @@ impl SharedObservation {
             playback_command: AtomicU64::new(0),
             acknowledged_command: AtomicU64::new(0),
             source_position: AtomicU64::new(0),
+            pcm_position: AtomicU64::new(0),
             render_frame: AtomicU64::new(0),
             ended: AtomicBool::new(false),
             callback_count: AtomicU64::new(0),
@@ -196,12 +199,13 @@ impl Drop for WorkerControl {
 }
 
 fn spawn_pcm_worker(layout: ChannelLayout) -> (NativeSource, WorkerControl) {
-    spawn_worker(layout, None)
+    spawn_worker(layout, None, 48_000)
 }
 
 fn spawn_worker(
     layout: ChannelLayout,
     mut wav_file: Option<(std::fs::File, crate::local_wav::LocalWav)>,
+    output_rate: u32,
 ) -> (NativeSource, WorkerControl) {
     use std::io::{Read, Seek, SeekFrom};
     let (mut ready_producer, ready_consumer) = RingBuffer::new(PCM_SLOT_COUNT);
@@ -223,9 +227,24 @@ fn spawn_worker(
         let mut next_frame = 0_u64;
         let mut exhausted = false;
         let mut bytes = [0_u8; PCM_SLOT_FRAMES * 6];
-        let total_frames = wav_file
+        let mut converter = match wav_file.as_ref() {
+            Some((_, wav)) => match PreparedRateConverter::new(
+                wav.sample_rate(),
+                output_rate,
+                layout.channels(),
+                wav.total_frames(),
+            ) {
+                Ok(converter) => Some(converter),
+                Err(_) => {
+                    worker_failed.store(true, Ordering::Release);
+                    return;
+                }
+            },
+            None => None,
+        };
+        let total_frames = converter
             .as_ref()
-            .map_or(u64::MAX, |(_, wav)| wav.total_frames());
+            .map_or(u64::MAX, PreparedRateConverter::total_pcm_frames);
         while !worker_stop.load(Ordering::Acquire) {
             let mut made_progress = false;
             for free_slot in &mut free {
@@ -238,27 +257,46 @@ fn spawn_worker(
                 block.meta = BlockMeta {
                     slot_id: block.meta.slot_id,
                     epoch: PROOF_EPOCH,
-                    source_frame_start: next_frame,
+                    pcm_frame_start: next_frame,
                     valid_frames: (total_frames - next_frame).min(PCM_SLOT_FRAMES as u64) as usize,
                     discontinuity: next_frame == 0,
                     end_of_stream: total_frames - next_frame <= PCM_SLOT_FRAMES as u64,
                 };
-                if let Some((file, wav)) = &mut wav_file {
-                    let length = block.meta.valid_frames * wav.block_align() as usize;
-                    let result = file
-                        .seek(SeekFrom::Start(
-                            wav.data_offset() + next_frame * u64::from(wav.block_align()),
-                        ))
-                        .and_then(|_| file.read_exact(&mut bytes[..length]));
-                    let decoded = result.ok().and_then(|_| wav.decode(&bytes[..length]).ok());
-                    let Some(decoded) = decoded else {
-                        worker_failed.store(true, Ordering::Release);
-                        return;
-                    };
-                    let frames = block.meta.valid_frames;
-                    block.left[..frames].copy_from_slice(&decoded[..frames]);
-                    if layout == ChannelLayout::Stereo {
-                        block.right[..frames].copy_from_slice(&decoded[frames..]);
+                if let (Some((file, wav)), Some(converter)) = (&mut wav_file, &mut converter) {
+                    let mut written = 0;
+                    while written < block.meta.valid_frames {
+                        let needed = converter.input_frames_needed().min(PCM_SLOT_FRAMES);
+                        if needed > 0 {
+                            let length = needed * wav.block_align() as usize;
+                            let offset = wav.data_offset()
+                                + converter.source_frames_read() * u64::from(wav.block_align());
+                            let decoded = file
+                                .seek(SeekFrom::Start(offset))
+                                .and_then(|_| file.read_exact(&mut bytes[..length]))
+                                .ok()
+                                .and_then(|_| wav.decode(&bytes[..length]).ok());
+                            if decoded
+                                .as_ref()
+                                .is_none_or(|data| converter.push(data).is_err())
+                            {
+                                worker_failed.store(true, Ordering::Release);
+                                return;
+                            }
+                        }
+                        let copied = converter
+                            .available_frames()
+                            .min(block.meta.valid_frames - written);
+                        block.left[written..written + copied]
+                            .copy_from_slice(&converter.output(0)[..copied]);
+                        if layout == ChannelLayout::Stereo {
+                            block.right[written..written + copied]
+                                .copy_from_slice(&converter.output(1)[..copied]);
+                        }
+                        if converter.consume(copied).is_err() {
+                            worker_failed.store(true, Ordering::Release);
+                            return;
+                        }
+                        written += copied;
                     }
                 } else {
                     block.fill_deterministic();
@@ -314,6 +352,7 @@ fn spawn_worker(
 
 struct CallbackProcessor {
     input: PreparedPcmInput<NativeSource>,
+    timeline: Option<PcmTimeline>,
     instance: RenderInstance,
     layout: ChannelLayout,
     channels: usize,
@@ -368,6 +407,7 @@ impl CallbackProcessor {
 
         Ok(Self {
             input,
+            timeline: None,
             instance,
             layout,
             channels,
@@ -538,9 +578,17 @@ impl CallbackProcessor {
         self.shared
             .deadline_overruns
             .store(self.deadline_overruns, Ordering::Relaxed);
+        self.shared.source_position.store(
+            self.timeline
+                .as_ref()
+                .map_or(self.input.pcm_position(), |timeline| {
+                    timeline.source_position(self.input.pcm_position())
+                }),
+            Ordering::Relaxed,
+        );
         self.shared
-            .source_position
-            .store(self.input.source_position(), Ordering::Relaxed);
+            .pcm_position
+            .store(self.input.pcm_position(), Ordering::Relaxed);
         self.shared
             .render_frame
             .store(self.instance.next_frame(), Ordering::Relaxed);
@@ -573,9 +621,11 @@ fn validate_wav_host(
     rate: u32,
     channels: u16,
 ) -> Result<(), String> {
-    if wav.sample_rate() != rate || wav.channels() != u32::from(channels) {
+    if PcmTimeline::new(wav.sample_rate(), rate, wav.total_frames()).is_err()
+        || wav.channels() != u32::from(channels)
+    {
         return Err(format!(
-            "source {} Hz / {} channels does not match active host {rate} Hz / {channels} channels; no conversion",
+            "source {} Hz / {} channels does not match active host {rate} Hz / {channels} channels; only same-rate or 44100 ↔ 48000 Hz conversion and exact channel match are supported",
             wav.sample_rate(),
             wav.channels()
         ));
@@ -641,20 +691,20 @@ mod tests {
     fn test_source(layout: ChannelLayout, block_frames: usize) -> NativeSource {
         let (mut ready_producer, ready) = RingBuffer::new(PCM_SLOT_COUNT);
         let (retired, _retired_consumer) = RingBuffer::<OwnedPcmBlock>::new(PCM_SLOT_COUNT);
-        let mut source_frame = 0_u64;
+        let mut pcm_frame = 0_u64;
         for slot_id in 0..PCM_SLOT_COUNT {
             let mut block = OwnedPcmBlock::new(slot_id as u32, layout, block_frames);
             block.meta = BlockMeta {
                 slot_id: slot_id as u32,
                 epoch: PROOF_EPOCH,
-                source_frame_start: source_frame,
+                pcm_frame_start: pcm_frame,
                 valid_frames: block_frames,
                 discontinuity: slot_id == 0,
                 end_of_stream: slot_id + 1 == PCM_SLOT_COUNT,
             };
             block.fill_deterministic();
             assert!(ready_producer.push(block).is_ok());
-            source_frame += block_frames as u64;
+            pcm_frame += block_frames as u64;
         }
         NativeSource { ready, retired }
     }
@@ -718,7 +768,7 @@ mod tests {
         assert_eq!(recycled.left.as_ptr(), addresses[retired_id]);
         assert_eq!(
             recycled.left[0],
-            crate::prepared_pcm::deterministic_sample(recycled.meta.source_frame_start, 0)
+            crate::prepared_pcm::deterministic_sample(recycled.meta.pcm_frame_start, 0)
         );
         worker.stop();
     }
@@ -790,7 +840,7 @@ mod tests {
         assert_eq!(snapshot.maximum_frames, 128);
         assert_eq!(snapshot.observed_frame_sizes, vec![128, 17]);
         assert_eq!(processor.instance.next_frame(), 0);
-        assert_eq!(processor.input.source_position(), 0);
+        assert_eq!(processor.input.pcm_position(), 0);
         assert_eq!(shared.render_frame.load(Ordering::Relaxed), 0);
         assert_eq!(shared.source_position.load(Ordering::Relaxed), 0);
         assert_eq!(snapshot.starvation_callbacks, 0);
@@ -888,6 +938,7 @@ mod tests {
         MEASURE_ALLOCATIONS.with(|active| active.set(false));
 
         let (mut warm_valid, _) = prepared_processor(2, 8);
+        warm_valid.timeline = Some(PcmTimeline::new(44100, 48000, 100).unwrap());
         let (mut warm_malformed, _) = prepared_processor(2, 8);
         let (mut warm_capacity, _) = prepared_processor(2, 2);
         let (mut warm_host, warm_host_shared) = prepared_processor(1, 8);
@@ -909,6 +960,7 @@ mod tests {
         }
 
         let (mut valid, _) = prepared_processor(2, 8);
+        valid.timeline = Some(PcmTimeline::new(44100, 48000, 100).unwrap());
         let (mut malformed, _) = prepared_processor(2, 8);
         let (mut capacity, _) = prepared_processor(2, 2);
         let (mut host, host_shared) = prepared_processor(1, 8);
@@ -965,6 +1017,16 @@ mod tests {
     }
 
     fn wav_source(bits: u16, channels: u16, frames: usize) -> (NativeSource, WorkerControl) {
+        wav_source_at_rates(bits, channels, frames, 48_000, 48_000)
+    }
+
+    fn wav_source_at_rates(
+        bits: u16,
+        channels: u16,
+        frames: usize,
+        source_rate: u32,
+        output_rate: u32,
+    ) -> (NativeSource, WorkerControl) {
         use std::io::Write;
         static FILE_ID: AtomicU64 = AtomicU64::new(0);
         let path = std::env::temp_dir().join(format!(
@@ -980,7 +1042,10 @@ mod tests {
             .unwrap();
         std::fs::remove_file(&path).unwrap();
         file.write_all(&crate::local_wav::tests::fixture(
-            bits, channels, 48_000, frames,
+            bits,
+            channels,
+            source_rate,
+            frames,
         ))
         .unwrap();
         let wav = crate::local_wav::read_header(&mut file).unwrap();
@@ -991,6 +1056,7 @@ mod tests {
                 ChannelLayout::Stereo
             },
             Some((file, wav)),
+            output_rate,
         );
         let deadline = Instant::now() + Duration::from_secs(5);
         while !result.1.ready.load(Ordering::Acquire) {
@@ -1002,7 +1068,7 @@ mod tests {
     }
 
     #[test]
-    fn local_wav_rejects_source_device_rate_and_layout_mismatch_without_conversion() {
+    fn local_wav_accepts_supported_conversion_and_rejects_layout_mismatch() {
         for channels in [1, 2] {
             for rate in [44_100, 48_000] {
                 let bytes = crate::local_wav::tests::fixture(24, channels, rate, 17);
@@ -1010,7 +1076,7 @@ mod tests {
                 assert!(validate_wav_host(&wav, rate, channels).is_ok());
                 assert!(
                     validate_wav_host(&wav, if rate == 48_000 { 44_100 } else { 48_000 }, channels)
-                        .is_err()
+                        .is_ok()
                 );
                 for host_channels in [0, 1, 2, 3, 6] {
                     assert_eq!(
@@ -1044,7 +1110,7 @@ mod tests {
                         // Device-free host waits outside rendering for sufficient supply, then proves exact samples.
                         let deadline = Instant::now() + Duration::from_secs(5);
                         while processor.input.source_mut().ready.slots() == 0
-                            && processor.input.source_position().is_multiple_of(1024)
+                            && processor.input.pcm_position().is_multiple_of(1024)
                         {
                             assert!(Instant::now() < deadline);
                             std::thread::sleep(Duration::from_millis(1));
@@ -1059,7 +1125,7 @@ mod tests {
                         assert_eq!(processor.process(&mut output), ProcessStatus::Rendered);
                         assert_eq!(shared.acknowledged_command.load(Ordering::Acquire), command);
                         assert_positive_zero(&output);
-                        assert_eq!(processor.input.source_position(), position as u64);
+                        assert_eq!(processor.input.pcm_position(), position as u64);
                         assert_eq!(processor.instance.next_frame(), clock);
                         shared
                             .playback_command
@@ -1079,7 +1145,7 @@ mod tests {
                         }
                         position += frames;
                         index += 1;
-                        assert_eq!(processor.input.source_position(), position as u64);
+                        assert_eq!(processor.input.pcm_position(), position as u64);
                         assert_eq!(processor.input.ended(), position == total);
                     }
                     let mut silence = [1.0_f32; 16];
@@ -1087,10 +1153,107 @@ mod tests {
                         processor.process(&mut silence);
                         assert_positive_zero(&silence);
                     }
-                    assert_eq!(processor.input.source_position(), total as u64);
+                    assert_eq!(processor.input.pcm_position(), total as u64);
                     assert!(processor.input.ended());
                     assert_eq!(processor.input.counters().starvation_callbacks, 0);
                     worker.stop();
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn converted_wav_native_worker_samples_pause_starvation_and_media_cursor() {
+        for (source_rate, output_rate) in [(44100, 48000), (48000, 44100)] {
+            for bits in [16, 24] {
+                for channels in [1, 2] {
+                    for total in [1, 17, 1176, 1280, 1281, 10003] {
+                        let input: Vec<Vec<f32>> = (0..channels as usize)
+                            .map(|channel| {
+                                (0..total)
+                                    .map(|frame| {
+                                        crate::local_wav::tests::expected(frame, channel, bits)
+                                    })
+                                    .collect()
+                            })
+                            .collect();
+                        let expected = crate::sample_rate::tests::convert(
+                            source_rate,
+                            output_rate,
+                            &input,
+                            &[1, 17, 256],
+                        );
+                        let timeline =
+                            PcmTimeline::new(source_rate, output_rate, total as u64).unwrap();
+                        let (source, worker) =
+                            wav_source_at_rates(bits, channels, total, source_rate, output_rate);
+                        let shared = Arc::new(SharedObservation::new());
+                        let mut processor = CallbackProcessor::prepare(
+                            output_rate,
+                            channels as usize,
+                            PROOF_MAXIMUM_FRAMES,
+                            source,
+                            Arc::clone(&shared),
+                        )
+                        .unwrap();
+                        processor.timeline = Some(timeline);
+                        worker.stalled.store(true, Ordering::Release);
+                        // Let already-started bounded worker production finish before the stall observation.
+                        std::thread::sleep(Duration::from_millis(5));
+                        let mut position = 0;
+                        let mut turn = 0;
+                        let mut stalled = false;
+                        let deadline = Instant::now() + Duration::from_secs(5);
+                        while !processor.input.ended() {
+                            assert!(Instant::now() < deadline);
+                            let frames = [1, 17, 257, 1024, 13][turn % 5];
+                            let mut output = vec![0.0_f32; frames * channels as usize];
+                            let render_frame = processor.instance.next_frame();
+                            shared.playback_command.store(1, Ordering::Release);
+                            processor.process(&mut output);
+                            assert_positive_zero(&output);
+                            assert_eq!(processor.instance.next_frame(), render_frame);
+                            assert_eq!(processor.input.pcm_position(), position as u64);
+                            shared.playback_command.store(2, Ordering::Release);
+                            processor.process(&mut output);
+                            let next = processor.input.pcm_position() as usize;
+                            for frame in 0..frames {
+                                for channel in 0..channels as usize {
+                                    assert_eq!(
+                                        output[frame * channels as usize + channel],
+                                        if frame < next - position {
+                                            expected[channel][position + frame] * 0.5
+                                        } else {
+                                            0.0
+                                        }
+                                    );
+                                }
+                            }
+                            assert_eq!(
+                                shared.source_position.load(Ordering::Relaxed),
+                                timeline.source_position(next as u64)
+                            );
+                            assert_eq!(shared.pcm_position.load(Ordering::Relaxed), next as u64);
+                            if next == position && !processor.input.ended() {
+                                stalled = true;
+                                assert!(processor.instance.next_frame() > render_frame);
+                                worker.stalled.store(false, Ordering::Release);
+                                std::thread::sleep(Duration::from_millis(1));
+                            }
+                            position = next;
+                            turn += 1;
+                        }
+                        assert_eq!(position, expected[0].len());
+                        assert_eq!(shared.source_position.load(Ordering::Relaxed), total as u64);
+                        if total == 10003 {
+                            assert!(stalled);
+                        }
+                        let mut output = [1.0_f32; 34];
+                        processor.process(&mut output);
+                        assert_positive_zero(&output);
+                        assert_eq!(processor.input.pcm_position(), position as u64);
+                        worker.stop();
+                    }
                 }
             }
         }
@@ -1105,11 +1268,11 @@ mod tests {
             CallbackProcessor::prepare(48_000, 2, PROOF_MAXIMUM_FRAMES, source, shared).unwrap();
         let mut first = [0.0_f32; 8192];
         processor.process(&mut first);
-        assert_eq!(processor.input.source_position(), 4096);
+        assert_eq!(processor.input.pcm_position(), 4096);
         let mut silence = [1.0_f32; 34];
         processor.process(&mut silence);
         assert_positive_zero(&silence);
-        assert_eq!(processor.input.source_position(), 4096);
+        assert_eq!(processor.input.pcm_position(), 4096);
         assert_eq!(processor.instance.next_frame(), 4113);
         assert_eq!(processor.input.counters().starvation_callbacks, 1);
         worker.stalled.store(false, Ordering::Release);
@@ -1128,7 +1291,7 @@ mod tests {
                 );
             }
         }
-        assert_eq!(processor.input.source_position(), 5000);
+        assert_eq!(processor.input.pcm_position(), 5000);
         assert!(processor.input.ended());
         worker.stop();
     }
@@ -1143,9 +1306,26 @@ mod tests {
         let device = cpal::default_host()
             .default_output_device()
             .ok_or("no default output device")?;
-        let supported = device.default_output_config().map_err(|e| e.to_string())?;
+        let mut supported = device.default_output_config().map_err(|e| e.to_string())?;
+        // Explicit proof-only rate selection; ordinary playback retains the device default.
+        if let Ok(rate) = std::env::var("KKB_OUTPUT_RATE") {
+            let rate: u32 = rate.parse().map_err(|_| "invalid KKB_OUTPUT_RATE")?;
+            if !matches!(rate, 44100 | 48000) {
+                return Err("KKB_OUTPUT_RATE must be 44100 or 48000".into());
+            }
+            supported = device
+                .supported_output_configs()
+                .map_err(|e| e.to_string())?
+                .filter(|config| {
+                    config.channels() == supported.channels()
+                        && config.sample_format() == supported.sample_format()
+                })
+                .find_map(|config| config.try_with_sample_rate(rate))
+                .ok_or("requested output rate is not supported by the device")?;
+        }
         validate_wav_host(&wav, supported.sample_rate(), supported.channels())?;
         let total = wav.total_frames();
+        let source_rate = wav.sample_rate();
         let layout = if wav.channels() == 1 {
             ChannelLayout::Mono
         } else {
@@ -1153,7 +1333,9 @@ mod tests {
         };
         let shared = Arc::new(SharedObservation::new());
         shared.playback_command.store(1, Ordering::Release);
-        let (source, worker) = spawn_worker(layout, Some((file, wav)));
+        let timeline = PcmTimeline::new(wav.sample_rate(), supported.sample_rate(), total)
+            .map_err(|_| "unsupported conversion")?;
+        let (source, worker) = spawn_worker(layout, Some((file, wav)), supported.sample_rate());
         let deadline = Instant::now() + Duration::from_secs(5);
         while !worker.ready.load(Ordering::Acquire) {
             if worker.failed.load(Ordering::Acquire) || Instant::now() > deadline {
@@ -1161,7 +1343,7 @@ mod tests {
             }
             std::thread::sleep(Duration::from_millis(1));
         }
-        let processor = CallbackProcessor::prepare(
+        let mut processor = CallbackProcessor::prepare(
             supported.sample_rate(),
             layout.channels(),
             PROOF_MAXIMUM_FRAMES,
@@ -1169,6 +1351,7 @@ mod tests {
             Arc::clone(&shared),
         )
         .map_err(|e| format!("{e:?}"))?;
+        processor.timeline = Some(timeline);
         let stream = build_stream_for_format(
             &device,
             supported.config(),
@@ -1178,11 +1361,12 @@ mod tests {
         )?;
         stream.play().map_err(|e| e.to_string())?;
         println!(
-            "device={} rate={} channels={} format={:?} totalFrames={total}; prepared paused. Commands: play, pause, status, stall, feed, close. Play emits sound at compiled gain 0.5; lower system volume first.",
+            "device={} rate={} channels={} format={:?} sourceRate={source_rate} totalFrames={total} totalPcmFrames={}; prepared paused. Commands: play, pause, status, stall, feed, close. Play emits sound at compiled gain 0.5; lower system volume first.",
             device,
             supported.sample_rate(),
             supported.channels(),
-            supported.sample_format()
+            supported.sample_format(),
+            timeline.total_pcm_frames()
         );
         for line in std::io::stdin().lock().lines() {
             match line.map_err(|e| e.to_string())?.trim() {
@@ -1207,10 +1391,11 @@ mod tests {
                 _ => println!("commands: play, pause, status, stall, feed, close"),
             }
             println!(
-                "paused={} position={}/{} renderFrame={} ended={} workerFailed={} observation={:?}",
+                "paused={} sourcePosition={}/{} pcmPosition={} renderFrame={} ended={} workerFailed={} observation={:?}",
                 shared.acknowledged_command.load(Ordering::Acquire) & 1 != 0,
                 shared.source_position.load(Ordering::Relaxed),
                 total,
+                shared.pcm_position.load(Ordering::Relaxed),
                 shared.render_frame.load(Ordering::Relaxed),
                 shared.ended.load(Ordering::Relaxed),
                 worker.failed.load(Ordering::Acquire),

@@ -18,7 +18,7 @@
     <button id="failure" type="button">Inject preparation failure</button>
     <button id="close" type="button">Close</button>
     <h2>Local WAV playback</h2>
-    <p>PCM16/24 mono or stereo, matching the active context rate. No resampling.
+    <p>PCM16/24 mono or stereo. Same-rate playback or 44.1 ↔ 48 kHz conversion to the active context rate.
       Play emits sound at gain 0.5: lower system volume first. Reload after end.</p>
     <p><label for="wav-file">Local WAV file</label> <input id="wav-file" type="file" accept=".wav,audio/wav" /></p>
     <button id="wav-load" type="button">Load WAV (paused)</button>
@@ -26,7 +26,7 @@
     <button id="wav-pause" type="button" disabled>Pause WAV</button>
     <button id="wav-status" type="button" disabled>WAV status</button>
     <p><label><input id="wav-stall" type="checkbox" disabled /> Stall worker (starvation proof)</label></p>
-    <p>Position is the next source frame to consume, not audible presentation time. Status is sampled on request.</p>
+    <p>Source position is a floor-rounded media cursor derived from consumed PCM, not audible presentation time. Status is sampled on request.</p>
     <pre id="result" aria-live="polite">idle</pre>
     <script type="module" src="./main.js"></script>
   </body>

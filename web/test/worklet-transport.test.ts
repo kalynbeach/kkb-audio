@@ -13,6 +13,7 @@ class FakeWorkletKernel {
   ) {}
 
   source_position(): bigint { return 0n; }
+  pcm_position(): bigint { return 0n; }
   next_frame(): bigint { return 0n; }
   ended(): boolean { return false; }
   slot_free(): boolean { return true; }
@@ -117,7 +118,7 @@ describe("AudioWorklet PCM transport", () => {
         type: "pcm",
         slotId: 0,
         epoch: 1,
-        sourceFrameStart: 0,
+        pcmFrameStart: 0,
         validFrames: 0,
         discontinuity: true,
         endOfStream: false,

@@ -51,6 +51,9 @@ class KkbPreparedKernelProcessor extends AudioWorkletProcessor {
         processorOptions.maximumFrames,
         processorOptions.slotFrames,
       );
+      if (processorOptions.sourceRate !== undefined && processorOptions.sourceFrames !== undefined) {
+        kernel.set_media_timeline(processorOptions.sourceRate, BigInt(processorOptions.sourceFrames));
+      }
       const preparationStatus = kernel.preparation_status();
       if (preparationStatus !== 0) { this.#failInitialization(preparationStatus); return; }
       const adapter = new PreparedPlanarAdapter(processorOptions.channelCount, kernel, exports.memory, processorOptions.slotFrames);
@@ -128,7 +131,7 @@ class KkbPreparedKernelProcessor extends AudioWorkletProcessor {
         ? snapshot
         : { ...snapshot, failureCode: this.#failureCode };
     }
-    return { sourcePosition: 0, renderFrame: 0, ended: false, failureCode: this.#failureCode, invalidBlockCount: 0, lastFrameCount: 0, memoryBytes: 0, processCount: 0, slotCount: 0, staleBlockCount: 0, starvationCount: 0 };
+    return { pcmPosition: 0, sourcePosition: 0, renderFrame: 0, ended: false, failureCode: this.#failureCode, invalidBlockCount: 0, lastFrameCount: 0, memoryBytes: 0, processCount: 0, slotCount: 0, staleBlockCount: 0, starvationCount: 0 };
   }
 }
 
@@ -144,6 +147,9 @@ function isProcessorOptions(value: unknown): value is ProcessorOptions {
     Number.isSafeInteger(options.slotFrames) && (options.slotFrames ?? 0) > 0 &&
     Number.isSafeInteger(options.maximumFrames) && (options.maximumFrames ?? 0) > 0 &&
     (options.maximumFrames ?? 0) <= MAXIMUM_PROOF_FRAMES &&
+    ((options.sourceRate === undefined && options.sourceFrames === undefined) ||
+      (Number.isSafeInteger(options.sourceRate) && (options.sourceRate ?? 0) > 0 &&
+       Number.isSafeInteger(options.sourceFrames) && (options.sourceFrames ?? 0) > 0)) &&
     options.module instanceof WebAssembly.Module
   );
 }

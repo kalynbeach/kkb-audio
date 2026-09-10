@@ -1,3 +1,6 @@
+// Prepared PCM capacity, independent of render quantum and bounded WAV read size.
+export const LOCAL_PCM_SLOT_FRAMES = 1_024;
+
 export type PcmStreamConfig = {
   channelCount: 1 | 2;
   epoch: number;
@@ -5,13 +8,15 @@ export type PcmStreamConfig = {
   slotCount: number;
   slotFrames: number;
   sourceId: number;
+  sourceRate?: number;
+  sourceFrames?: number;
 };
 
 export type PcmBlockMessage = {
   type: "pcm";
   slotId: number;
   epoch: number;
-  sourceFrameStart: number;
+  pcmFrameStart: number;
   validFrames: number;
   discontinuity: boolean;
   endOfStream: boolean;
@@ -51,7 +56,7 @@ export function isPcmBlockMessage(
     nonNegativeSafeInteger(value.slotId) &&
     value.slotId < config.slotCount &&
     nonNegativeSafeInteger(value.epoch) &&
-    nonNegativeSafeInteger(value.sourceFrameStart) &&
+    nonNegativeSafeInteger(value.pcmFrameStart) &&
     nonNegativeSafeInteger(value.validFrames) &&
     value.validFrames > 0 &&
     value.validFrames <= config.slotFrames &&

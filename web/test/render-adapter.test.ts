@@ -12,6 +12,7 @@ class FakeKernel implements WorkletKernelBinding {
   readonly #maximumFrames: number;
   readonly #rightPointer: number;
   source_position(): bigint { return 0n; }
+  pcm_position(): bigint { return 0n; }
   next_frame(): bigint { return 0n; }
   ended(): boolean { return false; }
   slot_free(): boolean { return true; }
@@ -25,7 +26,7 @@ class FakeKernel implements WorkletKernelBinding {
     this.#rightPointer = rightPointer;
   }
 
-  admit(_slotId: number, _epoch: bigint, _sourceFrameStart: bigint, _validFrames: number, _discontinuity: boolean, _endOfStream: boolean): number {
+  admit(_slotId: number, _epoch: bigint, _pcmFrameStart: bigint, _validFrames: number, _discontinuity: boolean, _endOfStream: boolean): number {
     return RenderStatus.Rendered;
   }
 
@@ -100,7 +101,7 @@ describe("PreparedPlanarAdapter", () => {
     expect(adapter.process([[twoHundredFiftySeven]])).toBe(true);
     expect(twoHundredFiftySeven[256]).toBe(256.25);
     expect(adapter.snapshot()).toEqual({
-      sourcePosition: 0, renderFrame: 0, ended: false,
+      sourcePosition: 0, pcmPosition: 0, renderFrame: 0, ended: false,
       failureCode: 0,
       invalidBlockCount: 0,
       lastFrameCount: 257,
