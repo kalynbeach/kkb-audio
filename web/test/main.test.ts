@@ -164,12 +164,12 @@ class StartupWorker {
   postMessage(_message: unknown): void {}
   terminate(): void { this.terminationCount += 1; }
 
-  sendReady(): void {
+  sendReady(initialAdmittedBlocks = 4): void {
     this.onmessage?.({
       data: {
         type: "worker-ready",
         slotCount: 4,
-        initialAdmittedBlocks: 4,
+        initialAdmittedBlocks,
         invalidRecycleCount: 0,
       },
     } as MessageEvent<unknown>);
@@ -453,7 +453,8 @@ test("proof-page Status disables Pause/reload/Close until its deferred snapshot 
       wavWorker.onmessage?.({ data: { type: "metadata", channelCount: 2, totalFrames: 1024 } } as MessageEvent<unknown>);
       await nextTask();
       const wavNode = StartupWorkletNode.latest;
-      wavWorker.sendReady(); wavNode.send(ready);
+      // This finite 1024-frame fixture now fits in one prepared transport slot.
+      wavWorker.sendReady(1); wavNode.send(ready);
       await loading;
       expect(control("wav-play").disabled).toBe(false);
       expect(control("close").disabled).toBe(false);

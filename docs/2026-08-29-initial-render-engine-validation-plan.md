@@ -381,10 +381,13 @@ session API.
 Implementation status, 2026-09-09: increment 2 adds private prepared 44100 ↔ 48000 Hz conversion,
 with same-rate bypass, bounded worker chunk adaptation, delay trimming, ceil-rounded finite output,
 reset/history isolation and a floor-rounded source cursor derived from consumed output-rate PCM.
-Native and actual-Wasm automated checks and bounded muted final-build browser observations pass.
-See the [conversion contract and evidence](./2026-09-09-prepared-sample-rate-conversion-evidence.md).
-The four-slot transport is retained without a new sustained-performance claim; physical converted
-output was not tested. WAV seeking and epochs is the next ordered increment.
+Native/actual-Wasm automated checks and ten-minute physical output in both directions pass.
+Browser stress testing exposed starvation; four larger slots and independently bounded 1024-frame
+reads improved refill margin without changing ownership. Final-build browser observations pass:
+ten-minute same-rate/up-conversion and a one-minute reverse confirmation under recorded load.
+See the [conversion contract and evidence](./2026-09-09-prepared-sample-rate-conversion-evidence.md)
+for failed intermediate trials, exact configurations and limits. This is not broad sustained-performance
+or subjective listening certification. WAV seeking and epochs is the next ordered increment.
 
 `PlaybackSession` remains provisional until local WAV, seek epochs, and at least one browser path pass
 the same behavioral fixtures.

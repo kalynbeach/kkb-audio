@@ -1306,7 +1306,23 @@ mod tests {
         let device = cpal::default_host()
             .default_output_device()
             .ok_or("no default output device")?;
-        let supported = device.default_output_config().map_err(|e| e.to_string())?;
+        let mut supported = device.default_output_config().map_err(|e| e.to_string())?;
+        // Explicit proof-only rate selection; ordinary playback retains the device default.
+        if let Ok(rate) = std::env::var("KKB_OUTPUT_RATE") {
+            let rate: u32 = rate.parse().map_err(|_| "invalid KKB_OUTPUT_RATE")?;
+            if !matches!(rate, 44100 | 48000) {
+                return Err("KKB_OUTPUT_RATE must be 44100 or 48000".into());
+            }
+            supported = device
+                .supported_output_configs()
+                .map_err(|e| e.to_string())?
+                .filter(|config| {
+                    config.channels() == supported.channels()
+                        && config.sample_format() == supported.sample_format()
+                })
+                .find_map(|config| config.try_with_sample_rate(rate))
+                .ok_or("requested output rate is not supported by the device")?;
+        }
         validate_wav_host(&wav, supported.sample_rate(), supported.channels())?;
         let total = wav.total_frames();
         let source_rate = wav.sample_rate();

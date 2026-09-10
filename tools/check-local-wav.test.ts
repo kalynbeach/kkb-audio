@@ -176,6 +176,6 @@ test("built browser worker reads bounded File slices, rejects unsupported conver
       expect(kernel.ended()).toBe(true); expect(kernel.source_position()).toBe(257n);
     } finally { channel.port1.close(); channel.port2.close(); kernel.free(); }
   }
-  expect(Math.max(...reads)).toBe(1536);
-  expect(reads.filter(length => length > 16)).toEqual([1536]);
+  expect(Math.max(...reads)).toBe(257 * 6);
+  expect(reads.filter(length => length > 16)).toEqual([257 * 6]);
 });

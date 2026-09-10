@@ -1,4 +1,5 @@
 import { PreparationLifecycle } from "./preparation-lifecycle";
+import { LOCAL_PCM_SLOT_FRAMES } from "./pcm-protocol";
 import {
   InitializationFailure,
   InitializationGate,
@@ -292,7 +293,7 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
       epoch: 1,
       sampleRate: context.sampleRate,
       slotCount: 4,
-      slotFrames: 256,
+      slotFrames: LOCAL_PCM_SLOT_FRAMES,
       sourceId: 3,
       sourceRate,
       sourceFrames: totalFrames,

@@ -1,3 +1,6 @@
+// Prepared PCM capacity, independent of render quantum and bounded WAV read size.
+export const LOCAL_PCM_SLOT_FRAMES = 1_024;
+
 export type PcmStreamConfig = {
   channelCount: 1 | 2;
   epoch: number;

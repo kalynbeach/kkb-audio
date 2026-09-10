@@ -136,7 +136,7 @@ test("built WAV worker conversion reaches consumed EOS across pause and starvati
       }
       expect(position).toBe(expected[0]!.length); expect(kernel.source_position()).toBe(BigInt(total));
       if (total > 1024) expect(recovered).toBe(true);
-      expect(Math.max(...reads)).toBeLessThanOrEqual(1536);
+      expect(Math.max(...reads)).toBeLessThanOrEqual(6144);
       expect(memory.buffer.byteLength).toBe(16777216);
       expect(messages.some(message => message.type === "worker-failed")).toBe(false);
     } finally {

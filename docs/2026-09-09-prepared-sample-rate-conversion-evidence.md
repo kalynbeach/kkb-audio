@@ -8,9 +8,11 @@ Same-rate playback remains an exact bypass, including previously accepted matchi
 that pair. Other mismatched rates and unsupported channel layouts are rejected. WAV encodings
 remain little-endian RIFF PCM16/24 mono/stereo. The host still chooses its output rate.
 
-Automated native and actual-Wasm checks and muted real-browser observations of the **final build**
-pass as described below. No physical converted output was observed. Neither these bounded runs nor the prior
-[same-rate WAV observations](2026-09-08-local-wav-playback-evidence.md) establish sustained reliability.
+Automated native and actual-Wasm checks pass. Physical output completed ten minutes in each
+conversion direction with clean engine counters. Browser stress testing exposed starvation and led
+to a bounded refill repair; passing final-build observations and failed earlier trials are recorded
+below. These results support the tested configurations, not universal gap-free playback or production
+readiness. Subjective listening quality remains unassessed.
 
 ## Conversion contract
 
@@ -31,8 +33,8 @@ bounded file reads → shared Rust WAV decode → PreparedRateConverter
 - Construct and allocate converter state in workers, never callbacks. Partial planar decode windows
   fill one fixed input chunk. Rubato processes into one preallocated output chunk, retaining its
   own prepared FFT scratch and overlap history. Transport-sized copies drain that output before
-  accepting the next chunk. Browser reads remain at most 256 frames / 1536 bytes; native reads at
-  most 1024 frames / 6144 bytes. Decoder result allocation remains bounded and worker-only.
+  accepting the next chunk. Browser and native reads are at most 1024 frames / 6144 bytes,
+  independently enforced by the shared decoder. Decoder result allocation remains bounded and worker-only.
 - Trim the initial output delay once. Zero-extend the final input chunk and process further zeros
   as needed, emitting exactly **ceil(sourceFrames × outputRate / sourceRate)** frames. Discard
   filter tail beyond that declared media duration. Delay compensation does not remove the need
@@ -85,8 +87,8 @@ bun run check
 git diff --check
 ```
 
-Rust debug/release: **63 passed, 2 ignored** (device-opening proofs). Bun: **42 web tests**, **7 WAV /
-conversion tests**, **6 lab/canvas tests**, **8 lab UI tests**, plus TypeScript, the existing kernel/plan
+Rust debug/release: **63 passed, 2 ignored** (device-opening proofs). Bun: **42 web tests**, **11 WAV /
+conversion and scheduling tests**, **6 lab/canvas tests**, **8 lab UI tests**, plus TypeScript, the existing kernel/plan
 Wasm checks, fixed memory checks and worklet source audits. No audio devices are opened by these commands.
 
 New evidence includes:
@@ -117,15 +119,20 @@ New evidence includes:
 
 ## Browser pacing and runtime boundary
 
-The browser still has four 256-frame transfer buffers and four worklet PCM slots. Admission returns
-ownership, not consumption credit. The same paced free-slot query and ordered retry rules remain;
-no transport replacement or capacity increase is included. Conversion now performs several bounded
-reads per FFT chunk, so previous same-rate poll/starvation measurements must not be reused as evidence
-for the new path. The bounded final-build observations below measure that path without changing
-transport. They neither identify a starvation root cause nor establish a sustained scheduling/I/O/load
-margin. Gap-free sustained playback and production readiness remain unproven.
+The initial build used four 256-frame transfer buffers and four worklet PCM slots. Admission
+returns ownership, not consumption credit. The repaired build retains that ownership model but uses
+**four × 1024 PCM frames** (85.3 ms total at 48 kHz), with an independent **1024-source-frame /
+6144-byte** read cap. Render quantum, credit queries and ordered admission are unchanged.
 
-### Muted browser observations — final build
+`tools/check-local-pcm-scheduling.test.ts` exercises independent virtual render, timer, read and
+transferred-message delivery with the actual producer and Wasm kernel. A single 21 ms poll with
+1 ms message legs reproduces starvation at the old capacity; the selected capacity passes both
+conversion directions and same-rate control, even with conservative 256-frame reads. A separate
+source-worker test enforces the 6144-byte read bound and at most eight payload reads for initial
+prefill; it failed with the old serial 256-frame window (20 reads), then passed with 1024-frame reads.
+These establish queue-headroom and read-amplification mechanisms, not exact browser-event causality.
+
+### Initial short browser observations — four × 256 frames
 
 Agent-browser exercised Chrome **152.0.7977.83**, macOS **26.6.2 (25G83), arm64**, with `--mute-audio`.
 Callbacks were **128 frames**, Wasm memory **16 MiB**, and transport capacity four slots. The final
@@ -157,7 +164,7 @@ and loopback servers were closed afterward.
   device matrix, background-load tolerance, or an explanation for prior starvation. The existing
   transport is retained without claiming that four slots provide sufficient production margin.
 
-### Final artifact identity and review
+### Initial artifact identity and review
 
 An earlier candidate's worker bundle changed after observation. Those runs were not reused as
 final-build proof: the full gates and browser observations were repeated, with these SHA-256 values
@@ -172,7 +179,92 @@ bc8f49500ce77df151807503dc12df7b476be4dd45ed06a89fcb544a5802371f  web/dist/workl
 
 Independent read-only DSP/spec and browser/standards reviews found no actionable issues. Reviewers
 inspected the tests; the parent separately reran the full gates and performed the browser observations.
-Only evidence documentation changed afterward.
+These observations apply to the initial published build, before the refill repair.
+
+## Extended validation and refill repair
+
+The extended fixtures contain 600 seconds of quiet stereo PCM: 44100 Hz PCM16 and 48000 Hz PCM24,
+source peak 0.02 through compiled gain 0.5. Native and browser suites initially ran concurrently.
+Durations below are source-media durations; final snapshots can include additional post-EOS silence.
+
+### Physical macOS output
+
+Explicitly authorized runs selected **MacBook Pro Speakers**, F32 stereo, with 512-frame callbacks.
+The ignored native proof's `KKB_OUTPUT_RATE` selects a supported 44100/48000 Hz configuration matching
+the default channels and sample format; ordinary playback selection is unchanged. Each run included
+two competing `nice -n 10` CPU workers from approximately 120–420 seconds.
+
+| Source → output | Duration | Consumed source / PCM at EOS | Callbacks | Starvation / processing deadline overruns |
+| --- | --- | --- | --- | --- |
+| 44100 → 48000 | 600 s | 26460000 / 28800000 | 56340 | 0 / 0 |
+| 48000 → 44100 | 600 s | 28800000 / 26460000 | 51774 | 0 / 0 |
+
+Both ended with zero failure code, invalid/stale blocks, retirement backpressure, host failures and
+worker failures. These are engine/callback observations, not measurements of every driver deadline.
+System volume was 6%, unmuted, when inspected after the native runs; the agent did not change volume.
+The original 48000 Hz device rate was restored and verified after all browser tests using a paused
+proof without Play. The owner reported not hearing or not listening to the test;
+**no subjective artifact-free sound claim is made**. Subsequent changes affect browser
+buffering/reads only, not the native conversion or render path.
+
+### Failed browser trials retained
+
+Chrome 152.0.7977.83 on the same macOS host, `--mute-audio`, 128-frame callbacks, fixed 16 MiB Wasm.
+Ten-minute trials requested 12 ms of main-thread busy work every 40 ms during approximately 120–420 s,
+and actually changed visibility to hidden during 180–360 s. Background timer throttling can reduce
+the achieved main-thread load. Later trials also ran two CPU workers during 120–420 s.
+
+- Initial four × 256 buffers: **32** starvation callbacks for 44100 → 48000 and **6** in reverse;
+  both reached exact EOS without failures, invalid/stale blocks or rejections. Maximum observed
+  producer poll delays were 21 / 13.6 ms. Native CPU activity overlapped these runs; they were not
+  globally unloaded. The reverse harness's elapsed counter was reactivated once; source/PCM totals
+  and absolute visibility events, not that reset elapsed counter, support its duration record.
+- Four × 1024 buffers with reads still capped at 256: both conversion directions passed 600 s with
+  zero starvation (maximum polls 24.1 / 39.4 ms), but same-rate 48000 Hz recorded **3** callbacks.
+  A separate audio-context control test overlapped that trial. An isolated repeat also recorded
+  **2** callbacks and was stopped after roughly four minutes, disproving overlap as a sufficient
+  explanation. The capacity-only candidate was not accepted as the final fix.
+- Temporary instrumented 90-second same-rate comparisons held capacity at four × 1024. The
+  256-frame window recorded **3** starvation callbacks, 17008 reads, an 8 ms maximum individual read
+  and 13.7 ms maximum accumulated block-read time. A 1024-frame window recorded **0**, 4264 reads,
+  and 4.2 ms maxima. Poll peaks differed (29.8 / 18.2 ms), so this is supporting evidence for reducing
+  serial read amplification, not an isolated proof of exact causation. Instrumentation was not shipped.
+
+### Final build
+
+All automated gates passed and both the capacity change and subsequent read-window change received
+independent read-only review. The final build uses four × 1024 slots and independently bounded
+1024-frame reads. No second audio context was added to these runs.
+
+| Source → context | Duration | Consumed source / PCM at EOS | Starvation | Maximum observed poll delay |
+| --- | --- | --- | --- | --- |
+| 48000 → 48000 control | 600 s | 28800000 / 28800000 | 0 | 51.3 ms |
+| 44100 → 48000 | 600 s | 26460000 / 28800000 | 0 | 20.7 ms |
+| 48000 → 44100 | 60 s | 2880000 / 2646000 | 0 | 15.6 ms |
+
+All three reached consumed EOS with zero failure code, invalid/stale blocks and producer rejections;
+source-read/prepared/admitted totals matched the respective finite source/PCM totals. Wasm memory
+remained 16 MiB. Artifact hashes were checked unchanged after the observations; owned browsers,
+servers and load workers were closed.
+
+The ten-minute cases used the load/visibility schedule above. The shorter reverse confirmation uses
+CPU/main-thread load during approximately 0–45 s and hidden visibility during 15–30 s. Its duration
+was deliberately shortened to finish review preparation: **there is no ten-minute reverse-direction
+observation on the final read-window build**. The earlier ten-minute reverse pass used smaller reads.
+All context rates are harness-requested, not claims about device-default selection or a product rate UI.
+
+Final artifact SHA-256 values (generated artifacts are not committed):
+
+```text
+d8208d2fa17aee9ef526f3f9ca0906a0ac5b97a18777ef088405b32d02765dde  web/dist/kkb_audio_bg.wasm
+9b5cbcff4ee63073858dab733b97bb6673f620740198eb611de8ad05c6222b85  web/dist/pcm-worker.js
+bc8f49500ce77df151807503dc12df7b476be4dd45ed06a89fcb544a5802371f  web/dist/worklet-processor.js
+bddea374ba7e1f90c277a5d3ed692520ddad6aadff39ba87fe418279208e9c00  web/dist/main.js
+```
+
+The recorded failures above occurred on superseded configurations. The passing observations remain
+bounded by this browser/device, finite durations and synthetic load; they do not certify arbitrary
+I/O stalls, simultaneous audio contexts, sleep/resume, a browser matrix, or production readiness.
 
 ## Safe runtime reproduction
 
@@ -194,7 +286,9 @@ selected. A harness may explicitly request 44100 Hz as in the bounded observatio
 label that choice rather than presenting it as device-default or product rate-selection behavior.
 
 The [native interactive proof](2026-09-08-local-wav-playback-evidence.md#safe-reproduction) accepts
-these mismatched-rate fixtures where channels match. **Obtain explicit authorization before opening
-physical audio output**, lower listening volume and use only the low-amplitude fixture. No physical
-converted playback, subjective listening test, broad device/browser matrix or background-load
-certification is claimed by the automated evidence above.
+these mismatched-rate fixtures where channels match. The fixture CLI accepts up to 600 seconds.
+For an explicitly selected proof rate, set `KKB_OUTPUT_RATE=44100` or `48000` alongside `KKB_WAV` when
+running the ignored `local_wav_playback` test. **Obtain authorization before opening physical output**
+and use only the quiet fixture at a safe listening volume. On CoreAudio, selecting a stream rate can
+change the device's nominal rate; record the original rate and restore it after testing. Physical
+observations require this opt-in proof and are not implied by the default automated commands.

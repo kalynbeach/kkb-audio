@@ -3,6 +3,10 @@ import { isPcmStreamConfig } from "./pcm-protocol";
 import { fillDeterministic } from "./pcm-worker-pool";
 import { LocalPcmProducer } from "./local-pcm-producer";
 
+// Bound reads independently of transport capacity without fragmenting refills
+// into many serial File operations (at most 6 KiB for PCM24 stereo).
+const WAV_READ_FRAMES = 1024;
+
 let producer: LocalPcmProducer | undefined;
 let file: File | undefined;
 let wav: LocalWav | undefined;
@@ -42,7 +46,7 @@ self.onmessage = async (event: MessageEvent) => {
         const output = new Float32Array(buffer);
         let written = 0;
         while (written < frames) {
-          const needed = Math.min(converter!.input_frames_needed(), config.slotFrames);
+          const needed = Math.min(converter!.input_frames_needed(), WAV_READ_FRAMES);
           if (needed > 0) {
             const offset = Number(wav.data_offset()) + Number(converter!.source_frames_read()) * wav.block_align();
             const bytes = new Uint8Array(await file.slice(offset, offset + needed * wav.block_align()).arrayBuffer());

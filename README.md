@@ -28,10 +28,12 @@ within the [WAV evidence limits](docs/2026-09-08-local-wav-playback-evidence.md)
 Issue #11 adds private prepared **44100 ↔ 48000 Hz** conversion in both workers, exact same-rate bypass,
 bounded chunk/history storage, delay trimming and finite-file flushing. Status distinguishes consumed
 output-rate PCM from a floor-rounded source-media cursor. Unsupported conversions/layouts/encodings
-and empty/malformed files are rejected; EOS still requires explicit reload. Automated native and
-actual-Wasm checks and bounded muted final-build browser observations pass within the
-[conversion evidence limits](docs/2026-09-09-prepared-sample-rate-conversion-evidence.md).
-Browser starvation remains a known risk; gap-free sustained playback and production readiness are not established.
+and empty/malformed files are rejected; EOS still requires explicit reload. Extended tests exposed
+browser starvation, addressed by four 1024-frame slots and independently bounded 1024-frame reads.
+Automated checks, ten-minute physical output in both directions, and final-build browser checks
+pass within the [conversion evidence limits](docs/2026-09-09-prepared-sample-rate-conversion-evidence.md)
+(ten-minute same-rate/up-conversion; one-minute reverse confirmation). Subjective listening quality,
+broad host support and production readiness are not established.
 
 See the canonical [system architecture](docs/2026-08-28-kkb-audio-system-architecture.md) and [initial validation plan](docs/2026-08-29-initial-render-engine-validation-plan.md).
 
