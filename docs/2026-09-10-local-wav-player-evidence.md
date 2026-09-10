@@ -2,8 +2,10 @@
 
 Issue [#15](https://github.com/kalynbeach/kkb-audio/issues/15), base
 `858dfc25cbb25377ff5c45d5321868e3380bb37f`. Date: 2026-09-10.
-Implementation checks, the bounded muted observations below and independent Standards/Spec reviews
-pass. This is not production or broad host certification.
+The initial implementation passed the checks, bounded muted observations and independent
+Standards/Spec reviews recorded below. A later PR review found the seek-cancellation edge case
+addressed under [Seek-cancellation follow-up](#seek-cancellation-follow-up). This is not production
+or broad host certification.
 
 ## Delivered surface and private ownership
 
@@ -169,7 +171,7 @@ an inappropriate `aria-label` on a generic duration span. The final player uses 
 for busy seeks and non-live output elements; final focus and accessibility checks above confirm those
 repairs. Candidate observations are not substituted for the final endpoint/replay evidence.
 
-Final runtime artifact hashes (unchanged after the final full check):
+Initial browser-observed runtime artifact hashes (before the seek-cancellation follow-up):
 
 ```text
 3805cc0f103f897a8517efc9abe5928a5a3a53f47feda6c55fd4f4e398f6d60a  kkb_audio_bg.wasm
@@ -190,6 +192,24 @@ and reran TypeScript, 32 playback-owner/proof lifecycle tests and all 11 player 
 exposed an extra trailing blank line in the extracted module; after removing it, the parent reran the
 full `bun run check` and staged whitespace check successfully. Built player hashes remained unchanged.
 No behavioral changes were needed after review.
+
+## Seek-cancellation follow-up
+
+PR #16 review found that blur cleared the cancelled-drag marker while pointer capture could remain
+active. A later range change from the same held-pointer gesture then took the non-pointer input path
+and dispatched a seek before release. Blur now cancels the preview without clearing that marker;
+pointer-up, pointer cancellation or lost capture ends the gesture as before.
+
+The existing cancellation test now continues range input after both blur and Escape, verifies zero
+seeks and no revived preview, releases the pointer, and verifies keyboard seeking still works. Before
+the fix, `bun test tools/check-player-ui.test.tsx -t 'blur cancels preview without seeking'` failed:
+a change to four seconds dispatched source frame **192000** instead of leaving the seek list empty.
+After the fix, `bun run check:player-ui` passed all **11 tests**, and `bun run check` passed all
+**99 tests** plus TypeScript, actual-Wasm checks, fixed-memory checks and worklet audits, using Bun **1.4.0**.
+
+This follow-up was verified with the actual React component and owner using a fake playback dependency;
+muted-browser observations were not rerun. The browser observations and hashes above describe the
+initial build, not the updated player bundle. No design rules, engine behavior or dependencies changed.
 
 ## Limits and reproduction
 

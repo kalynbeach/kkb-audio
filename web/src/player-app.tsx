@@ -129,7 +129,7 @@ function SeekBar({ state, unavailable, disabled, onSeek }: {
       }}
       onPointerCancel={() => { cancel(); drag.current = null; }}
       onLostPointerCapture={() => { cancel(); drag.current = null; }}
-      onBlur={() => { cancel(); drag.current = null; }}
+      onBlur={cancel}
       onKeyDown={event => {
         if (event.key === "Escape") { event.preventDefault(); cancel(); return; }
         const targets: Record<string, number> = {

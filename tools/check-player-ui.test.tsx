@@ -61,6 +61,12 @@ test.each(["escape", "pointercancel", "blur", "lostcapture"])("%s cancels previe
   else if (cancellation === "pointercancel") fireEvent.pointerCancel(seek, { pointerId: 1 });
   else if (cancellation === "lostcapture") fireEvent.lostPointerCapture(seek, { pointerId: 1 });
   else fireEvent.blur(seek);
+  if (cancellation === "escape" || cancellation === "blur") {
+    // Focus loss and Escape do not end a held-pointer gesture.
+    await act(() => { fireEvent.change(seek, { target: { value: "4" } }); });
+    expect(playback.seeks).toEqual([]);
+    expect(view.queryByText(/Preview 0:04/)).toBeNull();
+  }
   fireEvent.pointerUp(seek, { pointerId: 1 });
   expect(playback.seeks).toEqual([]);
   expect(view.queryByText(/Preview 0:03/)).toBeNull();
