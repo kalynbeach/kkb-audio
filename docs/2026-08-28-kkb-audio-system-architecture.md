@@ -893,6 +893,17 @@ non-finite output without formatting or logging in the callback.
 
 The engine does not know about releases, playlists, Clerk, Convex, or catalog roles.
 
+### Current private browser consumer
+
+The [initial local-WAV player](2026-09-10-local-wav-player-evidence.md) at `/player.html` exercises a
+narrow subset of this responsibility. `web/src/prepared-playback.ts` retains the existing private
+worker/worklet lifecycle, epochs and readiness used by both proof and player. `playback-owner.ts`
+owns file replacement/cancellation, command/snapshot ordering, consumed-source state, periodic UI
+updates and listening gain. React owns interaction and presentation, never worker messages or epochs.
+The owner uses a post-worklet GainNode (initial 0.15 after compiled gain 0.5); volume changes preserve
+the context and cursor. EOS/endpoint acknowledges pause; replay is explicit seek-zero plus play.
+This is not a published `PlaybackSession` interface, a new transport or a general command framework.
+
 ### Conceptual interface
 
 The exact Rust interface remains open, but the product contract should remain close to:

@@ -25,7 +25,16 @@ class FakeAnalyserNode extends FakeAudioNode {
 }
 
 class FakeChannelSplitterNode extends FakeAudioNode {}
-class FakeGainNode extends FakeAudioNode {}
+class FakeGainNode extends FakeAudioNode {
+  static latest: FakeGainNode;
+  readonly gain: { value: number };
+  constructor(_context: AudioContext, options: GainOptions) {
+    super();
+    this.gain = { value: options.gain ?? 1 };
+    FakeGainNode.latest = this;
+  }
+  disconnect(): void {}
+}
 
 class ProofControl {
   disabled = false;
@@ -52,7 +61,8 @@ Object.defineProperties(globalThis, {
   GainNode: { configurable: true, value: FakeGainNode },
 });
 
-const { PreparedProof, prepareProof } = await import("../src/main");
+const { PreparedProof, prepareProof } = await import("../src/prepared-playback");
+await import("../src/main");
 
 class FakeContext {
   readonly destination = new FakeAudioNode();
@@ -538,4 +548,31 @@ test("proof-page Status disables conflicting controls but keeps Close available"
     expect(control("wav-play").disabled).toBe(true);
     expect(control("wav-pause").disabled).toBe(true);
   });
+});
+
+test("post-worklet listening gain updates the same node without context or cursor reset", async () => {
+  const { context, node, proof } = preparedProof(10003);
+  const destinations: unknown[] = [];
+  node.connect = destination => { destinations.push(destination); return destination; };
+  node.port.postMessage = () => proof.acceptRuntimeMessage({ type: "snapshot", snapshot: {
+    epoch: 1, presentationTime: null, ready: true, sourcePosition: 441, pcmPosition: 480,
+    renderFrame: 480, ended: false, failureCode: 0, invalidBlockCount: 0, lastFrameCount: 128,
+    memoryBytes: 16777216, processCount: 4, slotCount: 4, staleBlockCount: 0, starvationCount: 0,
+  } });
+  proof.setListeningGain(0.15);
+  const gain = FakeGainNode.latest;
+  expect(context.state).toBe("suspended");
+  expect(destinations).toEqual([]);
+  await proof.play();
+  expect(destinations).toEqual([gain]);
+  proof.setListeningGain(0);
+  expect(gain.gain.value).toBe(0);
+  proof.setListeningGain(0.37);
+  expect(gain.gain.value).toBe(0.37);
+  expect(FakeGainNode.latest).toBe(gain);
+  expect(destinations).toEqual([gain]);
+  expect((await proof.status()).sourcePosition).toBe(441);
+  expect(context.closeCount).toBe(0);
+  expect(context.suspendCount).toBe(0);
+  await proof.close();
 });

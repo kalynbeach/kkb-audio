@@ -1,4 +1,4 @@
-# Audio-engine learning lab
+# Audio-engine lab and local WAV player
 
 <!-- impeccable:product-schema 1 -->
 
@@ -11,6 +11,25 @@ and Inter/TX-02 choices.
 ## Platform
 
 web
+
+## Local WAV player
+
+`/player.html` is the first usable local-file playback surface alongside the learning lab and proof
+pages. Kalyn can choose one supported WAV, play/pause/resume, preview and commit a seek, replay,
+control listening volume and close/cancel without understanding the transport. Nothing is uploaded.
+Loading and replacement stay paused; playback starts with explicit Play. Ended is terminal and
+paused, so seeking backward does not restart audio until Play; Replay seeks zero then plays.
+
+The supported subset remains nonempty little-endian RIFF PCM16/24 mono/stereo, same-rate playback
+and prepared 44100 ↔ 48000 Hz conversion. Unsupported files recover through replacement. Duration
+comes from source metadata and elapsed time from consumed source frames, not an audible clock.
+Listening gain starts at 15% after the compiled 0.5 gain, with mute retaining the chosen level.
+
+The private playback owner is established through this consumer, not a frozen public session API.
+The eventual separate `wave-player` app/package, additional codecs, waveform, queues, loops, HTTP,
+catalog, device handoff and production deployment remain out of scope. Targeted muted checks are
+not broad browser/device/background or listening-quality certification. See the
+[player evidence](docs/2026-09-10-local-wav-player-evidence.md).
 
 ## Users and purpose
 
