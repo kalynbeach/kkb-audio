@@ -3,6 +3,10 @@
 Date: 2026-09-09. [Issue #11](https://github.com/kalynbeach/kkb-audio/issues/11),
 base `3487a4d8f9ee0e11101e9d9ba6a27e74121a87ff`.
 
+Follow-on: [issue #13 seeking/lifecycle evidence](2026-09-10-wav-seeking-lifecycle-evidence.md)
+adds bounded seek pre-roll, epochs and post-EOS repositioning. Statements below about missing seeking
+and reload-only EOS describe the original #11 build, not the current path.
+
 The private local WAV path now converts **44100 ↔ 48000 Hz** in native and browser workers.
 Same-rate playback remains an exact bypass, including previously accepted matching rates outside
 that pair. Other mismatched rates and unsupported channel layouts are rejected. WAV encodings

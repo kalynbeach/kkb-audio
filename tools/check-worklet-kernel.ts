@@ -56,15 +56,18 @@ for (const sampleRate of [44_100, 48_000]) {
       }
       for (const kernel of instances) assert.equal(kernel.next_frame(), 1_000n);
 
-      // Invalidate the unconsumed tail of slot 3, then reject queued stale and future epochs.
+      // Invalidate the partial tail; obsolete/future admissions return ownership immediately.
       whole.set_epoch(2n);
-      admit(whole, channels, 0, 1n, 1_028, 2);
-      admit(whole, channels, 1, 3n, 1_030, 2);
+      for (const epoch of [1n, 3n]) {
+        assert.equal(whole.reserve_slot(0), true);
+        assert.equal(whole.admit(0, epoch, 1028n, 2, false, false), 5);
+        assert.equal(whole.slot_free(0), true);
+      }
       admit(whole, channels, 2, 2n, 2_000, 2);
       const afterEpoch = render(whole, channels, [4]);
       assert.deepEqual(Array.from(afterEpoch[0]!), [2_001 / 8_192, 2_002 / 8_192, 0, 0]);
-      assert.equal(whole.stale_count(), 2n);
-      assert.equal(whole.invalid_count(), 1n);
+      assert.equal(whole.stale_count(), 1n);
+      assert.equal(whole.invalid_count(), 0n);
       assert.equal(whole.starvation_count(), 1n);
       for (let slot = 0; slot < 4; slot += 1) { assert.equal(whole.reserve_slot(slot), true); whole.cancel_slot(slot); }
       assert.ok(render(whole, channels, [4]).every((plane) => plane.every((sample) => Object.is(sample, 0))));

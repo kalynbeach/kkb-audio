@@ -46,6 +46,11 @@ enum ProcessStatus {
 struct SharedObservation {
     host_failed: AtomicBool,
     playback_command: AtomicU64,
+    seek_command: AtomicU64,
+    snapshot_sequence: AtomicU64,
+    epoch: AtomicU64,
+    seek_ready: AtomicBool,
+    paused: AtomicBool,
     acknowledged_command: AtomicU64,
     source_position: AtomicU64,
     pcm_position: AtomicU64,
@@ -70,6 +75,11 @@ impl SharedObservation {
         Self {
             host_failed: AtomicBool::new(false),
             playback_command: AtomicU64::new(0),
+            seek_command: AtomicU64::new(PROOF_EPOCH << 32),
+            snapshot_sequence: AtomicU64::new(0),
+            epoch: AtomicU64::new(PROOF_EPOCH),
+            seek_ready: AtomicBool::new(false),
+            paused: AtomicBool::new(false),
             acknowledged_command: AtomicU64::new(0),
             source_position: AtomicU64::new(0),
             pcm_position: AtomicU64::new(0),
@@ -87,6 +97,43 @@ impl SharedObservation {
             observed_frame_sizes: std::array::from_fn(|_| AtomicUsize::new(0)),
             observed_frame_size_count: AtomicUsize::new(0),
             observed_frame_sizes_truncated: AtomicBool::new(false),
+        }
+    }
+
+    /// RIFF PCM16/24 limits the source coordinate to u32; pack one coherent latest request.
+    fn request_seek(&self, target: u64, timeline: PcmTimeline) -> Result<u64, u32> {
+        timeline.seek_pcm_frame(target)?;
+        let target = u32::try_from(target).map_err(|_| 71_u32)?;
+        let epoch = (self.seek_command.load(Ordering::Acquire) >> 32) + 1;
+        if epoch > u64::from(u32::MAX) {
+            return Err(71);
+        }
+        self.seek_command
+            .store((epoch << 32) | u64::from(target), Ordering::Release);
+        Ok(epoch)
+    }
+
+    // Control-side retries only. Callback publication is fixed stores, never a retry loop.
+    fn playback_snapshot(&self) -> PlaybackSnapshot {
+        loop {
+            let before = self.snapshot_sequence.load(Ordering::SeqCst);
+            if before & 1 != 0 {
+                std::hint::spin_loop();
+                continue;
+            }
+            let snapshot = PlaybackSnapshot {
+                epoch: self.epoch.load(Ordering::SeqCst),
+                source_position: self.source_position.load(Ordering::SeqCst),
+                pcm_position: self.pcm_position.load(Ordering::SeqCst),
+                render_frame: self.render_frame.load(Ordering::SeqCst),
+                ended: self.ended.load(Ordering::SeqCst),
+                ready: self.seek_ready.load(Ordering::SeqCst),
+                paused: self.paused.load(Ordering::SeqCst),
+                presentation_time: None,
+            };
+            if before == self.snapshot_sequence.load(Ordering::SeqCst) {
+                return snapshot;
+            }
         }
     }
 
@@ -147,7 +194,21 @@ struct ObservationSnapshot {
     observed_frame_sizes_truncated: bool,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct PlaybackSnapshot {
+    epoch: u64,
+    source_position: u64,
+    pcm_position: u64,
+    render_frame: u64,
+    ended: bool,
+    ready: bool,
+    paused: bool,
+    presentation_time: Option<u64>,
+}
+
 struct NativeSource {
+    seek: Arc<AtomicU64>,
+    ready_epoch: Arc<AtomicU64>,
     ready: Consumer<OwnedPcmBlock>,
     retired: Producer<OwnedPcmBlock>,
 }
@@ -215,6 +276,10 @@ fn spawn_worker(
     let backpressure = Arc::new(AtomicU64::new(0));
     let stalled = Arc::new(AtomicBool::new(false));
     let failed = Arc::new(AtomicBool::new(false));
+    let seek = Arc::new(AtomicU64::new(PROOF_EPOCH << 32));
+    let ready_epoch = Arc::new(AtomicU64::new(0));
+    let worker_seek = Arc::clone(&seek);
+    let worker_ready_epoch = Arc::clone(&ready_epoch);
     let worker_stalled = Arc::clone(&stalled);
     let worker_failed = Arc::clone(&failed);
     let worker_stop = Arc::clone(&stop);
@@ -245,7 +310,24 @@ fn spawn_worker(
         let total_frames = converter
             .as_ref()
             .map_or(u64::MAX, PreparedRateConverter::total_pcm_frames);
+        let mut active_seek = PROOF_EPOCH << 32;
+        let mut admitted = 0;
         while !worker_stop.load(Ordering::Acquire) {
+            let requested = worker_seek.load(Ordering::Acquire);
+            if requested != active_seek {
+                active_seek = requested;
+                admitted = 0;
+                worker_ready.store(false, Ordering::Release);
+                if let Some(converter) = &mut converter {
+                    match converter.seek(u64::from(requested as u32)) {
+                        Ok(pcm) => next_frame = pcm,
+                        Err(_) => {
+                            worker_failed.store(true, Ordering::Release);
+                            return;
+                        }
+                    }
+                }
+            }
             let mut made_progress = false;
             for free_slot in &mut free {
                 if next_frame == total_frames || worker_stalled.load(Ordering::Acquire) {
@@ -256,15 +338,20 @@ fn spawn_worker(
                 };
                 block.meta = BlockMeta {
                     slot_id: block.meta.slot_id,
-                    epoch: PROOF_EPOCH,
+                    epoch: active_seek >> 32,
                     pcm_frame_start: next_frame,
                     valid_frames: (total_frames - next_frame).min(PCM_SLOT_FRAMES as u64) as usize,
-                    discontinuity: next_frame == 0,
+                    discontinuity: admitted == 0,
                     end_of_stream: total_frames - next_frame <= PCM_SLOT_FRAMES as u64,
                 };
                 if let (Some((file, wav)), Some(converter)) = (&mut wav_file, &mut converter) {
                     let mut written = 0;
                     while written < block.meta.valid_frames {
+                        if worker_seek.load(Ordering::Acquire) != active_seek
+                            || worker_stop.load(Ordering::Acquire)
+                        {
+                            break;
+                        }
                         let needed = converter.input_frames_needed().min(PCM_SLOT_FRAMES);
                         if needed > 0 {
                             let length = needed * wav.block_align() as usize;
@@ -301,10 +388,17 @@ fn spawn_worker(
                 } else {
                     block.fill_deterministic();
                 }
+                if worker_seek.load(Ordering::Acquire) != active_seek
+                    || worker_stop.load(Ordering::Acquire)
+                {
+                    *free_slot = Some(block);
+                    break;
+                }
                 let valid_frames = block.meta.valid_frames;
                 match ready_producer.push(block) {
                     Ok(()) => {
                         next_frame = next_frame.saturating_add(valid_frames as u64);
+                        admitted += 1;
                         made_progress = true;
                     }
                     Err(PushError::Full(block)) => {
@@ -312,7 +406,8 @@ fn spawn_worker(
                     }
                 }
             }
-            if free.iter().all(Option::is_none) || next_frame == total_frames {
+            if admitted >= PCM_SLOT_COUNT || next_frame == total_frames {
+                worker_ready_epoch.store(active_seek >> 32, Ordering::Release);
                 worker_ready.store(true, Ordering::Release);
             }
             match retired_consumer.pop() {
@@ -336,6 +431,8 @@ fn spawn_worker(
     });
     (
         NativeSource {
+            seek,
+            ready_epoch,
             ready: ready_consumer,
             retired: retired_producer,
         },
@@ -361,6 +458,7 @@ struct CallbackProcessor {
     left: Box<[f32]>,
     right: Box<[f32]>,
     failed: FailureCode,
+    paused: bool,
     callback_count: u64,
     minimum_frames: usize,
     maximum_observed_frames: usize,
@@ -416,6 +514,7 @@ impl CallbackProcessor {
             left,
             right,
             failed: FailureCode::None,
+            paused: false,
             callback_count: 0,
             minimum_frames: usize::MAX,
             maximum_observed_frames: 0,
@@ -453,6 +552,24 @@ impl CallbackProcessor {
         }
         self.record_frame_count(frame_count);
         let command = self.shared.playback_command.load(Ordering::Acquire);
+        self.paused = command & 1 != 0;
+        let seek = self.shared.seek_command.load(Ordering::Acquire);
+        if seek >> 32 > self.input.active_epoch()
+            && let Some(timeline) = self.timeline
+        {
+            let Ok(pcm) = timeline.seek_pcm_frame(u64::from(seek as u32)) else {
+                return self.finish_silent(FailureCode::Render, frame_count, started);
+            };
+            self.input
+                .begin_seek(seek >> 32, pcm, pcm == timeline.total_pcm_frames());
+            self.instance.clear_source_observations();
+            self.input.source_mut().seek.store(seek, Ordering::Release);
+        }
+        self.input.reclaim_stale();
+        if self.input.source_mut().ready_epoch.load(Ordering::Acquire) == self.input.active_epoch()
+        {
+            self.input.finish_seek();
+        }
         if command & 1 != 0 {
             self.publish(started, frame_count, FailureCode::None);
             self.shared
@@ -578,23 +695,33 @@ impl CallbackProcessor {
         self.shared
             .deadline_overruns
             .store(self.deadline_overruns, Ordering::Relaxed);
+        self.shared.snapshot_sequence.fetch_add(1, Ordering::SeqCst);
+        self.shared
+            .epoch
+            .store(self.input.active_epoch(), Ordering::SeqCst);
+        let ready = !self.input.preparing()
+            && self.input.source_mut().ready_epoch.load(Ordering::Acquire)
+                == self.input.active_epoch();
+        self.shared.seek_ready.store(ready, Ordering::SeqCst);
+        self.shared.paused.store(self.paused, Ordering::SeqCst);
         self.shared.source_position.store(
             self.timeline
                 .as_ref()
                 .map_or(self.input.pcm_position(), |timeline| {
                     timeline.source_position(self.input.pcm_position())
                 }),
-            Ordering::Relaxed,
+            Ordering::SeqCst,
         );
         self.shared
             .pcm_position
-            .store(self.input.pcm_position(), Ordering::Relaxed);
+            .store(self.input.pcm_position(), Ordering::SeqCst);
         self.shared
             .render_frame
-            .store(self.instance.next_frame(), Ordering::Relaxed);
+            .store(self.instance.next_frame(), Ordering::SeqCst);
         self.shared
             .ended
-            .store(self.input.ended(), Ordering::Relaxed);
+            .store(self.input.ended(), Ordering::SeqCst);
+        self.shared.snapshot_sequence.fetch_add(1, Ordering::SeqCst);
         let counters = self.input.counters();
         self.shared
             .starvation_callbacks
@@ -706,7 +833,12 @@ mod tests {
             assert!(ready_producer.push(block).is_ok());
             pcm_frame += block_frames as u64;
         }
-        NativeSource { ready, retired }
+        NativeSource {
+            ready,
+            retired,
+            seek: Arc::new(AtomicU64::new(PROOF_EPOCH << 32)),
+            ready_epoch: Arc::new(AtomicU64::new(PROOF_EPOCH)),
+        }
     }
 
     fn prepared_processor(
@@ -976,8 +1108,17 @@ mod tests {
         MEASURE_ALLOCATIONS.with(|active| active.set(true));
         black_box(valid.process(black_box(&mut valid_output)));
         valid.shared.playback_command.store(1, Ordering::Release);
+        valid
+            .shared
+            .seek_command
+            .store((2 << 32) | 17, Ordering::Release);
         black_box(valid.process(black_box(&mut valid_output)));
         valid.shared.playback_command.store(2, Ordering::Release);
+        valid
+            .input
+            .source_mut()
+            .ready_epoch
+            .store(2, Ordering::Release);
         black_box(valid.process(black_box(&mut valid_output)));
         black_box(malformed.process(black_box(&mut malformed_output)));
         black_box(capacity.process(black_box(&mut oversized)));
@@ -1260,6 +1401,110 @@ mod tests {
     }
 
     #[test]
+    fn wav_seek_lifecycle_preserves_instance_clock_and_reclaims_paused_slots() {
+        for (source_rate, output_rate, bits, channels) in [
+            (44100, 48000, 24, 2),
+            (48000, 44100, 16, 1),
+            (48000, 48000, 24, 2),
+        ] {
+            for total in [1_usize, 17, 10003] {
+                let input: Vec<Vec<f32>> = (0..channels as usize)
+                    .map(|ch| {
+                        (0..total)
+                            .map(|frame| crate::local_wav::tests::expected(frame, ch, bits))
+                            .collect()
+                    })
+                    .collect();
+                let reference = crate::sample_rate::tests::convert(
+                    source_rate,
+                    output_rate,
+                    &input,
+                    &[17, 239],
+                );
+                let timeline = PcmTimeline::new(source_rate, output_rate, total as u64).unwrap();
+                let (source, worker) =
+                    wav_source_at_rates(bits, channels, total, source_rate, output_rate);
+                let shared = Arc::new(SharedObservation::new());
+                let mut processor = CallbackProcessor::prepare(
+                    output_rate,
+                    channels as usize,
+                    PROOF_MAXIMUM_FRAMES,
+                    source,
+                    Arc::clone(&shared),
+                )
+                .unwrap();
+                processor.timeline = Some(timeline);
+                let mut small = vec![0.0_f32; 17 * channels as usize];
+                processor.process(&mut small); // Retain a partial block on long fixtures.
+                for target in [total / 2, 0, total - 1, total, 1, 0] {
+                    let before = processor.instance.next_frame();
+                    shared.playback_command.store(1, Ordering::Release);
+                    shared.request_seek(total as u64, timeline).unwrap();
+                    let epoch = shared.request_seek(target as u64, timeline).unwrap(); // Latest wins without a queue.
+                    let start = timeline.seek_pcm_frame(target as u64).unwrap();
+                    let deadline = Instant::now() + Duration::from_secs(2);
+                    loop {
+                        processor.process(&mut small);
+                        assert_positive_zero(&small);
+                        let snapshot = shared.playback_snapshot();
+                        assert_eq!(snapshot.epoch, epoch);
+                        assert_eq!(snapshot.render_frame, before);
+                        assert_eq!(snapshot.pcm_position, start);
+                        assert!(snapshot.paused);
+                        assert_eq!(snapshot.presentation_time, None);
+                        if snapshot.ready {
+                            break;
+                        }
+                        assert!(Instant::now() < deadline, "paused readiness deadlock");
+                        std::thread::sleep(Duration::from_millis(1));
+                    }
+                    shared.playback_command.store(2, Ordering::Release);
+                    let mut position = start as usize;
+                    let mut turn = 0;
+                    while !processor.input.ended() {
+                        let frames = [1, 17, 257, 1024][turn % 4];
+                        let mut output = vec![0.0_f32; frames * channels as usize];
+                        processor.process(&mut output);
+                        let next = processor.input.pcm_position() as usize;
+                        for frame in 0..frames {
+                            for ch in 0..channels as usize {
+                                assert_eq!(
+                                    output[frame * channels as usize + ch],
+                                    if frame < next - position {
+                                        reference[ch][position + frame] * 0.5
+                                    } else {
+                                        0.0
+                                    }
+                                );
+                            }
+                        }
+                        if next == position {
+                            std::thread::sleep(Duration::from_millis(1));
+                        }
+                        position = next;
+                        turn += 1;
+                        assert!(Instant::now() < deadline);
+                    }
+                    assert_eq!(position, reference[0].len());
+                    assert_eq!(shared.playback_snapshot().source_position, total as u64);
+                    assert_eq!(processor.input.counters().invalid_blocks, 0);
+                    assert_eq!(processor.input.counters().retirement_backpressure, 0);
+                }
+                assert!(shared.request_seek(total as u64 + 1, timeline).is_err());
+                // Preparation while playing emits silence and advances this same clock.
+                worker.stalled.store(true, Ordering::Release);
+                shared.request_seek(0, timeline).unwrap();
+                let before = processor.instance.next_frame();
+                processor.process(&mut small);
+                assert_positive_zero(&small);
+                assert_eq!(processor.instance.next_frame(), before + 17);
+                // Close during preparation joins the bounded worker; no device was opened.
+                worker.stop();
+            }
+        }
+    }
+
+    #[test]
     fn local_wav_worker_starvation_freezes_media_not_render_clock_and_recovers() {
         let (source, worker) = wav_source(24, 2, 5000);
         worker.stalled.store(true, Ordering::Release);
@@ -1361,7 +1606,7 @@ mod tests {
         )?;
         stream.play().map_err(|e| e.to_string())?;
         println!(
-            "device={} rate={} channels={} format={:?} sourceRate={source_rate} totalFrames={total} totalPcmFrames={}; prepared paused. Commands: play, pause, status, stall, feed, close. Play emits sound at compiled gain 0.5; lower system volume first.",
+            "device={} rate={} channels={} format={:?} sourceRate={source_rate} totalFrames={total} totalPcmFrames={}; prepared paused. Commands: play, pause, seek FRAME, status, stall, feed, close. Play emits sound at compiled gain 0.5; lower system volume first.",
             device,
             supported.sample_rate(),
             supported.channels(),
@@ -1384,20 +1629,39 @@ mod tests {
                         }
                     }
                 }
+                action if action.starts_with("seek ") => {
+                    let target = action[5..].trim().parse::<u64>();
+                    if let Ok(target) = target
+                        && let Ok(epoch) = shared.request_seek(target, timeline)
+                    {
+                        let pcm = timeline
+                            .seek_pcm_frame(target)
+                            .map_err(|_| "invalid seek")?;
+                        let actual = timeline.source_position(pcm);
+                        let result = if source_rate == supported.sample_rate() {
+                            "Exact"
+                        } else if actual == target {
+                            "AnchorAndDiscard"
+                        } else {
+                            "Adjusted"
+                        };
+                        println!(
+                            "seek requested epoch={epoch} target={target} pcmFrame={pcm} actualMediaFrame={actual} result={result}; completion is snapshot ready=true for this epoch"
+                        );
+                    } else {
+                        println!("invalid source-frame target");
+                    }
+                }
                 "stall" => worker.stalled.store(true, Ordering::Release),
                 "feed" => worker.stalled.store(false, Ordering::Release),
                 "close" => break,
                 "status" => {}
-                _ => println!("commands: play, pause, status, stall, feed, close"),
+                _ => println!("commands: play, pause, seek FRAME, status, stall, feed, close"),
             }
             println!(
-                "paused={} sourcePosition={}/{} pcmPosition={} renderFrame={} ended={} workerFailed={} observation={:?}",
-                shared.acknowledged_command.load(Ordering::Acquire) & 1 != 0,
-                shared.source_position.load(Ordering::Relaxed),
+                "playback={:?} totalFrames={} workerFailed={} observation={:?}",
+                shared.playback_snapshot(),
                 total,
-                shared.pcm_position.load(Ordering::Relaxed),
-                shared.render_frame.load(Ordering::Relaxed),
-                shared.ended.load(Ordering::Relaxed),
                 worker.failed.load(Ordering::Acquire),
                 shared.snapshot()
             );

@@ -142,6 +142,7 @@ pub(crate) struct PreparedPcmInput<S: PreparedBlockSource> {
     current_offset: usize,
     pending_retire: Option<S::Block>,
     ended: bool,
+    preparing: bool,
     pcm_position: u64,
     terminal: bool,
     counters: PcmCounters,
@@ -163,6 +164,7 @@ impl<S: PreparedBlockSource> PreparedPcmInput<S> {
             current_offset: 0,
             pending_retire: None,
             ended: false,
+            preparing: false,
             pcm_position: 0,
             terminal: false,
             counters: PcmCounters::default(),
@@ -203,6 +205,54 @@ impl<S: PreparedBlockSource> PreparedPcmInput<S> {
         self.pcm_position = 0;
     }
 
+    pub(crate) fn begin_seek(&mut self, epoch: u64, pcm_frame: u64, ended: bool) {
+        self.set_active_epoch(epoch);
+        self.pcm_position = pcm_frame;
+        self.ended = ended;
+        self.preparing = true;
+        self.reclaim_stale();
+    }
+
+    pub(crate) fn finish_seek(&mut self) {
+        self.preparing = false;
+    }
+    pub(crate) fn preparing(&self) -> bool {
+        self.preparing
+    }
+
+    /// Bounded ownership maintenance, also called while consumption is paused.
+    pub(crate) fn reclaim_stale(&mut self) {
+        if !self.flush_pending_retirement() {
+            return;
+        }
+        for _ in 0..=self.source.scan_limit() {
+            if self.current.is_none() {
+                let Some(block) = self.source.pop_ready() else {
+                    break;
+                };
+                if !self.accept_block(&block) {
+                    if !self.retire(block) {
+                        break;
+                    }
+                    continue;
+                }
+                self.current = Some(block);
+                self.current_offset = 0;
+            }
+            let Some(block) = self.current.as_ref() else {
+                break;
+            };
+            if block.meta().epoch == self.active_epoch {
+                break;
+            }
+            let block = self.current.take().expect("current block");
+            self.counters.stale_blocks = self.counters.stale_blocks.saturating_add(1);
+            if !self.retire(block) {
+                break;
+            }
+        }
+    }
+
     pub(crate) fn render(&mut self, mut output: PcmOutput<'_>) -> PcmRenderStatus {
         let Some(frame_count) = output.frame_count(self.spec.layout) else {
             output.zero();
@@ -221,6 +271,10 @@ impl<S: PreparedBlockSource> PreparedPcmInput<S> {
             return PcmRenderStatus::CapacityExceeded;
         }
         output.zero();
+        if self.preparing {
+            self.reclaim_stale();
+            return PcmRenderStatus::Rendered;
+        }
 
         if !self.flush_pending_retirement() {
             self.count_starvation_unless_ended();
@@ -818,6 +872,38 @@ mod tests {
             [deterministic_sample(40, 0), deterministic_sample(41, 0)]
         );
         assert_eq!(input.counters().stale_blocks, 1);
+    }
+
+    #[test]
+    fn paused_reclamation_validates_blocks_before_retaining_them() {
+        let mut overflow = block(1, 2, 0, 2, false);
+        overflow.meta.pcm_frame_start = u64::MAX;
+        let mut input = input([
+            Some(block(0, 2, 0, 5, false)),
+            Some(overflow),
+            Some(block(2, 2, 10, 2, true)),
+            None,
+        ]);
+        input.begin_seek(2, 10, false);
+        input.finish_seek();
+        let mut left = [0.0; 5];
+        let mut right = [0.0; 5];
+        input.render(PcmOutput::Stereo {
+            left: &mut left,
+            right: &mut right,
+        });
+        assert_eq!(input.counters().invalid_blocks, 2);
+        assert_eq!(
+            left,
+            [
+                deterministic_sample(10, 0),
+                deterministic_sample(11, 0),
+                0.0,
+                0.0,
+                0.0
+            ]
+        );
+        assert_eq!(input.source_mut().retired_len, 3);
     }
 
     #[test]

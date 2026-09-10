@@ -11,6 +11,8 @@ class FakeKernel implements WorkletKernelBinding {
   readonly #memory: MutableMemory;
   readonly #maximumFrames: number;
   readonly #rightPointer: number;
+  epoch(): bigint { return 1n; }
+  ready(): boolean { return true; }
   source_position(): bigint { return 0n; }
   pcm_position(): bigint { return 0n; }
   next_frame(): bigint { return 0n; }
@@ -101,7 +103,7 @@ describe("PreparedPlanarAdapter", () => {
     expect(adapter.process([[twoHundredFiftySeven]])).toBe(true);
     expect(twoHundredFiftySeven[256]).toBe(256.25);
     expect(adapter.snapshot()).toEqual({
-      sourcePosition: 0, pcmPosition: 0, renderFrame: 0, ended: false,
+      epoch: 1, presentationTime: null, ready: true, sourcePosition: 0, pcmPosition: 0, renderFrame: 0, ended: false,
       failureCode: 0,
       invalidBlockCount: 0,
       lastFrameCount: 257,

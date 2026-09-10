@@ -12,6 +12,8 @@ class FakeWorkletKernel {
     _slotFrames: number,
   ) {}
 
+  epoch(): bigint { return 1n; }
+  ready(): boolean { return true; }
   source_position(): bigint { return 0n; }
   pcm_position(): bigint { return 0n; }
   next_frame(): bigint { return 0n; }

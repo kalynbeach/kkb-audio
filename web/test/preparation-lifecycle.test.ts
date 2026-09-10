@@ -63,6 +63,24 @@ describe("PreparationLifecycle", () => {
     expect(events).toEqual(["create:first"]);
   });
 
+  test("close aborts preparation and disposes an uncancellable late result before reload", async () => {
+    const events: string[] = [];
+    const lifecycle = new PreparationLifecycle<FakeProof>();
+    const result = deferred<FakeProof>();
+    let signal: AbortSignal | undefined;
+    const pending = lifecycle.tryReplace(value => { signal = value; return result.promise; })!;
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+    await lifecycle.closeActive();
+    expect(signal?.aborted).toBe(true);
+    result.resolve(new FakeProof("late", events));
+    await expect(pending).rejects.toThrow("cancelled");
+    expect(lifecycle.active).toBeUndefined();
+    expect(events).toEqual(["close:late"]);
+    await lifecycle.tryReplace(async () => new FakeProof("reload", events));
+    expect(lifecycle.active?.name).toBe("reload");
+    await lifecycle.closeActive();
+  });
+
   test("closes the active proof before creating its sequential replacement", async () => {
     const events: string[] = [];
     const lifecycle = new PreparationLifecycle<FakeProof>();

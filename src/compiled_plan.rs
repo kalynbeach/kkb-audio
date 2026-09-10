@@ -869,6 +869,15 @@ impl RenderInstance {
         Ok(())
     }
 
+    /// Disqualify a partial/completed source window without resetting render-time state.
+    pub(crate) fn clear_source_observations(&mut self) {
+        self.levels = Levels {
+            sequence: self.levels.sequence,
+            dropped: self.levels.dropped,
+            ..Levels::default()
+        };
+    }
+
     pub(crate) fn take_observation(&mut self) -> Option<Observation> {
         self.levels.pending.take()
     }

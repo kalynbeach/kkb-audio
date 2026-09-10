@@ -359,14 +359,22 @@ Playback proceeds through small, ordered increments:
    source rate matching the active host.
 2. **Prepared sample-rate conversion.** Account for chunk adaptation, delay, history, reset, flush,
    and input/output position mapping.
-3. **WAV seeking and epochs.** Prove stale-buffer rejection, decoder repositioning, resampler
-   pre-roll, readiness, and media/render/presentation snapshots.
-4. **MP3 trim and seek fixtures.** Test valid, missing, and malformed trim metadata, decoder anchors,
-   and `Exact`, `AnchorAndDiscard`, or `Adjusted` results.
-5. **FLAC fixtures.** Test lossless reference output and seeking with and without optional metadata.
-6. **WAV loops.** Settle nominal-period-preserving seam geometry, short-loop limits, smoothing
+3. **WAV seeking, epochs, and complete playback lifecycle.** Prove stale-buffer rejection, decoder
+   repositioning, bounded resampler pre-roll, readiness, honest media/render/presentation snapshots,
+   and one coherent load/play/pause/resume/seek/starvation/EOS/close/reload workflow on both paths.
+   This is the last planned foundation increment unless it exposes a concrete blocking problem.
+4. **Initial thin local-WAV wave-player.** After the lifecycle gate passes, add file selection,
+   play/pause, seeking, time/duration, volume, and clear loading/error states. Playback—not UI—owns
+   worker coordination, converter state, and epochs. Let this integration establish the smallest
+   useful playback interface; do not freeze a generic public session API first.
+5. **MP3 trim and seek fixtures, when needed.** Test valid, missing, and malformed trim metadata,
+   decoder anchors, and `Exact`, `AnchorAndDiscard`, or `Adjusted` results.
+6. **FLAC fixtures, when needed.** Test lossless reference output and seeking with and without metadata.
+7. **WAV loops.** Settle nominal-period-preserving seam geometry, short-loop limits, smoothing
    bounds, UI coordinate, automation, provenance, readiness, and underrun behavior.
-7. **Compressed loops.** Add only where codec, trim, and seek evidence supports the declared result.
+8. **Compressed loops.** Add only where codec, trim, and seek evidence supports the declared result.
+
+Remaining codecs, loops, HTTP delivery, and catalog work do not block the initial local-WAV player.
 
 Implementation status, 2026-09-08: the private same-rate local WAV slice accepts PCM16/24 RIFF PCM
 mono/stereo through the existing browser/native transports. Pause acknowledgment freezes consumption
@@ -389,8 +397,17 @@ See the [conversion contract and evidence](./2026-09-09-prepared-sample-rate-con
 for failed intermediate trials, exact configurations and limits. This is not broad sustained-performance
 or subjective listening certification. WAV seeking and epochs is the next ordered increment.
 
-`PlaybackSession` remains provisional until local WAV, seek epochs, and at least one browser path pass
-the same behavioral fixtures.
+Implementation status, 2026-09-10: increment 3 adds source-frame seeks with explicit rational output-grid
+coordinates, bounded globally aligned converter pre-roll, epoch readiness, paused slot reclamation,
+latest-request cancellation and epoch-tagged snapshots. Both host paths retain one compiled render
+instance and its clock. Presentation estimates are explicitly unavailable. The complete lifecycle
+fixtures and targeted muted browser observations are recorded in the
+[seeking/lifecycle evidence](2026-09-10-wav-seeking-lifecycle-evidence.md), including verification status
+and limitations. No physical native output is claimed for this increment.
+
+`PlaybackSession` remains provisional. The next increment is the initial local-WAV player, not another
+speculative foundation/API layer. “Foundation ready” means this declared local-file contract works in
+the tested configurations, not production readiness or a finished audio platform.
 
 ## Progressive HTTP validation
 

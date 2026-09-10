@@ -9,6 +9,7 @@ import {
 import type { RenderSnapshot } from "./render-adapter";
 
 type ProofOptions = {
+  signal?: AbortSignal;
   file?: File;
   channelCount: 1 | 2;
   injectPreparationFailure?: boolean;
@@ -38,6 +39,14 @@ export class InitializationError extends Error {
   }
 }
 
+export type SeekResult = {
+  epoch: number;
+  requestedFrame: number;
+  pcmFrame: number;
+  actualMediaFrame: number;
+  result: "Exact" | "AnchorAndDiscard" | "Adjusted";
+};
+
 export class PreparedProof {
   readonly #context: AudioContext;
   readonly #gate: InitializationGate;
@@ -51,6 +60,12 @@ export class PreparedProof {
   #closed = false;
   #workerTerminated = false;
   #runtimeFailure = 0;
+  #epoch = 1;
+  #observedEpoch = 1;
+  #postedSeek: number | undefined;
+  #queuedSeek: { epoch: number; target: number } | undefined;
+  #seekResolve: ((result: SeekResult) => void) | undefined;
+  #seekReject: ((error: Error) => void) | undefined;
   producerObservation: unknown;
   #snapshotResolve: ((snapshot: RenderSnapshot) => void) | undefined;
   #snapshotReject: ((code: number) => void) | undefined;
@@ -82,7 +97,15 @@ export class PreparedProof {
   }
 
   acceptRuntimeMessage(value: unknown): void {
+    if (this.#closed) return;
     if (isSnapshotMessage(value)) {
+      if (value.snapshot.epoch < this.#observedEpoch) {
+        // Worker completion and snapshot replies use different ports. Replace the
+        // obsolete reply without extending the original bounded request deadline.
+        if (this.#snapshotResolve) this.#node.port.postMessage({ type: "snapshot" });
+        return;
+      }
+      this.#observedEpoch = value.snapshot.epoch;
       if (value.snapshot.failureCode !== 0) { this.failRuntime(value.snapshot.failureCode); return; }
       this.#snapshotResolve?.(value.snapshot);
       return;
@@ -99,7 +122,21 @@ export class PreparedProof {
   }
 
   acceptWorkerMessage(value: unknown): void {
-    if ((value as { type?: string } | null)?.type === "producer-status") this.producerObservation = value;
+    if (this.#closed || this.#runtimeFailure !== 0) return;
+    const message = value as { type?: string; epoch?: number; requestedFrame?: number; pcmFrame?: number } | null;
+    if (message?.type === "seek-accepted" && message.epoch === this.#postedSeek) {
+      this.#postedSeek = undefined;
+      this.#dispatchSeek();
+      return;
+    }
+    if (message?.type === "producer-status" && message.epoch === this.#epoch) this.producerObservation = value;
+    if (message?.type === "seek-complete" && message.epoch === this.#epoch && Number.isSafeInteger(message.pcmFrame) && Number.isSafeInteger(message.requestedFrame)) {
+      this.#observedEpoch = this.#epoch;
+      const pcmFrame = message.pcmFrame!;
+      const actualMediaFrame = Math.min(this.totalFrames!, Math.floor(pcmFrame * this.sourceRate! / this.#context.sampleRate));
+      this.#seekResolve?.({ epoch: this.#epoch, requestedFrame: message.requestedFrame!, pcmFrame, actualMediaFrame,
+        result: this.sourceRate === this.#context.sampleRate ? "Exact" : actualMediaFrame === message.requestedFrame ? "AnchorAndDiscard" : "Adjusted" });
+    }
     const code = workerFailureCode(value);
     if (code !== undefined) this.failRuntime(code);
   }
@@ -109,6 +146,7 @@ export class PreparedProof {
       this.#runtimeFailure = code;
     }
     this.#snapshotReject?.(this.#runtimeFailure);
+    this.#seekReject?.(new InitializationError(this.#runtimeFailure));
     this.#node.disconnect();
     this.#terminateWorker();
     if (!this.#closed) {
@@ -177,7 +215,7 @@ export class PreparedProof {
     if (this.totalFrames === undefined) throw new Error("Load a WAV first");
     if (!this.#activated) { this.#node.connect(this.#context.destination); this.#activated = true; }
     const snapshot = await this.status();
-    if (!snapshot.ended) {
+    if (!snapshot.ended || this.#seekResolve !== undefined) {
       this.#worker?.postMessage({ type: "activate" });
       await this.#context.resume();
       this.#throwIfUnavailable();
@@ -189,6 +227,30 @@ export class PreparedProof {
     this.#throwIfUnavailable();
     await this.#context.suspend();
     return this.status();
+  }
+
+  seek(target: number): Promise<SeekResult> {
+    this.#throwIfUnavailable();
+    if (this.totalFrames === undefined || !Number.isSafeInteger(target) || target < 0 || target > this.totalFrames || this.#epoch === Number.MAX_SAFE_INTEGER) throw new Error("Seek requires a source frame in [0, totalFrames]");
+    this.#seekReject?.(new Error("Seek superseded"));
+    this.#epoch += 1;
+    this.producerObservation = undefined;
+    return new Promise((resolve, reject) => {
+      const clear = () => { clearTimeout(timeout); this.#seekResolve = undefined; this.#seekReject = undefined; };
+      const timeout = setTimeout(() => { this.#seekReject?.(new Error("Seek preparation timed out")); this.failRuntime(InitializationFailure.Timeout); }, 5000);
+      this.#seekResolve = result => { clear(); resolve(result); };
+      this.#seekReject = error => { clear(); reject(error); };
+      this.#queuedSeek = { epoch: this.#epoch, target };
+      this.#dispatchSeek();
+    });
+  }
+
+  #dispatchSeek(): void {
+    if (this.#postedSeek !== undefined || !this.#queuedSeek) return;
+    const request = this.#queuedSeek;
+    this.#queuedSeek = undefined;
+    this.#postedSeek = request.epoch;
+    this.#worker!.postMessage({ type: "seek", ...request });
   }
 
   async status(): Promise<RenderSnapshot> {
@@ -205,6 +267,7 @@ export class PreparedProof {
       return;
     }
     this.#closed = true;
+    this.#seekReject?.(new Error("Playback closed"));
     this.#snapshotReject?.(InitializationFailure.ContextState);
     this.#node.disconnect();
     this.#terminateWorker();
@@ -251,7 +314,18 @@ export class PreparedProof {
 }
 
 export async function prepareProof(options: ProofOptions): Promise<PreparedProof> {
+  options.signal?.throwIfAborted();
   const context = new AudioContext();
+  const wait = <T>(operation: Promise<T>): Promise<T> => {
+    const signal = options.signal;
+    if (!signal) return operation;
+    let abort: () => void;
+    const cancelled = new Promise<never>((_resolve, reject) => {
+      abort = () => reject(new Error("Preparation cancelled"));
+      if (signal.aborted) abort(); else signal.addEventListener("abort", abort, { once: true });
+    });
+    return Promise.race([operation, cancelled]).finally(() => signal.removeEventListener("abort", abort));
+  };
   const timeoutMilliseconds = options.timeoutMilliseconds ?? 5_000;
   const wasmUrl = options.wasmUrl ?? "./kkb_audio_bg.wasm";
   const workerUrl = options.workerUrl ?? "./pcm-worker.js";
@@ -261,11 +335,11 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
   let startupRuntimeFailure: number | undefined;
 
   try {
-    if (context.state !== "suspended") await context.suspend();
-    const wasmResponse = await fetch(wasmUrl, { cache: "no-store" });
+    if (context.state !== "suspended") await wait(context.suspend());
+    const wasmResponse = await wait(fetch(wasmUrl, { cache: "no-store", signal: options.signal }));
     if (!wasmResponse.ok) throw new InitializationError(InitializationFailure.InvalidMessage);
-    const module = await WebAssembly.compile(await wasmResponse.arrayBuffer());
-    await context.audioWorklet.addModule(workletUrl);
+    const module = await wait(WebAssembly.compile(await wait(wasmResponse.arrayBuffer())));
+    await wait(context.audioWorklet.addModule(workletUrl));
 
     worker = new Worker(workerUrl, { type: "module" });
     let totalFrames: number | undefined;
@@ -273,7 +347,7 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
     let sourceRate: number | undefined;
     let channelCount = options.channelCount;
     if (options.file) {
-      const metadata = await new Promise<{ channelCount: 1 | 2; totalFrames: number; totalPcmFrames: number; sampleRate: number }>((resolve, reject) => {
+      const metadata = await wait(new Promise<{ channelCount: 1 | 2; totalFrames: number; totalPcmFrames: number; sampleRate: number }>((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error("WAV inspection timed out")), timeoutMilliseconds);
         worker!.onerror = () => { clearTimeout(timeout); reject(new Error("WAV worker failed")); };
         worker!.onmessage = event => {
@@ -282,7 +356,7 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
           else reject(new Error(event.data?.detail ?? "Unsupported or malformed WAV"));
         };
         worker!.postMessage({ type: "inspect", file: options.file, module, sampleRate: context.sampleRate });
-      });
+      }));
       channelCount = metadata.channelCount;
       totalFrames = metadata.totalFrames;
       totalPcmFrames = metadata.totalPcmFrames;
@@ -367,7 +441,7 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
       node.port.postMessage({ type: "transport-port", port: channel.port2 }, [channel.port2]);
     });
 
-    const [ready, workerInitialAdmittedBlocks] = await Promise.all([workletReady, workerReady]);
+    const [ready, workerInitialAdmittedBlocks] = await wait(Promise.all([workletReady, workerReady]));
     if (startupRuntimeFailure !== undefined) {
       throw new InitializationError(startupRuntimeFailure);
     }
@@ -404,6 +478,7 @@ function isSnapshotMessage(
   }
   const snapshot = message.snapshot as Partial<RenderSnapshot>;
   return (
+    Number.isSafeInteger(snapshot.epoch) && snapshot.presentationTime === null && typeof snapshot.ready === "boolean" &&
     Number.isSafeInteger(snapshot.sourcePosition) &&
     Number.isSafeInteger(snapshot.pcmPosition) &&
     Number.isSafeInteger(snapshot.renderFrame) &&
@@ -432,8 +507,9 @@ const proofLifecycle = new PreparationLifecycle<PreparedProof>();
 let controlsPending = false;
 
 prepareButton?.addEventListener("click", async () => {
-  const preparation = proofLifecycle.tryReplace(() =>
+  const preparation = proofLifecycle.tryReplace(signal =>
     prepareProof({
+      signal,
       channelCount: 2,
       maximumFrames: 1_024,
     }),
@@ -522,7 +598,7 @@ function setPreparationControlsDisabled(disabled: boolean): void {
     failureButton.disabled = disabled;
   }
   if (closeButton !== null) {
-    closeButton.disabled = disabled;
+    closeButton.disabled = false;
   }
 }
 
@@ -538,19 +614,19 @@ function errorText(error: unknown): string {
 
 const wavFile = document.querySelector<HTMLInputElement>("#wav-file");
 const wavStall = document.querySelector<HTMLInputElement>("#wav-stall");
-const wavControls = ["wav-play", "wav-pause", "wav-status"].map(id => document.querySelector(`#${id}`) as HTMLButtonElement);
+const wavControls = ["wav-play", "wav-pause", "wav-status", "wav-seek"].map(id => document.querySelector(`#${id}`) as HTMLButtonElement);
 function updateWavControls(): void {
   const unavailable = proofLifecycle.active?.totalFrames === undefined;
   for (const control of wavControls) if (control) control.disabled = controlsPending || unavailable;
-  if (wavStall) { wavStall.disabled = controlsPending || unavailable; if (unavailable) wavStall.checked = false; }
+  if (wavStall) { wavStall.disabled = unavailable; if (unavailable) wavStall.checked = false; }
 }
 function wavStatus(proof: PreparedProof, snapshot: RenderSnapshot): void {
-  outputText(JSON.stringify({ state: snapshot.ended ? "ended" : proof.paused ? "paused" : "playing", totalFrames: proof.totalFrames, sourceRate: proof.sourceRate, producerLastObserved: proof.producerObservation, ...snapshot }, null, 2));
+  outputText(JSON.stringify({ state: !snapshot.ready ? "preparing" : snapshot.ended ? "ended" : proof.paused ? "paused" : "playing", totalFrames: proof.totalFrames, sourceRate: proof.sourceRate, producerLastObserved: proof.producerObservation, ...snapshot }, null, 2));
 }
 document.querySelector("#wav-load")?.addEventListener("click", async () => {
   const file = wavFile?.files?.[0];
   if (!file) { outputText("Choose a local WAV file first."); return; }
-  const pending = proofLifecycle.tryReplace(() => prepareProof({ file, channelCount: 2, maximumFrames: 1024 }));
+  const pending = proofLifecycle.tryReplace(signal => prepareProof({ signal, file, channelCount: 2, maximumFrames: 1024 }));
   if (!pending) return;
   setPreparationControlsDisabled(true);
   if (activateButton) activateButton.disabled = true;
@@ -571,6 +647,17 @@ for (const [id, action] of [["wav-play", "play"], ["wav-pause", "pause"], ["wav-
     finally { setPreparationControlsDisabled(false); }
   });
 }
+document.querySelector("#wav-seek")?.addEventListener("click", async () => {
+  const proof = proofLifecycle.active;
+  if (!proof) return;
+  setPreparationControlsDisabled(true);
+  try {
+    const target = Number(document.querySelector<HTMLInputElement>("#wav-frame")?.value);
+    const seek = await proof.seek(target);
+    outputText(JSON.stringify({ seek, paused: proof.paused, ...await proof.status() }, null, 2));
+  } catch (error) { outputText(errorText(error)); }
+  finally { setPreparationControlsDisabled(false); }
+});
 wavStall?.addEventListener("change", () => {
   try { proofLifecycle.active?.stall(wavStall.checked); } catch (error) { outputText(errorText(error)); }
 });

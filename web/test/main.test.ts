@@ -127,7 +127,7 @@ class StartupWorkletNode extends FakeAudioNode {
         this.send({
           type: "snapshot",
           snapshot: {
-          sourcePosition: 0, pcmPosition: 0, renderFrame: 0, ended: false,
+          epoch: 1, presentationTime: null, ready: true, sourcePosition: 0, pcmPosition: 0, renderFrame: 0, ended: false,
             failureCode: 0,
             invalidBlockCount: 0,
             lastFrameCount: 128,
@@ -204,6 +204,7 @@ function preparedProof(totalFrames?: number): {
     worker as unknown as Worker,
     0,
     totalFrames,
+    totalFrames === undefined ? undefined : 44100,
   );
   return { context, node, proof, worker };
 }
@@ -285,7 +286,7 @@ describe("PreparedProof activation", () => {
       proof.acceptRuntimeMessage({
         type: "snapshot",
         snapshot: {
-          sourcePosition: 0, pcmPosition: 0, renderFrame: 0, ended: false,
+          epoch: 1, presentationTime: null, ready: true, sourcePosition: 0, pcmPosition: 0, renderFrame: 0, ended: false,
           failureCode: 36,
           invalidBlockCount: 0,
           lastFrameCount: 128,
@@ -420,7 +421,7 @@ test("local WAV controls suspend at acknowledgment, retain the instance, and nev
   let position = 0;
   let ended = false;
   node.port.postMessage = () => proof.acceptRuntimeMessage({ type: "snapshot", snapshot: {
-    sourcePosition: position, pcmPosition: position, renderFrame: position, ended, failureCode: 0, invalidBlockCount: 0,
+    epoch: 1, presentationTime: null, ready: true, sourcePosition: position, pcmPosition: position, renderFrame: position, ended, failureCode: 0, invalidBlockCount: 0,
     lastFrameCount: 1, memoryBytes: 16777216, processCount: position, slotCount: 4, staleBlockCount: 0, starvationCount: 0,
   } });
   await proof.play(); expect(context.state).toBe("running");
@@ -437,7 +438,45 @@ test("local WAV controls suspend at acknowledgment, retain the instance, and nev
 });
 
 
-test("proof-page Status disables Pause/reload/Close until its deferred snapshot settles", async () => {
+test("WAV seeks reject stale completion/observations, preserve pause and cancel on close", async () => {
+  const { proof, context, worker } = preparedProof(10003);
+  expect(() => proof.seek(-1)).toThrow();
+  expect(() => proof.seek(10004)).toThrow();
+  expect(() => proof.seek(0.5)).toThrow();
+  const first = proof.seek(7001).catch(error => error.message);
+  const second = proof.seek(1176);
+  expect(await first).toBe("Seek superseded");
+  expect(worker.messages.filter(message => (message as { type: string }).type === "seek")).toHaveLength(1);
+  proof.acceptWorkerMessage({ type: "seek-accepted", epoch: 2 });
+  expect(worker.messages.filter(message => (message as { type: string }).type === "seek")).toHaveLength(2);
+  proof.acceptWorkerMessage({ type: "seek-complete", epoch: 2, requestedFrame: 7001, pcmFrame: 7621 });
+  proof.acceptWorkerMessage({ type: "producer-status", epoch: 2 });
+  expect(proof.producerObservation).toBeUndefined();
+  proof.acceptWorkerMessage({ type: "seek-complete", epoch: 3, requestedFrame: 1176, pcmFrame: 1280 });
+  expect(await second).toEqual({ epoch: 3, requestedFrame: 1176, pcmFrame: 1280, actualMediaFrame: 1176, result: "AnchorAndDiscard" });
+  expect(context.state).toBe("suspended");
+  const pending = proof.seek(0).catch(error => error.message);
+  await proof.close();
+  expect(await pending).toBe("Playback closed");
+  proof.acceptWorkerMessage({ type: "seek-complete", epoch: 4, requestedFrame: 0, pcmFrame: 0 });
+  expect(context.state).toBe("closed"); expect(worker.terminationCount).toBe(1);
+});
+
+test("a delayed prior-epoch snapshot requests a fresh reply rather than timing out playback", async () => {
+  const { proof, node } = preparedProof(10003);
+  const status = proof.status();
+  const seek = proof.seek(17);
+  proof.acceptWorkerMessage({ type: "seek-complete", epoch: 2, requestedFrame: 17, pcmFrame: 19 });
+  await seek;
+  const snapshot = { epoch: 1, presentationTime: null, ready: true, sourcePosition: 0, pcmPosition: 0, renderFrame: 128, ended: false, failureCode: 0, invalidBlockCount: 0, lastFrameCount: 128, memoryBytes: 16777216, processCount: 1, slotCount: 4, staleBlockCount: 0, starvationCount: 0 };
+  let replacements = 0;
+  node.port.postMessage = () => { replacements++; proof.acceptRuntimeMessage({ type: "snapshot", snapshot: { ...snapshot, epoch: 2, sourcePosition: 17, pcmPosition: 19 } }); };
+  proof.acceptRuntimeMessage({ type: "snapshot", snapshot });
+  expect((await status).epoch).toBe(2); expect(replacements).toBe(1);
+  await proof.close();
+});
+
+test("proof-page Status disables conflicting controls but keeps Close available", async () => {
   Object.defineProperty(globalThis, "document", { configurable: true, value: proofDocument });
   const control = (id: string) => controls.get(`#${id}`)!;
   await withStartupProof(async ({ preparation, worker, node }) => {
@@ -447,7 +486,7 @@ test("proof-page Status disables Pause/reload/Close until its deferred snapshot 
       const created = new Promise<StartupWorker>(resolve => { resolveStartupWorker = resolve; });
       const loading = control("wav-load").click();
       expect(control("wav-load").disabled).toBe(true);
-      expect(control("close").disabled).toBe(true);
+      expect(control("close").disabled).toBe(false);
       expect(control("wav-play").disabled).toBe(true);
       const wavWorker = await created;
       wavWorker.onmessage?.({ data: { type: "metadata", channelCount: 2, totalFrames: 1024 } } as MessageEvent<unknown>);
@@ -468,10 +507,11 @@ test("proof-page Status disables Pause/reload/Close until its deferred snapshot 
     first.wavNode.port.postMessage = message => { deferred = message; };
     const status = control("wav-status").click();
     // Disabled synchronously, before the exclusive action's first microtask runs.
-    for (const id of ["wav-play", "wav-pause", "wav-status", "wav-load", "close", "prepare", "failure", "wav-stall"]) expect(control(id).disabled).toBe(true);
+    for (const id of ["wav-play", "wav-pause", "wav-status", "wav-load", "prepare", "failure"]) expect(control(id).disabled).toBe(true);
+    expect(control("close").disabled).toBe(false);
+    expect(control("wav-stall").disabled).toBe(false);
     await control("wav-pause").click();
     await control("wav-load").click();
-    await control("close").click();
     expect(first.context.state).toBe("running");
     expect(first.context.closeCount).toBe(0);
     expect(first.wavWorker.terminationCount).toBe(0);

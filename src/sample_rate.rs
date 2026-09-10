@@ -39,6 +39,14 @@ impl PcmTimeline {
     pub fn total_pcm_frames(&self) -> u64 {
         self.pcm_frames
     }
+    /// First output-grid frame at or after the requested source frame.
+    pub fn seek_pcm_frame(&self, source_frame: u64) -> Result<u64, u32> {
+        if source_frame > self.source_frames {
+            return Err(INVALID_CONVERSION);
+        }
+        Ok((u128::from(source_frame) * u128::from(self.output_rate))
+            .div_ceil(u128::from(self.source_rate)) as u64)
+    }
     /// Floor-rounded media cursor, not filter provenance or audible presentation time.
     pub fn source_position(&self, pcm_position: u64) -> u64 {
         if pcm_position >= self.pcm_frames {
@@ -160,9 +168,6 @@ impl PreparedRateConverter {
         if frames > self.available_frames() {
             return Err(INVALID_CONVERSION);
         }
-        if frames == 0 {
-            return Ok(());
-        }
         self.output_offset += frames;
         self.pcm_consumed += frames as u64;
         if self.available_frames() == 0
@@ -172,6 +177,27 @@ impl PreparedRateConverter {
             self.process_chunk()?;
         }
         Ok(())
+    }
+    /// Reconstruct overlap from one preceding globally aligned FFT chunk. Returns the
+    /// absolute realized PCM coordinate; source_frames_read() exposes the read anchor.
+    pub fn seek(&mut self, source_frame: u64) -> Result<u64, u32> {
+        let target = self.timeline.seek_pcm_frame(source_frame)?;
+        self.reset();
+        self.pcm_consumed = target;
+        if target == self.total_pcm_frames() || self.resampler.is_none() {
+            self.source_read = if target == self.total_pcm_frames() {
+                self.timeline.source_frames
+            } else {
+                source_frame
+            };
+            self.skip_delay = 0;
+        } else {
+            let raw_target = u128::from(target) + self.skip_delay as u128;
+            let chunk = (raw_target / self.output[0].len() as u128).saturating_sub(1);
+            self.source_read = (chunk * self.input[0].len() as u128) as u64;
+            self.skip_delay = (raw_target - chunk * self.output[0].len() as u128) as usize;
+        }
+        Ok(target)
     }
     /// Reload/reset starts a new finite stream; pause does not call this.
     pub fn reset(&mut self) {
@@ -223,8 +249,8 @@ impl PreparedRateConverter {
             self.output[0].len()
         };
         self.input_filled = 0;
-        self.output_offset = self.skip_delay;
-        self.skip_delay = 0;
+        self.output_offset = self.skip_delay.min(output_frames);
+        self.skip_delay -= self.output_offset;
         let valid = (self.total_pcm_frames() - self.pcm_consumed)
             .min((output_frames - self.output_offset) as u64) as usize;
         self.output_end = self.output_offset + valid;

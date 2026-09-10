@@ -22,6 +22,8 @@ export const HostFailure = {
 } as const;
 
 export interface WorkletKernelBinding {
+  epoch(): bigint;
+  ready(): boolean;
   source_position(): bigint;
   pcm_position(): bigint;
   next_frame(): bigint;
@@ -45,6 +47,9 @@ export interface WorkletKernelBinding {
 export interface WorkletMemory { readonly buffer: ArrayBuffer; }
 
 export type RenderSnapshot = {
+  epoch: number;
+  presentationTime: null;
+  ready: boolean;
   sourcePosition: number;
   pcmPosition: number;
   renderFrame: number;
@@ -166,6 +171,9 @@ export class PreparedPlanarAdapter {
 
   snapshot(): RenderSnapshot {
     return {
+      epoch: Number(this.#kernel.epoch()),
+      presentationTime: null,
+      ready: this.#kernel.ready(),
       sourcePosition: Number(this.#kernel.source_position()),
       pcmPosition: Number(this.#kernel.pcm_position()),
       renderFrame: Number(this.#kernel.next_frame()),
