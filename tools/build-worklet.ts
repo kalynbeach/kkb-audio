@@ -46,7 +46,7 @@ await build("web/src/plan-worker.ts");
 await build("web/src/plan-main.ts");
 await build("web/src/lab-worker.ts");
 const lab = await Bun.build({
-  entrypoints: ["web/lab.html"],
+  entrypoints: ["web/lab.html", "web/player.html"],
   outdir: outputDirectory,
   target: "browser",
   minify: true,

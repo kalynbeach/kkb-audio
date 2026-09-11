@@ -405,9 +405,21 @@ fixtures and targeted muted browser observations are recorded in the
 [seeking/lifecycle evidence](2026-09-10-wav-seeking-lifecycle-evidence.md), including verification status
 and limitations. No physical native output is claimed for this increment.
 
-`PlaybackSession` remains provisional. The next increment is the initial local-WAV player, not another
-speculative foundation/API layer. “Foundation ready” means this declared local-file contract works in
-the tested configurations, not production readiness or a finished audio platform.
+Implementation status, 2026-09-10: increment 4 (#15) adds the separate `/player.html` local-WAV
+player. Private extracted playback internals plus a task-oriented owner provide cancellation,
+replacement, serialized/coalesced snapshots and user commands, source-cursor updates, seek/replay
+and post-worklet listening gain. React owns presentation and preview/commit interaction only.
+Normal seeks preserve play/pause; consumed EOS and the exact endpoint acknowledge suspension, and
+seek-back stays paused until explicit Play. Replay seeks zero then plays without replacing the context.
+Focused owner/UI tests, the full device-free Rust/Bun gates and targeted muted built-player workflows
+pass within the [local-player evidence](2026-09-10-local-wav-player-evidence.md). Independent Standards
+and Spec reviews returned zero findings; parent diff inspection and targeted checks also pass. These
+observations do not certify broad browser/device or audible behavior.
+
+`PlaybackSession` remains provisional. This player establishes a private consumer, not the eventual
+application migration or another speculative foundation/API layer. “Foundation ready” means this
+declared local-file contract works in the tested configurations, not production readiness or a
+finished audio platform.
 
 ## Progressive HTTP validation
 

@@ -1,8 +1,8 @@
-# Learning lab design
+# Learning lab and local player design
 
 This lab follows the KKB design-system baseline from [`kkb/DESIGN.md`](https://github.com/kalynbeach/kkb/blob/c30c935932ff5a7c245454491cef2591a55fece4/DESIGN.md)
 and [`@kkb/ui`](https://github.com/kalynbeach/kkb/tree/c30c935932ff5a7c245454491cef2591a55fece4/packages/ui).
-The scope is `/lab.html`; the engine's architecture remains in [the canonical architecture](docs/2026-08-28-kkb-audio-system-architecture.md).
+The surfaces are `/lab.html` and `/player.html`; the engine's architecture remains in [the canonical architecture](docs/2026-08-28-kkb-audio-system-architecture.md).
 
 ## Sources and precedence
 
@@ -48,6 +48,31 @@ duration, not a separately simulated parameter curve.
 Audio starts through an explicit Play action. Listening volume starts at 15%, with adjacent Stop and
 Mute controls. The cursor follows an estimated Web Audio replay clock; the Rust/Wasm render has
 already completed. There is no ambient animation.
+
+## Local player composition
+
+`/player.html` is an Operate surface: file choice, current file/state, acknowledged time and seek,
+transport, then listening volume. It inherits the research theme, Inter/TX-02 roles, flat surfaces
+and ruled divisions rather than introducing a second visual system. `web/player.css` owns its narrow,
+centered composition. Existing shadcn Button and Input supply controls; native range inputs retain
+browser slider semantics while the player owns preview/commit interaction.
+
+Consumed time and drag preview are separate. Pointer input previews only; release commits once.
+Escape, cancellation, lost capture and blur abandon a draft. Arrow keys commit five-second steps,
+Page Up/Down thirty seconds, and Home/End exact endpoints. Busy seeks keep the range focusable with
+`aria-disabled` and guarded handlers, rather than disabling it and losing keyboard focus. Announced
+state changes are separate from non-live elapsed/duration outputs. Diagnostics live under Details.
+
+Controls remain labelled and at least 44px tall. The filename wraps; transport and details reflow at
+narrow widths. Close/Cancel stays available during preparation and restores focus to file choice.
+Volume remains usable during preparation/seeking, starts at 15% after compiled gain 0.5, and mute
+preserves the level. No load/replacement autoplays. Normal seeks preserve play/pause; reaching the
+exact endpoint or consumed EOS suspends playback. Seek-back stays paused; Replay explicitly seeks
+zero and plays on the same context. There is no waveform, ambient motion or new graph editing.
+
+The player uses the existing light theme; it does not add a theme picker or claim a separate dark-mode
+review. Muted desktop/narrow observations and accessibility limits are recorded in the
+[player evidence](docs/2026-09-10-local-wav-player-evidence.md).
 
 ## Responsive and accessible behavior
 
