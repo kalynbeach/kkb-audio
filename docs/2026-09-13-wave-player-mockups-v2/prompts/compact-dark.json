@@ -1,0 +1,7 @@
+{
+  "name": "compact-dark",
+  "prompt": "Create ONE exact dark counterpart of this supplied Wave Player light mockup. Keep all layout, portrait shape, dimensions, typography, wording and glyphs identical. Change ONLY semantic light colors to dark: board #080807, card#0c0c0b, main ink#f2f2ed, thin borders#292925, consumed waveform light and remaining waveform readable gray. Green signal art stays green on black. No new elements. NO tabs, NO theme controls, NO visible volume slider, NO central A/B button/text. Preserve bottom-left Phosphor Queue and Repeat icons, the independently centered Phosphor SkipBack/Pause/SkipForward, and SpeakerHigh far right. Match their stroke and geometry between modes. Preserve TX-02-like title/times, Inter metadata, selective Departure Mono-like short state markers. This is compact listening: Loop off and no editing markers; identity Low Tide / North Window | Tidal Studies; time01:24 /04:32. Exact caption outside UI \"Design fixture — simulated waveform and playback\". Match reference image dimensions.",
+  "referenced_image_paths": [
+    "/Users/kalynbeach/.codex/generated_images/01a09c32-3f86-7b63-a39f-4f74c62cff21/exec-2a0e191f-eb20-4bb1-87ac-dd9adffd0484.png"
+  ]
+}

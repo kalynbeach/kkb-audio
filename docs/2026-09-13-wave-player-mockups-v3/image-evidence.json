@@ -1,0 +1,98 @@
+[
+  {
+    "name": "compact-light",
+    "status": "current",
+    "source": "/Users/kalynbeach/.codex/generated_images/01a09c32-3f86-7b63-a39f-4f74c62cff21/exec-db4da779-90d0-4da5-b4bc-2185e0168be2.png",
+    "path": "/Users/kalynbeach/dev/kb/kkb-audio/docs/2026-09-13-wave-player-mockups-v3/compact-light.png",
+    "width": 1506,
+    "height": 1045,
+    "sha256": "7954d125350801fb7a1ba104e5ee18c506fcb3aa4817a42cea2b1b0bd3805f9e",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "name": "compact-dark",
+    "status": "current",
+    "source": "/Users/kalynbeach/.codex/generated_images/01a09c32-3f86-7b63-a39f-4f74c62cff21/exec-d706fc8b-4895-4d02-9bba-bac14b626940.png",
+    "path": "/Users/kalynbeach/dev/kb/kkb-audio/docs/2026-09-13-wave-player-mockups-v3/compact-dark.png",
+    "width": 1506,
+    "height": 1045,
+    "sha256": "60e4c4e884861019eb97c1d43a589b12f44e998e661fa6efcf4842e24886b264",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "name": "desktop-library-light",
+    "status": "current",
+    "source": "/Users/kalynbeach/.codex/generated_images/01a09c32-3f86-7b63-a39f-4f74c62cff21/exec-b5cb3af4-d275-4969-91a6-292f4d9563e2.png",
+    "path": "/Users/kalynbeach/dev/kb/kkb-audio/docs/2026-09-13-wave-player-mockups-v3/desktop-library-light.png",
+    "width": 1505,
+    "height": 1045,
+    "sha256": "cf325da8c627ccb5a353a0a633138bee11e0a9a73f3b718c73a37610bc0c2681",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "name": "desktop-library-dark",
+    "status": "current",
+    "source": "/Users/kalynbeach/.codex/generated_images/01a09c32-3f86-7b63-a39f-4f74c62cff21/exec-e9e59aa3-c38b-484b-b6a6-a229ab47d0a3.png",
+    "path": "/Users/kalynbeach/dev/kb/kkb-audio/docs/2026-09-13-wave-player-mockups-v3/desktop-library-dark.png",
+    "width": 1505,
+    "height": 1045,
+    "sha256": "f415e45726de477e1e3e97bc18120396a45e1ef800de392b3cfe0bd579f63149",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "name": "mobile-library-light",
+    "status": "current",
+    "source": "/Users/kalynbeach/.codex/generated_images/01a09c32-3f86-7b63-a39f-4f74c62cff21/exec-67095822-7c3a-465f-b706-c2de27194db0.png",
+    "path": "/Users/kalynbeach/dev/kb/kkb-audio/docs/2026-09-13-wave-player-mockups-v3/mobile-library-light.png",
+    "width": 853,
+    "height": 1844,
+    "sha256": "1c0e16f3d161ffc1ab4a60889f18fc557193778f025ab83cbe53f4ea194ff894",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "name": "mobile-library-dark",
+    "status": "current",
+    "source": "/Users/kalynbeach/.codex/generated_images/01a09c32-3f86-7b63-a39f-4f74c62cff21/exec-45c0128b-9428-4622-b622-20f660e28300.png",
+    "path": "/Users/kalynbeach/dev/kb/kkb-audio/docs/2026-09-13-wave-player-mockups-v3/mobile-library-dark.png",
+    "width": 853,
+    "height": 1844,
+    "sha256": "3a4baaa5d618182a7feba1c1ac5d6439b40dec7115f59c89e3db2d336da4c99c",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "name": "compact-dark",
+    "status": "superseded: incorrect active Repeat background in loop-off view",
+    "source": "/Users/kalynbeach/.codex/generated_images/01a09c32-3f86-7b63-a39f-4f74c62cff21/exec-ad864097-17c6-4119-b705-901614216104.png",
+    "path": "/Users/kalynbeach/dev/kb/kkb-audio/docs/2026-09-13-wave-player-mockups-v3/superseded-active-repeat/compact-dark.png",
+    "width": 1506,
+    "height": 1045,
+    "sha256": "d5dd9a28149815d431adc386a4aa6240345d8d5e89d29ac50c2e0e6198c0f6b1",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "name": "mobile-library-light",
+    "status": "superseded: incorrect active Repeat background in loop-off view",
+    "source": "/Users/kalynbeach/.codex/generated_images/01a09c32-3f86-7b63-a39f-4f74c62cff21/exec-1fdfdf8b-2913-419e-b111-d03c7e713969.png",
+    "path": "/Users/kalynbeach/dev/kb/kkb-audio/docs/2026-09-13-wave-player-mockups-v3/superseded-active-repeat/mobile-library-light.png",
+    "width": 853,
+    "height": 1844,
+    "sha256": "ae57971bbfd7d54682d634d6256580405e72c14ec3eafa7fe91118e60e4a34a9",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  }
+]

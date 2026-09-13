@@ -1,0 +1,8 @@
+{
+  "name": "compact-dark",
+  "prompt": "Make the dark counterpart of this exact supplied light Wave Player image, ONE individual landscape mockup, matching reference framing and card geometry. User explicitly forbids tabs: preserve NO tabs, no VISUAL label, no header navigation. Preserve tight tall card, Low Tide monospaced title, Inter \"North Window | Tidal Studies\", large green signal art directly below identity, separate amplitude waveform, elapsed01:24 and total04:32, small centered A/B in time row, small unboxed Library icon/text at bottom-left, centered previous/Pause/next, tiny volume icon at far right with slider hidden. NO theme controls. Change only semantic light colors to dark: board#080807 card#0c0c0b text#f2f2ed rules#292925, white consumed waveform and readable gray remainder. Preserve three typography roles TX-02-like title/time, Inter supporting metadata, Departure Mono-like crisp pixel short Library/A/B labels. The large oscilloscope stays green, avoid adding color to utility controls. Keep exact caption outside UI \"Design fixture — simulated waveform and playback\".",
+  "referenced_image_paths": [
+    "/Users/kalynbeach/.codex/generated_images/01a09c32-3f86-7b63-a39f-4f74c62cff21/exec-6dc5a8b1-3a56-461f-bc1c-3a526a2c4649.png",
+    "/Users/kalynbeach/dev/kb/kkb-audio/docs/2026-09-13-wave-player-design-assets/research-foundations-dark.png"
+  ]
+}

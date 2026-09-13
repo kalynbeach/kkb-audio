@@ -1,0 +1,110 @@
+[
+  {
+    "file": "mobile-library-dark.png",
+    "width": 853,
+    "height": 1844,
+    "sha256": "ab83bd686b54b30b8c9e7167bc9de659cfbfe840e21a34b0d641d8bb5d3c5949",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "file": "compact-dark.png",
+    "width": 1506,
+    "height": 1045,
+    "sha256": "ec55b94ebf56159b3e96f836df70dbcdcbc757f83792a933a072ddea129d217d",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "file": "desktop-library-light.png",
+    "width": 1505,
+    "height": 1045,
+    "sha256": "9d8f0bc02e4bba4e1b7adae2a56c2c9af346179f744fbd3d2f285cf0a14047ae",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "file": "compact-light.png",
+    "width": 1505,
+    "height": 1045,
+    "sha256": "b647ef9ef2436b57f2ccf65ca1c8d7fd7b6219203c141fe785e8f5e74e29d085",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "file": "mobile-library-light.png",
+    "width": 853,
+    "height": 1844,
+    "sha256": "e932133add8d4177c484fb0445af87ec1f017b317017bc17833b9626c4fa5f0b",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "file": "desktop-library-dark.png",
+    "width": 1505,
+    "height": 1045,
+    "sha256": "a534f5290bdfd2a06484254e33bc375e1e98b3f5d629bce0d0e92f597936e403",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "file": "superseded-text-utilities/compact-dark.png",
+    "width": 1505,
+    "height": 1045,
+    "sha256": "e7aad2a6fc80c5513aabdfb55e25c39b78f471e5b96d25c942b20d378ee6c0bf",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "file": "superseded-text-utilities/desktop-library-light.png",
+    "width": 1505,
+    "height": 1045,
+    "sha256": "f54fd6f286fa916b53076509011cacd41f5abcd25333e70d32557d84b2e39bbd",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "file": "superseded-text-utilities/compact-light.png",
+    "width": 1505,
+    "height": 1045,
+    "sha256": "3d57b084facebbd2d241072418756da0f5884f4e543151d2fc6a24a0eb69d50e",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "file": "superseded-text-utilities/desktop-library-dark.png",
+    "width": 1506,
+    "height": 1045,
+    "sha256": "3fabae4c21fcce48a9040039a2162079fc8ece8534938ee4a3ab85059955a4a0",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "file": "superseded-tabs/compact-dark.png",
+    "width": 1505,
+    "height": 1045,
+    "sha256": "d8e7bcdb2051bfd0d693bc8c07e8c0aeffe2c6a2f0edd9cccec044b123786208",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "file": "superseded-tabs/compact-light.png",
+    "width": 1505,
+    "height": 1045,
+    "sha256": "baf5b87da6874736cfef3d66dfdf6a249534a54dac43d28f221bd1bf4b9a564a",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  }
+]

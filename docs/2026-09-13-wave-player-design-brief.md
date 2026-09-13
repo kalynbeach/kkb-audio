@@ -1,7 +1,19 @@
 # Wave Player: mockup reference bundle
 
 Date: 2026-09-13. Issue: [#21](https://github.com/kalynbeach/kkb-audio/issues/21).
-Status: **reference preparation complete; image-generation task and both design approvals pending**.
+Status: **v3 direction approved for a separate, non-shipping interactive prototype; final design approval remains pending**.
+
+Kalyn explicitly approved proceeding in Pi after the six current v3 images were inspected. This approval carries forward the stated v3 composition and permits real-font, geometry, density and interaction refinements in the prototype only. It does not approve engine integration or #22. See the [prototype handoff](2026-09-13-wave-player-prototype.md).
+
+Prototype follow-up: Kalyn clarified that row selection must not issue a playback command, while the row’s play icon immediately starts that track. Reveal play on desktop hover/keyboard focus and keep it visible on touch. Reserve its column so selection/playback never rearranges rows. Remove manual Load actions, LOADED/SELECTED badges, import, deletion and Clear from the player library; catalog/playlist/track management belongs to a separate experience and is not added by this prototype. This correction supersedes conflicting image-stage interactions below, not the remaining final-approval gate.
+
+Latest mockups: [third-set images, exact prompts and evidence](2026-09-13-wave-player-mockups-v3/README.md). Kalyn clarified that typography and top-info spacing corrections apply across all six views, and rejected circular control backgrounds. All button surfaces use zero-radius geometry. The third set explores smaller Inter loaded titles, TX-02 metadata/values and selective Departure Mono labels; exact font rendering remains inconsistent. Preserve the waveform A/B selection direction Kalyn liked. The bounded prototype is now authorized; shipping UI is not.
+
+Earlier corrections: [second set](2026-09-13-wave-player-mockups-v2/README.md). Kalyn explicitly rejected Visual/Library tabs and the central A/B text action. Use Phosphor icons for Library, loop, Settings and related utilities. These corrections supersede older tab-navigation or Lucide starting assumptions.
+
+September 13 review update: [six originals, exact prompts, model evidence and corrections](2026-09-13-wave-player-mockups/README.md). Kalyn reaffirmed the established TCG card layout and feel, rejected the isolated Library button and crowded playback/volume arrangement, and moved theme selection out of the player into app Settings. These corrections supersede conflicting composition instructions below. Exact/latest model verification was explicitly waived in the Codex task; built-in image generation was authorized. This historical image-stage restriction is superseded only by the bounded prototype approval above.
+
+Follow-up research: [Stencil and corrected design direction](2026-09-13-wave-player-design-research.md), with [local source evidence](2026-09-13-wave-player-local-design-research.md). Kalyn identifies Stencil as a major inspiration, asks for tighter component composition and more TX-02/Departure Mono, and explicitly retains Inter. The original 380px-wide, 5:7 Wave Player card is the starting scale reference for the next exploration. Exact dimensions and font-role assignments remain proposals for visual review. Keep the oscilloscope and waveform studies; the surrounding first-set design is rejected.
 
 This is the starting packet for the [Codex app task](2026-09-13-wave-player-codex-task.md), not an approved design or coded prototype. No product UI changes are included. Existing [PRODUCT.md](../PRODUCT.md) and [DESIGN.md](../DESIGN.md) describe the lab/demo; their player composition is not the target design.
 
@@ -15,7 +27,7 @@ Track identity, the visual/artwork surface, full-track navigation and transport 
 
 Required gates:
 
-1. At least one **actual Codex app image-generation task**, using the latest available GPT image model verified at execution time.
+1. At least one **actual Codex app image-generation task**. Completed with the built-in image tool; Kalyn waived exact/latest-model verification. Output metadata and its limitations are preserved in the handoff.
 2. Kalyn approves the generated visual direction **before any coded design/prototype**.
 3. Build the separate interactive prototype with actual shadcn/Base UI composition and controlled states, without engine integration.
 4. Kalyn approves that working composition and interaction handoff **before #22**.
@@ -27,7 +39,7 @@ Generated images are proposals, not evidence of working components, accurate fon
 | Source | Carry forward | Do not infer |
 | --- | --- | --- |
 | Current direction in #21 and the September 11–13 planning conversation | Compact player; companion desktop library; internal narrow library; persistent transport; deliberate paired modes | A fixed portrait ratio, chosen pixel dimensions or approved finished composition |
-| This repository's September 7 research theme/component and Inter/TX-02 choices | Inter for content/controls; TX-02 for time and precise metadata; existing Base UI `base-nova` controls and Lucide utility icons | Permission to migrate to Geist, Instrument Serif, Phosphor or a different preset |
+| September 13 typography and icon corrections, grounded in current KKB and research sources | Retain Inter, give TX-02 and Departure Mono deliberate roles, and use Phosphor utility icons; compose existing Base UI controls compactly | Final font-role approval, accurate image-generated glyphs, or a changed component preset |
 | KKB application foundation, `@kkb/ui` and `@kkb/web` | Square structural geometry, semantic states, meaningful functional shape exceptions, component/app ownership, accessible paired modes | The old `/audio` shell as product authority; a universal dashboard layout |
 | Research and `@kkb/agents` artifact foundation | Precise linework, type-role separation, signal-derived imagery, intentional spacing | Giant serif titles, page-wide grids, editorial navigation or report proportions in the player |
 | Earlier Wave Player iterations, read with July 19 corrections | Identity → visual surface → persistent transport; compact object; phosphor-green oscilloscope | Oversized/dark-only execution, unnecessary labels, scene editors, old playback architecture or A/B behavior that never existed |
@@ -87,13 +99,14 @@ The current `kkb-audio/player.html` is an explicit anti-reference: no large expl
 - Title is the strongest text. Artist/album provide quieter context. Filename is an honest fallback. Do not lead with product branding, codec data or status telemetry.
 - One coherent bounded object, precise structural corners and a useful visual field. No nested card wall, ornamental hardware chassis, faux CRT housing, glossy buttons or mandatory collectible-card ratio.
 - Base neutrals come from the current theme: light ground `#f4f4f0`, surface `#fffffc`, ink `#171714`, border `#d6d6ce`; dark ground `#080807`, surface `#0c0c0b`, ink `#f2f2ed`, border `#292925`. These are starting references, not a substitute for judging the composition. Propose a readable paired phosphor signal treatment; do not make every state green or silently change the global theme.
-- Inter carries track/content/control hierarchy. TX-02 carries elapsed/duration, A/B values and technical metadata, with tabular numerals. Do not import the artifact's editorial serif voice by default. Reduce redundant copy before shrinking text.
-- The player stays compact when the desktop library opens beside it. At narrow widths use an internal library with persistent identity/transport and an explicit return path. Keep the page within the viewport; scroll the collection locally.
-- The waveform is a full-track amplitude overview with separate playhead, seek preview and A/B boundary/region treatments. A live oscilloscope has no time-axis seeking semantics. The visual surface must retain a meaningful static/unavailable/reduced-motion representation.
-- Use familiar, labelled transport, clear focus and practical touch targets. A small visible icon may have a larger hit area; a screenshot cannot prove that area exists.
-- Initial collection scope is multi-file local selection and session-only File references. No uploads, persistent indexing, watched folders, auto-advance, shuffle, playlists, search infrastructure or artwork discovery.
-- Adding/loading/replacing a track does not autoplay. Browsing/view changes do not issue playback commands. Selected/focused, loaded, playing and failed tracks must be distinguishable without color alone.
+- Use Inter, TX-02 and Departure Mono together. The third set tests smaller Inter loaded titles and library track names, TX-02 metadata and precise values, and Departure Mono short state labels and markers. These roles are proposed, not approved, and image rendering remains inconsistent. Do not import the artifact's editorial serif voice by default. Reduce redundant copy before shrinking text.
+- The player stays compact and centered when the desktop library opens to its right: equal outer columns balance the center player rather than centering the combined pair. Use the internal library when there is not enough room for that layout, retaining identity/transport and an explicit return path. Keep the page within the viewport; scroll the collection locally.
+- The waveform is a full-track amplitude overview with separate playhead, seek preview and A/B boundary/region treatments. Its height and position stay fixed when opening the loop editor. Layer the loop controls on an opaque overlay above the visual; do not resize, squish or warp either underlying surface to make space. A live oscilloscope has no time-axis seeking semantics. The visual surface must retain a meaningful static/unavailable/reduced-motion representation.
+- Use familiar, labelled transport, clear focus and practical touch targets. Place Volume on the left and Library on the right, near its desktop companion, with playback independently centered. Use a pointer cursor for ordinary waveform seeking; reserve the crosshair for the loop editor. A small visible icon may have a larger hit area; a screenshot cannot prove that area exists.
+- The player library is a playback picker, not collection management. No file import, deletion, Clear, playlist editing, uploads, persistent indexing, watched folders, auto-advance, shuffle, search infrastructure or artwork discovery in this prototype. Future management is a separate scope/UI.
+- Clicking a row selects it without changing the current track, position or playback. Its play icon explicitly starts that track immediately; on the currently playing row it becomes Pause. Desktop hover/focus reveals controls in reserved space; touch keeps them visible. Selection uses a subtle background/border, current playback a restrained icon cue—not LOADED/SELECTED badges or a manual Load step. Browsing/view changes never issue playback commands.
 - Seeking previews during drag, commits once on release and cancels on Escape/blur/pointer cancellation. Preserve the distinction between preview and acknowledged consumed position. Exact EOS stays paused; replay is explicit.
+- Use stable React 19.3 and React View Transitions for UI disclosures, including library open/close, with reduced-motion and unsupported-browser fallbacks. Keep playback/seek updates immediate and the waveform out of scaling snapshots. The volume slider uses a pointer cursor across its track and thumb. Its popup fades as one opaque live surface under Base UI’s lifecycle; do not nest independently named popup snapshots inside another animated wrapper.
 - A/B enable, boundary entry/adjustment, reset and Preparing/Active/Failed feedback must be legible without overwhelming normal listening. Product choices about seeking outside an armed loop and editing pending regions remain decisions for the prototype/engine gate, not assumptions to hide in an image.
 
 ### Controlled content for the mockups
@@ -116,7 +129,7 @@ Generate one coherent proposed direction in six primary views: compact light/dar
 
 The task must preserve its reopenable reference, actual image-model identity/date/evidence, full generation prompts, supplied reference list and image outputs. If the app does not expose enough evidence to verify the required model, report that limitation; do not fill the record from an assumption.
 
-Still to be approved: exact density/dimensions, visual/waveform proportions, mode-safe signal treatment, library selection/load grammar, A/B interaction details and the bounded first visualization. None requires reopening the agreed product scope.
+Still to be approved: exact density/dimensions, visual/waveform proportions, mode-safe signal treatment, final library density and affordance treatment, A/B interaction details and the bounded first visualization. None requires reopening the agreed product scope.
 
 ## Preparation evidence and current gate
 
@@ -132,10 +145,10 @@ Still to be approved: exact density/dimensions, visual/waveform proportions, mod
 | Gate | State |
 | --- | --- |
 | Curated references and task prompt | Prepared |
-| Codex app task URL/ID | Pending Kalyn launch/handoff |
-| Latest available GPT image model / verification evidence | Pending in-app verification |
-| Generated images / exact generation prompts | Pending |
-| Kalyn's mockup selection and approval | Pending; no design code allowed yet |
+| Codex app task URL/ID | `01a09c32-3f86-7b63-a39f-4f74c62cff21`; [reopen](codex://threads/01a09c32-3f86-7b63-a39f-4f74c62cff21) |
+| Latest available GPT image model / verification evidence | Pre-generation verification waived by Kalyn; built-in tool used; PNG softwareAgent metadata reports gpt-image 2.0; exact routing/latest availability not exposed |
+| Generated images / exact generation prompts | [Third set](2026-09-13-wave-player-mockups-v3/README.md): six current images plus two superseded state corrections with prompts; earlier sets retained |
+| Kalyn's mockup selection and approval | Six current root-level v3 images approved as the direction for a separate prototype; real-font, spacing, stable geometry and interaction refinements explicitly in scope. Not final design acceptance. |
 | Interactive prototype and final design approval | Pending; #22 remains gated |
 
 ## Stack continuation

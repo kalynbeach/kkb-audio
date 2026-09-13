@@ -1,0 +1,7 @@
+{
+  "name": "mobile-library-light",
+  "prompt": "Precise one-detail edit of supplied Wave Player mockup. REMOVE ONLY the filled square background behind the Repeat icon in the bottom-left utility group (second icon from the left). Loop is OFF in this view. Keep the Repeat glyph itself visible, at exactly the same position and size, on the plain surrounding surface. Keep the centered Pause SQUARE background intact. Do not change any typography, other shape, colors, dimensions, line, text, waveform, visualization, spacing, library state or caption. One image, same aspect ratio.",
+  "referenced_image_paths": [
+    "/Users/kalynbeach/.codex/generated_images/01a09c32-3f86-7b63-a39f-4f74c62cff21/exec-1fdfdf8b-2913-419e-b111-d03c7e713969.png"
+  ]
+}

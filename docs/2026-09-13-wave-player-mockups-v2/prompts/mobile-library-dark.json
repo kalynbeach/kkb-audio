@@ -1,0 +1,7 @@
+{
+  "name": "mobile-library-dark",
+  "prompt": "Create ONE exact DARK counterpart of this supplied mobile-library-light image. Preserve EXACT anatomy, portrait aspect, every text, row height, glyph, and control position. Change only neutral semantic colors: outer ground#080807 surface#0c0c0b ink#f2f2ed borders#292925. White consumed waveform, readable gray remainder, selected row neutral dark fill with visible fine dotted outline. Keep current position01:24 and total04:32. Preserve Inter content, TX-02 title/filename/times, crisp Departure Mono pixel short labels. Preserve Phosphor regular ArrowLeft/Plus/Queue/Repeat/SkipBack/Pause/SkipForward/SpeakerHigh/WarningCircle glyph language.\nDO NOT add any oscilloscope, artwork or signal strip. This internal library replaces the art completely. DO NOT introduce tabs, a VISUAL selector, central A/B text, library text button in footer, theme selector or volume slider. Keep all five exact rows, full long title and filename, playing versus selection and error distinction, and existing back arrow to return to listening view. Loop off. Preserve all shapes as shown, including pause button. Target phone viewport390x844 proportions, image same aspect as reference. Complete UI visible. Exact caption OUTSIDE player \"Design fixture — simulated waveform and playback\".",
+  "referenced_image_paths": [
+    "/Users/kalynbeach/.codex/generated_images/01a09c32-3f86-7b63-a39f-4f74c62cff21/exec-57df781b-b73a-4da4-9aae-19796d1fcf6b.png"
+  ]
+}
