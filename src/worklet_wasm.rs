@@ -203,7 +203,7 @@ impl WorkletKernel {
         edit: bool,
     ) -> Result<u64, u32> {
         let timeline = self.timeline.as_ref().ok_or(73_u32)?;
-        let region = crate::wav_loop::LoopRegion::new(
+        let region = crate::media_loop::LoopRegion::new(
             timeline.seek_pcm_frame(a)?,
             timeline.seek_pcm_frame(b)?,
             self.sample_rate,
@@ -243,7 +243,7 @@ impl WorkletKernel {
         enabled: bool,
     ) -> Result<(), u32> {
         let region = if enabled {
-            Some(crate::wav_loop::LoopRegion::new(a, b, self.sample_rate)?)
+            Some(crate::media_loop::LoopRegion::new(a, b, self.sample_rate)?)
         } else {
             None
         };

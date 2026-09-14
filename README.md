@@ -124,17 +124,16 @@ At most 4096 min/max bins (32 KiB) preserve extrema across channels, including o
 display reduction includes every covered bin. The fixed full-scale overview is unaffected by volume,
 mute, conversion or seeks. No summaries are cached across tracks. See [waveform evidence](docs/2026-09-13-source-waveform.md)
 for mapping, working memory and measured extra decoding cost. The live visual adds no decoder or
-worklet callback work. WAV A/B loops (#19) are implemented for review: open the repeat editor,
+worklet callback work. WAV/MP3 A/B loops (#19/#20) are implemented: open the repeat editor,
 choose one region or the default whole track, then enable separately. Exact fields accept mm:ss.fraction
 or integer source frames followed by `f`; Shift-drag creates a region and labelled handles support
-arrows (1 second, Shift 5). MP3 looping remains unavailable (#20). Requested source bounds and realized
+arrows (1 second, Shift 5). MP3 uses its validated decoded-and-trimmed timeline and a private bounded codec-history anchor. Requested source bounds and realized
 converted period are shown separately; fixed-grid quantization accumulates across iterations. Bounded
 held-head smoothing preserves the realized output period, not every tail sample or arbitrary endpoint
 slopes. Preparing/Failed are explicit; loop underrun fades to silence and re-primes without resetting
 the render clock. Normal wraps do not use public seek or UI polling. Explicit control changes may
 prepare silence. Review repairs cover EOF head draining, acknowledgment-time EOS pause, latest control
-intent and visible visual/capability explanations at the smallest layout. Human listening and reviewer
-rechecks remain pending; see [WAV loop evidence](docs/2026-09-14-wav-loops.md#bounded-review-repair-2026-09-14),
+intent and visible visual/capability explanations at the smallest layout. Human listening remains pending; see [MP3 loop evidence](docs/2026-09-14-mp3-loops.md) and [WAV loop evidence](docs/2026-09-14-wav-loops.md#bounded-review-repair-2026-09-14),
 including the small repository-hosted screenshot/runtime/check set.
 
 MP3 support (#17) uses pinned Symphonia 0.6.1 in the shared Rust preparation path,
@@ -149,7 +148,7 @@ frames, unsupported variants and changing rates/layouts reject. Bounds: 32 MiB e
 1 MiB leading ID3, at most 25,000 packets / 600 seconds **including codec padding**.
 
 Inspection decodes/counts the whole bounded stream before publishing duration, with
-constant PCM storage. MP3 seeks reset/decode/discard to reconstruct codec history
+constant PCM storage. Ordinary MP3 seeks reset/decode/discard to reconstruct codec history
 before converter pre-roll; even equal-rate seeks report `AnchorAndDiscard` (or
 `Adjusted` for output-grid rounding), not guessed `Exact`. Preparation/seeking
 can take time and are cancellable; a 30-second worker deadline rejects excessively

@@ -95,6 +95,44 @@ impl LocalMedia {
         self.wav_length = 0;
         Ok(())
     }
+    pub fn prepare_loop_anchor(&mut self, source: u64) -> Result<(), u32> {
+        if let Reader::Mp3(r) = &mut self.reader {
+            r.prepare_loop_anchor(source)?;
+        }
+        Ok(())
+    }
+    pub fn loop_anchor_ready(&self, source: u64) -> bool {
+        match &self.reader {
+            Reader::Wav(_) => true,
+            Reader::Mp3(r) => r.loop_anchor_ready(source),
+        }
+    }
+    pub fn cancel_loop_anchor(&mut self) {
+        if let Reader::Mp3(r) = &mut self.reader {
+            r.cancel_loop_anchor();
+        }
+    }
+    pub fn clear_loop_anchor(&mut self) {
+        if let Reader::Mp3(r) = &mut self.reader {
+            r.clear_loop_anchor();
+        }
+    }
+    pub fn loop_restore_packets(&self) -> u64 {
+        match &self.reader {
+            Reader::Wav(_) => 0,
+            Reader::Mp3(r) => r.loop_restore_packets(),
+        }
+    }
+    pub fn seek_loop(&mut self, source: u64) -> Result<(), u32> {
+        if let Reader::Mp3(r) = &mut self.reader {
+            r.seek_loop(source)?;
+        } else {
+            return self.seek(source);
+        }
+        self.reading = true;
+        self.position = source;
+        Ok(())
+    }
     pub fn request(&mut self, maximum: usize) -> Result<(), u32> {
         if !self.reading || maximum == 0 || maximum > 1024 || self.position >= self.total_frames() {
             return Err(72);

@@ -1,0 +1,32 @@
+{"file":"tools/fixtures/mp3/crc.mp3","targetPacket":0,"restores":16,"warmupPacketsEach":0,"carriersEach":0,"cumulativeCompared":1504,"mismatches":0,"errors":0}
+{"file":"tools/fixtures/mp3/crc.mp3","targetPacket":1,"restores":16,"warmupPacketsEach":1,"carriersEach":0,"cumulativeCompared":38368,"mismatches":0,"errors":0}
+{"file":"tools/fixtures/mp3/crc.mp3","targetPacket":2,"restores":16,"warmupPacketsEach":2,"carriersEach":1,"cumulativeCompared":75232,"mismatches":0,"errors":0}
+{"file":"tools/fixtures/mp3/crc.mp3","targetPacket":3,"restores":16,"warmupPacketsEach":2,"carriersEach":1,"cumulativeCompared":112096,"mismatches":0,"errors":0}
+{"file":"tools/fixtures/mp3/crc.mp3","targetPacket":4,"restores":16,"warmupPacketsEach":2,"carriersEach":1,"cumulativeCompared":148960,"mismatches":0,"errors":0}
+{"file":"tools/fixtures/mp3/crc.mp3","targetPacket":5,"restores":16,"warmupPacketsEach":2,"carriersEach":1,"cumulativeCompared":185824,"mismatches":0,"errors":0}
+{"file":"tools/fixtures/mp3/crc.mp3","targetPacket":6,"restores":16,"warmupPacketsEach":2,"carriersEach":1,"cumulativeCompared":210432,"mismatches":0,"errors":0}
+{"file":"tools/fixtures/mp3/crc.mp3","mechanism":"reservoir-carrier-plus-previous","rate":48000,"channels":2,"mediaFrames":6576,"delay":1105,"packets":7,"blockModes":[16, 4, 4, 4, 0],"channelModes":[0, 7, 0, 0],"maxMdb":272,"minPayload":346,"restores":112,"compared":210432,"mismatches":0,"errors":0,"maxAbs":0,"meanReprimeUs":24.95051785714286,"maxReprimeUs":63.542,"maxReprimePackets":2,"maxReprimeBytes":1344,"maxAnchorBytes":895,"underflowObservations":0,"fileProbeMs":5.786833}
+{"file":"history/derived/crc.mp3","targetPacket":0,"restores":16,"warmupPacketsEach":0,"carriersEach":0,"cumulativeCompared":36864,"mismatches":0,"errors":0}
+{"file":"history/derived/crc.mp3","targetPacket":1,"restores":16,"warmupPacketsEach":1,"carriersEach":0,"cumulativeCompared":73728,"mismatches":0,"errors":0}
+{"file":"history/derived/crc.mp3","targetPacket":2,"restores":16,"warmupPacketsEach":2,"carriersEach":1,"cumulativeCompared":110592,"mismatches":0,"errors":0}
+{"file":"history/derived/crc.mp3","targetPacket":3,"restores":16,"warmupPacketsEach":2,"carriersEach":1,"cumulativeCompared":147456,"mismatches":0,"errors":0}
+{"file":"history/derived/crc.mp3","targetPacket":4,"restores":16,"warmupPacketsEach":2,"carriersEach":1,"cumulativeCompared":184320,"mismatches":0,"errors":0}
+{"file":"history/derived/crc.mp3","targetPacket":5,"restores":16,"warmupPacketsEach":2,"carriersEach":1,"cumulativeCompared":221184,"mismatches":0,"errors":0}
+{"file":"history/derived/crc.mp3","targetPacket":6,"restores":16,"warmupPacketsEach":2,"carriersEach":1,"cumulativeCompared":258048,"mismatches":0,"errors":0}
+{"file":"history/derived/crc.mp3","mechanism":"reservoir-carrier-plus-previous","rate":48000,"channels":2,"mediaFrames":8064,"delay":0,"packets":7,"blockModes":[16, 4, 4, 4, 0],"channelModes":[0, 7, 0, 0],"maxMdb":272,"minPayload":346,"restores":112,"compared":258048,"mismatches":0,"errors":0,"maxAbs":0,"meanReprimeUs":18.35973214285714,"maxReprimeUs":34.5,"maxReprimePackets":2,"maxReprimeBytes":1344,"maxAnchorBytes":895,"underflowObservations":0,"fileProbeMs":4.357709000000001}
+{"file":"tools/fixtures/mp3/vbri.mp3","targetPacket":0,"restores":16,"warmupPacketsEach":0,"carriersEach":0,"cumulativeCompared":36864,"mismatches":0,"errors":0}
+{"file":"tools/fixtures/mp3/vbri.mp3","targetPacket":1,"restores":16,"warmupPacketsEach":1,"carriersEach":0,"cumulativeCompared":73728,"mismatches":0,"errors":0}
+{"file":"tools/fixtures/mp3/vbri.mp3","targetPacket":2,"restores":16,"warmupPacketsEach":2,"carriersEach":1,"cumulativeCompared":110592,"mismatches":0,"errors":0}
+{"file":"tools/fixtures/mp3/vbri.mp3","targetPacket":3,"restores":16,"warmupPacketsEach":2,"carriersEach":1,"cumulativeCompared":147456,"mismatches":0,"errors":0}
+{"file":"tools/fixtures/mp3/vbri.mp3","targetPacket":4,"restores":16,"warmupPacketsEach":2,"carriersEach":1,"cumulativeCompared":184320,"mismatches":0,"errors":0}
+{"file":"tools/fixtures/mp3/vbri.mp3","targetPacket":5,"restores":16,"warmupPacketsEach":2,"carriersEach":1,"cumulativeCompared":221184,"mismatches":0,"errors":0}
+{"file":"tools/fixtures/mp3/vbri.mp3","targetPacket":6,"restores":16,"warmupPacketsEach":2,"carriersEach":1,"cumulativeCompared":258048,"mismatches":0,"errors":0}
+{"file":"tools/fixtures/mp3/vbri.mp3","mechanism":"reservoir-carrier-plus-previous","rate":48000,"channels":2,"mediaFrames":8064,"delay":0,"packets":7,"blockModes":[16, 4, 4, 4, 0],"channelModes":[0, 7, 0, 0],"maxMdb":249,"minPayload":348,"restores":112,"compared":258048,"mismatches":0,"errors":0,"maxAbs":0,"meanReprimeUs":20.083321428571427,"maxReprimeUs":39.666,"maxReprimePackets":2,"maxReprimeBytes":1344,"maxAnchorBytes":895,"underflowObservations":0,"fileProbeMs":4.71875}
+{"file":"history/derived/vbri.mp3","targetPacket":0,"restores":16,"warmupPacketsEach":0,"carriersEach":0,"cumulativeCompared":36864,"mismatches":0,"errors":0}
+{"file":"history/derived/vbri.mp3","targetPacket":1,"restores":16,"warmupPacketsEach":1,"carriersEach":0,"cumulativeCompared":73728,"mismatches":0,"errors":0}
+{"file":"history/derived/vbri.mp3","targetPacket":2,"restores":16,"warmupPacketsEach":2,"carriersEach":1,"cumulativeCompared":110592,"mismatches":0,"errors":0}
+{"file":"history/derived/vbri.mp3","targetPacket":3,"restores":16,"warmupPacketsEach":2,"carriersEach":1,"cumulativeCompared":147456,"mismatches":0,"errors":0}
+{"file":"history/derived/vbri.mp3","targetPacket":4,"restores":16,"warmupPacketsEach":2,"carriersEach":1,"cumulativeCompared":184320,"mismatches":0,"errors":0}
+{"file":"history/derived/vbri.mp3","targetPacket":5,"restores":16,"warmupPacketsEach":2,"carriersEach":1,"cumulativeCompared":221184,"mismatches":0,"errors":0}
+{"file":"history/derived/vbri.mp3","targetPacket":6,"restores":16,"warmupPacketsEach":2,"carriersEach":1,"cumulativeCompared":258048,"mismatches":0,"errors":0}
+{"file":"history/derived/vbri.mp3","mechanism":"reservoir-carrier-plus-previous","rate":48000,"channels":2,"mediaFrames":8064,"delay":0,"packets":7,"blockModes":[16, 4, 4, 4, 0],"channelModes":[0, 7, 0, 0],"maxMdb":249,"minPayload":348,"restores":112,"compared":258048,"mismatches":0,"errors":0,"maxAbs":0,"meanReprimeUs":19.308,"maxReprimeUs":34.834,"maxReprimePackets":2,"maxReprimeBytes":1344,"maxAnchorBytes":895,"underflowObservations":0,"fileProbeMs":4.538041}

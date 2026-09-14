@@ -1,5 +1,5 @@
 import { OscilloscopeTap, type OscilloscopeBuffers, type OscilloscopeRead } from "./oscilloscope-tap";
-import { wavLoopRegion } from "./wav-loop";
+import { mediaLoopRegion } from "./media-loop";
 import { LOCAL_PCM_SLOT_FRAMES } from "./pcm-protocol";
 import {
   InitializationFailure,
@@ -274,8 +274,8 @@ export class PreparedProof {
 
   setLoop(a: number, b: number, enabled: boolean, edit = false): Promise<SeekResult> {
     this.#throwIfUnavailable();
-    if (enabled && (this.anchorAndDiscard || !Number.isSafeInteger(a) || !Number.isSafeInteger(b) || a < 0 || a >= b || b > this.totalFrames!)) throw new Error("Loops require a supported WAV interval");
-    if (enabled) wavLoopRegion(a, b, this.sourceRate!, this.#context.sampleRate, this.totalFrames!);
+    if (enabled && (!Number.isSafeInteger(a) || !Number.isSafeInteger(b) || a < 0 || a >= b || b > this.totalFrames!)) throw new Error("Loops require a supported media interval");
+    if (enabled) mediaLoopRegion(a, b, this.sourceRate!, this.#context.sampleRate, this.totalFrames!);
     this.#loop = enabled ? { a, b } : undefined;
     return this.#seek(0, false, { a, b, enabled, edit });
   }

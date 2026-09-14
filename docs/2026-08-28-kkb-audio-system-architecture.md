@@ -959,7 +959,7 @@ readiness contract.
 
 ### Loop contract
 
-**Decision (#19, parent-approved 2026-09-14; implementation under review).** Local WAV loops use half-open logical intervals:
+**Decision (#19/#20, parent-approved 2026-09-14; implementation accepted for stacked PR publication).** Local WAV/MP3 loops use half-open logical intervals:
 
 ```text
 [loop_start, loop_end)
@@ -968,7 +968,7 @@ readiness contract.
 Events at `loop_start` repeat. Events exactly at `loop_end` are outside the active loop. The working
 priority is to preserve this nominal loop period and report any seam transformation explicitly.
 
-WAV uses **held-head seam smoothing**, not a moving-head crossfade. Let the requested source
+Both codecs use **held-head seam smoothing**, not a moving-head crossfade. Let the requested source
 boundaries be A/B at rate Rs and realized converted boundaries be a=ceil(A·Ro/Rs), b=ceil(B·Ro/Rs).
 Repeat the fixed globally aligned converted slice [a,b), P=b−a output frames. With
 F=min(floor(Ro/200),floor(P/4)), require P≥8 and F≥2; otherwise reject looping without changing
@@ -1022,7 +1022,7 @@ seek, or render-instance replacement. Initial head-not-ready is Preparing, not L
 
 | Control | Acknowledged behavior |
 | --- | --- |
-| Load/replacement | Whole track, Disabled; editor disclosure may stay open. MP3 looping unavailable. |
+| Load/replacement | Whole track, Disabled; editor disclosure may stay open. |
 | Disabled edit/reset | Store only a valid region, no engine reposition or autoplay. |
 | Enable | Capture the exact next media PCM cursor at the renderer/control boundary, after any normal wrap. Inside [a,b), preserve it; outside choose a. Preserve pause; EOS becomes paused. |
 | Disable | Preserve that exact acknowledged PCM cursor and resume ordinary source preparation there, not after finishing an iteration. |
@@ -1068,8 +1068,48 @@ media-time boundary semantics remain as above without adding a public event syst
 Explicit changes/recovery clear obsolete source observations and #23 visual history. Normal wraps
 leave the private pre-volume analyser continuous. Its samples remain untagged approximate browser
 history, not a canonical provenance API or speaker clock. The original full-track waveform retains
-its identity and amplitude. Long creative crossfades and MP3 loops remain separate future scope;
+its identity and amplitude. Long creative crossfades remain separate future scope;
 no general transition/session framework is introduced by #19.
+
+#### Private MP3 loop history (#20)
+
+The source coordinate is #17's pinned-decoder validated decoded-and-trimmed timeline,
+not recovered encoder input. Ordinary seeks retain reset/decode/discard and truthful
+`AnchorAndDiscard` even at equal rates. Normal loop continuation instead uses one
+source-owner-local encoded recipe, acquired **before Armed**. Initial acquisition and
+head/start reconstruction may decode linearly with cancellation and a30-second rejection
+budget; no O(target) acquisition is initiated by an active normal wrap.
+
+For the packet containing the converter's earlier source read anchor plus validated delay,
+retain its unchanged predecessor, up to511 preceding main-data bytes, exact raw/byte/source
+coordinates and genuine unread-reservoir bookkeeping. Reset the unmodified Symphonia0.6.1
+decoder, feed an internal same-rate/channel zero-side-information carrier containing that
+suffix, then decode the original predecessor. Discard both outputs. Packet0 needs no warm-up;
+packet1 needs only original packet0. At most two discarded decodes plus the ordinary next
+source packet precede raw readiness; converter pre-roll remains separate. Carrier bytes are
+never source PCM, waveform input, media-time contributions, metadata or validation evidence.
+
+This horizon is source-derived: MPEG-1 reservoir references are9bits (511bytes), hybrid overlap
+is replaced by each granule, and synthesis retains16 steps. After correct compressed history,
+the predecessor's second granule provides18 correct synthesis steps. Packet-local scalefactors
+and overwritten spectral scratch add no older dependency. No guessed preroll, incomplete-history
+concealment, state cloning, decoder fork or general seek index is used. Original CRC and genuine
+reservoir checks remain mandatory before original packets decode. Artificial carrier padding
+cannot legitimize missing source history; decode/I/O failures remain terminal track failures.
+
+One completed anchor and at most one transient replacement belong to the active reader.
+Each owns fixed1045-byte predecessor and511-byte history arrays (1556 encoded payload bytes).
+The replacement's rolling buffer is511bytes; carrier scratch is at most1044bytes; at most one
+additional owned packet-input copy is1045bytes. The conservative additional encoded payload
+ceiling is **5712bytes**, excluding existing host cache/read buffers, decoder working/output
+buffers and scalar/container/allocator overhead. There is still only one active reader/decoder,
+4096 converted head frames, four1024-frame slots and fixed16MiB Wasm memory. All allocation,
+replacement and destruction remain off-callback. Superseding preparation cancels pending
+acquisition before install/publication. Same-owner/same-target completed recipes may be reused
+under a verified new request; replacement/close never transfers an anchor across sources.
+
+See [dated evidence and limitations](2026-09-14-mp3-loops.md) for the corrected CRC/VBRI research
+coverage, actual worker/callback references, measured normal wraps and pending human listening.
 
 ### Underrun and failure policy
 

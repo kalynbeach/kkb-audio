@@ -1,4 +1,4 @@
-import { emptyWavLoop, wavLoopRegion, type WavLoopState, type WavLoopRegion } from "./wav-loop";
+import { emptyMediaLoop, mediaLoopRegion, type MediaLoopState, type MediaLoopRegion } from "./media-loop";
 import type { OscilloscopeBuffers, OscilloscopeRead } from "./oscilloscope-tap";
 import { prepareProof, type PreparedProof, type SeekResult } from "./prepared-playback";
 import { prepareWaveform, type PrepareWaveform } from "./prepare-waveform";
@@ -11,10 +11,10 @@ export type WavPlayback = Pick<PreparedProof,
   "close" | "play" | "pause" | "seek" | "status" | "setListeningGain" |
   "totalFrames" | "sourceRate" | "paused" | "ready"> &
   Partial<Pick<PreparedProof, "readOscilloscope" | "releaseOscilloscope" | "setLoop" | "anchorAndDiscard">>;
-type LoopControl = { region: WavLoopRegion; enabled: boolean; edit?: boolean };
+type LoopControl = { region: MediaLoopRegion; enabled: boolean; edit?: boolean };
 type PrepareWav = (file: File, signal: AbortSignal) => Promise<WavPlayback>;
 export type PlaybackState = {
-  loop: WavLoopState;
+  loop: MediaLoopState;
   phase: "empty" | "loading" | "paused" | "playing" | "seeking" | "ended" | "error";
   fileName: string;
   totalFrames: number;
@@ -40,7 +40,7 @@ export function sourceFrameAtSeconds(seconds: number, sourceRate: number, totalF
 const emptyState: PlaybackState = {
   phase: "empty", fileName: "", totalFrames: 0, sourceRate: 0, outputRate: 0,
   snapshot: null, seekResult: null, busy: false, error: null, volume: 0.15, muted: false,
-  waveform: null, waveformPhase: "empty", loop: emptyWavLoop,
+  waveform: null, waveformPhase: "empty", loop: emptyMediaLoop,
 };
 
 export class PlaybackOwner {
@@ -111,10 +111,10 @@ export class PlaybackOwner {
       if (generation !== this.#generation) return;
       this.#publish({ totalFrames: playback.totalFrames!, sourceRate: playback.sourceRate!,
         outputRate: playback.ready.sampleRate, busy: false });
-      let loop = emptyWavLoop;
-      if (playback.setLoop && !playback.anchorAndDiscard) {
-        try { loop = { ...emptyWavLoop, supported: true, region: wavLoopRegion(0, playback.totalFrames!, playback.sourceRate!, playback.ready.sampleRate, playback.totalFrames!) }; }
-        catch (error) { loop = { ...emptyWavLoop, error: String(error) }; }
+      let loop = emptyMediaLoop;
+      if (playback.setLoop) {
+        try { loop = { ...emptyMediaLoop, supported: true, region: mediaLoopRegion(0, playback.totalFrames!, playback.sourceRate!, playback.ready.sampleRate, playback.totalFrames!) }; }
+        catch (error) { loop = { ...emptyMediaLoop, error: String(error) }; }
       }
       this.#publish({ loop });
       this.#accept(snapshot, playback);
@@ -179,7 +179,7 @@ export class PlaybackOwner {
   }
   setLoopRegion(a: number, b: number): Promise<void> {
     try {
-      const region = wavLoopRegion(a,b,this.#state.sourceRate,this.#state.outputRate,this.#state.totalFrames);
+      const region = mediaLoopRegion(a,b,this.#state.sourceRate,this.#state.outputRate,this.#state.totalFrames);
       if (!this.#state.loop.supported) return Promise.resolve();
       const enabled = this.#loopIntent?.enabled ?? this.#state.loop.enabled;
       this.#publish({ loop: { ...this.#state.loop, region, error: null } });

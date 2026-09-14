@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from "react";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
-import { wavLoopRegion } from "./wav-loop";
+import { mediaLoopRegion } from "./media-loop";
 import type { PlaybackOwner, PlaybackState } from "./playback-owner";
 
 function boundaryTime(frame: number, rate: number): string {
@@ -28,8 +28,8 @@ function BoundaryField({ name, frame, rate, onCommit }: { name: string; frame: n
 export function PlayerLoopEditor({state,owner}:{state:PlaybackState;owner:PlaybackOwner}){
   const r=state.loop.region;
   if(state.phase==="error")return <div className="player-loop-overlay" role="group" aria-label="Loop editor"><p role="status">Loop Failed — source unavailable. Retry this track from the library. Loop controls cannot recover a terminated worker.</p></div>;
-  if(!r)return <div className="player-loop-overlay" role="group" aria-label="Loop editor"><p role="status">{state.loop.error??"WAV loops unavailable. MP3 loops are not supported."}</p></div>;
-  const commit=(a:number,b:number)=>{void owner.setLoopRegion(a,b);try{wavLoopRegion(a,b,state.sourceRate,state.outputRate,state.totalFrames);return true;}catch{return false;}};
+  if(!r)return <div className="player-loop-overlay" role="group" aria-label="Loop editor"><p role="status">{state.loop.error??"Loops unavailable."}</p></div>;
+  const commit=(a:number,b:number)=>{void owner.setLoopRegion(a,b);try{mediaLoopRegion(a,b,state.sourceRate,state.outputRate,state.totalFrames);return true;}catch{return false;}};
   return <div className="player-loop-overlay" role="group" aria-label="Loop editor">
     <div className="player-loop-fields">
       <BoundaryField name="A" frame={r.a} rate={state.sourceRate} onCommit={a=>commit(a,r.b)}/>

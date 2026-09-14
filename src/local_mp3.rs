@@ -13,6 +13,28 @@ use wasm_bindgen::prelude::*;
 const INVALID_MP3: u32 = 72;
 const MAX_BYTES: u64 = 32 * 1024 * 1024;
 const PACKET_FRAMES: u64 = 1152;
+const MAX_PACKET_BYTES: usize = 1045;
+const HISTORY_BYTES: usize = 511;
+
+// One completed recipe and at most one replacement under construction. Encoded
+// payload: 2*1556 + 511 rolling + 1044 carrier + 1045 packet copy <= 5712 bytes.
+// Decoder buffers, host input buffers and scalar/allocator overhead are separate.
+struct LoopAnchor {
+    source: u64,
+    raw: u64,
+    offset: u64,
+    unread: usize,
+    predecessor_unread: usize,
+    predecessor: [u8; MAX_PACKET_BYTES],
+    predecessor_len: usize,
+    history: [u8; HISTORY_BYTES],
+    history_len: usize,
+}
+struct AnchorAcquisition {
+    anchor: Box<LoopAnchor>,
+    rolling: [u8; HISTORY_BYTES],
+    rolling_len: usize,
+}
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 pub struct LocalMp3 {
@@ -40,6 +62,9 @@ pub struct LocalMp3 {
     begin: usize,
     finish: usize,
     target: u64,
+    loop_anchor: Option<Box<LoopAnchor>>,
+    acquisition: Option<Box<AnchorAcquisition>>,
+    loop_restore_packets: u64,
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
@@ -81,6 +106,9 @@ impl LocalMp3 {
             begin: 0,
             finish: 0,
             target: 0,
+            loop_anchor: None,
+            acquisition: None,
+            loop_restore_packets: 0,
         })
     }
     pub fn offset(&self) -> u64 {
@@ -111,6 +139,7 @@ impl LocalMp3 {
         if !self.inspected || target > self.total {
             return Err(INVALID_MP3);
         }
+        self.acquisition = None;
         self.decoder.reset();
         self.inspecting = false;
         self.raw_position = 0;
@@ -123,6 +152,97 @@ impl LocalMp3 {
         } else {
             self.audio_start
         };
+        self.next_header()
+    }
+    /// Preparation only: acquire one selected continuation recipe by the existing
+    /// strict linear decode. Hosts must finish this before publishing loop readiness.
+    pub fn prepare_loop_anchor(&mut self, source: u64) -> Result<(), u32> {
+        self.acquisition = None;
+        if self.loop_anchor_ready(source) {
+            return Ok(());
+        }
+        self.seek(source)?;
+        let anchor = Box::new(LoopAnchor {
+            source,
+            raw: (source + self.delay) / PACKET_FRAMES * PACKET_FRAMES,
+            offset: self.end,
+            unread: 0,
+            predecessor_unread: 0,
+            predecessor: [0; MAX_PACKET_BYTES],
+            predecessor_len: 0,
+            history: [0; HISTORY_BYTES],
+            history_len: 0,
+        });
+        if source == self.total {
+            self.loop_anchor = Some(anchor);
+        } else {
+            self.acquisition = Some(Box::new(AnchorAcquisition {
+                anchor,
+                rolling: [0; HISTORY_BYTES],
+                rolling_len: 0,
+            }));
+        }
+        Ok(())
+    }
+    pub fn loop_anchor_ready(&self, source: u64) -> bool {
+        self.acquisition.is_none()
+            && self
+                .loop_anchor
+                .as_ref()
+                .is_some_and(|a| a.source == source)
+    }
+    pub fn cancel_loop_anchor(&mut self) {
+        self.acquisition = None;
+    }
+    pub fn clear_loop_anchor(&mut self) {
+        self.acquisition = None;
+        self.loop_anchor = None;
+    }
+    pub fn loop_restore_packets(&self) -> u64 {
+        self.loop_restore_packets
+    }
+    /// Private loop continuation, not public seeking. Never acquires an anchor.
+    /// At most two discarded decodes; cancellation is checked by the host around it.
+    pub fn seek_loop(&mut self, source: u64) -> Result<(), u32> {
+        if source == self.total || !self.loop_anchor_ready(source) {
+            return self.seek(source);
+        }
+        let a = self.loop_anchor.as_ref().ok_or(INVALID_MP3)?;
+        let previous = &a.predecessor[..a.predecessor_len];
+        if !previous.is_empty() {
+            check_crc(previous, self.channels)?;
+            let restored_unread = reservoir_after(previous, self.channels, a.predecessor_unread)?;
+            if restored_unread != a.unread || main_data_begin(previous) > a.history_len {
+                return Err(INVALID_MP3);
+            }
+        }
+        self.decoder.reset();
+        if a.raw > PACKET_FRAMES {
+            // Genuine source suffix, carried by an internal zero-spectrum packet.
+            // Neither this PCM nor the predecessor PCM is source/timeline output.
+            let mut carrier = [0u8; 1044];
+            let length = (144000 * 320 / self.rate) as usize;
+            carrier[..4].copy_from_slice(&[
+                255,
+                251,
+                224 | if self.rate == 48000 { 4 } else { 0 },
+                if self.channels == 1 { 192 } else { 0 },
+            ]);
+            carrier[length - a.history_len..length].copy_from_slice(&a.history[..a.history_len]);
+            decode_discard(&mut *self.decoder, &carrier[..length])?;
+            self.loop_restore_packets = self.loop_restore_packets.saturating_add(1);
+        }
+        if !previous.is_empty() {
+            decode_discard(&mut *self.decoder, previous)?;
+            self.loop_restore_packets = self.loop_restore_packets.saturating_add(1);
+        }
+        self.inspecting = false;
+        self.raw_position = a.raw;
+        self.reservoir_bytes = a.unread; // Source history, NEVER carrier padding.
+        self.target = source + self.delay;
+        self.begin = 0;
+        self.finish = 0;
+        self.offset = a.offset;
         self.next_header()
     }
     pub fn take(&mut self, maximum: usize) -> Result<Vec<f32>, u32> {
@@ -222,8 +342,10 @@ impl LocalMp3 {
                 if tag {
                     self.audio_start = self.offset + bytes.len() as u64;
                 } else {
-                    self.reservoir_bytes =
-                        reservoir_after(bytes, self.channels, self.reservoir_bytes)?;
+                    let unread = self.reservoir_bytes;
+                    let next_unread = reservoir_after(bytes, self.channels, unread)?;
+                    self.capture_loop_anchor(bytes, unread);
+                    self.reservoir_bytes = next_unread;
                     let packet = PacketBuilder::new()
                         .track_id(0)
                         .pts(Timestamp::new(0))
@@ -270,6 +392,34 @@ impl LocalMp3 {
 }
 
 impl LocalMp3 {
+    fn capture_loop_anchor(&mut self, bytes: &[u8], unread: usize) {
+        let Some(pending) = &mut self.acquisition else {
+            return;
+        };
+        if self.raw_position == pending.anchor.raw {
+            pending.anchor.offset = self.offset;
+            pending.anchor.unread = unread;
+            self.loop_anchor = self.acquisition.take().map(|p| p.anchor);
+            return;
+        }
+        let a = &mut pending.anchor;
+        a.predecessor[..bytes.len()].copy_from_slice(bytes);
+        a.predecessor_len = bytes.len();
+        a.predecessor_unread = unread;
+        a.history[..pending.rolling_len].copy_from_slice(&pending.rolling[..pending.rolling_len]);
+        a.history_len = pending.rolling_len;
+        let start = if bytes[1] & 1 == 0 { 6 } else { 4 };
+        let main = &bytes[start + if self.channels == 1 { 17 } else { 32 }..];
+        let keep = pending
+            .rolling_len
+            .min(HISTORY_BYTES.saturating_sub(main.len()));
+        pending
+            .rolling
+            .copy_within(pending.rolling_len - keep..pending.rolling_len, 0);
+        let suffix = &main[main.len().saturating_sub(HISTORY_BYTES)..];
+        pending.rolling[keep..keep + suffix.len()].copy_from_slice(suffix);
+        pending.rolling_len = keep + suffix.len();
+    }
     fn next_header(&mut self) -> Result<(), u32> {
         if self.offset == self.end {
             self.length = 0;
@@ -395,6 +545,20 @@ fn header(b: &[u8]) -> Result<(u32, u32, usize), u32> {
         (144000 * kbps / rate + ((h >> 9) & 1)) as usize,
     ))
 }
+fn main_data_begin(bytes: &[u8]) -> usize {
+    let start = if bytes[1] & 1 == 0 { 6 } else { 4 };
+    (usize::from(bytes[start]) << 1) | usize::from(bytes[start + 1] >> 7)
+}
+fn decode_discard(decoder: &mut dyn AudioDecoder, bytes: &[u8]) -> Result<(), u32> {
+    let packet = PacketBuilder::new()
+        .track_id(0)
+        .pts(Timestamp::new(0))
+        .dur(Duration::new(1152))
+        .data(bytes.to_vec())
+        .build();
+    decoder.decode(&packet).map_err(|_| INVALID_MP3)?;
+    Ok(())
+}
 fn be32(b: &[u8], p: usize) -> Result<u32, u32> {
     Ok(u32::from_be_bytes(
         b.get(p..p + 4)
@@ -499,6 +663,145 @@ pub(crate) mod tests {
             }
         }
         (rate, output)
+    }
+    fn acquire(r: &mut LocalMp3, bytes: &[u8], source: u64) {
+        r.prepare_loop_anchor(source).unwrap();
+        while !r.loop_anchor_ready(source) {
+            let at = r.offset() as usize;
+            r.accept(&bytes[at..at + r.length()]).unwrap();
+        }
+    }
+    #[test]
+    fn mp3_loop_anchor_exact_suffixes_trim_and_bounded_carrier_work() {
+        for name in [
+            "cbr-44100-1",
+            "cbr-44100-2",
+            "cbr-48000-1",
+            "cbr-48000-2",
+            "vbr-44100-1",
+            "vbr-44100-2",
+            "vbr-48000-1",
+            "vbr-48000-2",
+            "crc",
+            "vbri",
+            "short",
+        ] {
+            let tagged = std::fs::read(format!("tools/fixtures/mp3/{name}.mp3")).unwrap();
+            let first = header(&tagged[..4]).unwrap().2;
+            for bytes in [&tagged[..], &tagged[first..]] {
+                let mut r = inspect(bytes).unwrap();
+                let mut reference = vec![Vec::new(); r.channels() as usize];
+                r.seek(0).unwrap();
+                while r.length() != 0 || r.available_frames() != 0 {
+                    if r.available_frames() == 0 {
+                        let at = r.offset() as usize;
+                        r.accept(&bytes[at..at + r.length()]).unwrap();
+                    } else {
+                        let pcm = r.take(73).unwrap();
+                        let n = pcm.len() / reference.len();
+                        for (ch, p) in reference.iter_mut().enumerate() {
+                            p.extend_from_slice(&pcm[ch * n..(ch + 1) * n]);
+                        }
+                    }
+                }
+                let total = r.total_frames();
+                for source in [
+                    0,
+                    1,
+                    1152u64.saturating_sub(r.delay),
+                    2304u64.saturating_sub(r.delay),
+                    4000,
+                    total - 1,
+                    total,
+                ] {
+                    if source > total {
+                        continue;
+                    }
+                    acquire(&mut r, bytes, source);
+                    let anchor = r.loop_anchor.as_ref().unwrap();
+                    assert_eq!(anchor.predecessor.len() + anchor.history.len(), 1556);
+                    for _ in 0..32 {
+                        let count = r.loop_restore_packets();
+                        r.seek_loop(source).unwrap();
+                        assert!(r.loop_restore_packets() - count <= 2);
+                        let mut at = source as usize;
+                        while at < total as usize {
+                            if r.available_frames() == 0 {
+                                let p = r.offset() as usize;
+                                r.accept(&bytes[p..p + r.length()]).unwrap();
+                            } else {
+                                let pcm = r.take(311).unwrap();
+                                let n = pcm.len() / reference.len();
+                                for (ch, p) in reference.iter().enumerate() {
+                                    assert_eq!(
+                                        &pcm[ch * n..(ch + 1) * n],
+                                        &p[at..at + n],
+                                        "{name} source {source}"
+                                    );
+                                }
+                                at += n;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    #[test]
+    fn mp3_loop_anchor_never_uses_carrier_padding_as_source_validation() {
+        let bytes = std::fs::read("tools/fixtures/mp3/cbr-48000-2.mp3").unwrap();
+        let mut r = inspect(&bytes).unwrap();
+        acquire(&mut r, &bytes, 4000);
+        let a = r.loop_anchor.as_mut().unwrap();
+        assert!(main_data_begin(&a.predecessor[..a.predecessor_len]) > 0);
+        a.predecessor_unread = 0;
+        assert_eq!(r.seek_loop(4000), Err(INVALID_MP3));
+        r.clear_loop_anchor();
+        acquire(&mut r, &bytes, 4000);
+        r.seek_loop(4000).unwrap();
+        let p = r.offset() as usize;
+        r.accept(&bytes[p..p + 4]).unwrap();
+        let p = r.offset() as usize;
+        let mut bad = bytes[p..p + r.length()].to_vec();
+        bad[4] = 255;
+        bad[5] |= 128;
+        r.reservoir_bytes = 0;
+        assert_eq!(r.accept(&bad), Err(INVALID_MP3));
+        let crc = std::fs::read("tools/fixtures/mp3/crc.mp3").unwrap();
+        let mut r = inspect(&crc).unwrap();
+        acquire(&mut r, &crc, 4000);
+        r.loop_anchor.as_mut().unwrap().predecessor[6] ^= 1;
+        assert_eq!(r.seek_loop(4000), Err(INVALID_MP3));
+        r.clear_loop_anchor();
+        acquire(&mut r, &crc, 4000);
+        r.seek_loop(4000).unwrap();
+        let p = r.offset() as usize;
+        r.accept(&crc[p..p + 4]).unwrap();
+        let p = r.offset() as usize;
+        let mut bad = crc[p..p + r.length()].to_vec();
+        bad[6] ^= 1;
+        assert_eq!(r.accept(&bad), Err(INVALID_MP3));
+    }
+    #[test]
+    fn mp3_loop_anchor_cancelled_replacement_cannot_install() {
+        let bytes = std::fs::read("tools/fixtures/mp3/cbr-48000-2.mp3").unwrap();
+        let mut r = inspect(&bytes).unwrap();
+        acquire(&mut r, &bytes, 1);
+        r.prepare_loop_anchor(4000).unwrap();
+        assert!(r.acquisition.is_some());
+        assert!(r.loop_anchor.is_some());
+        r.cancel_loop_anchor();
+        assert!(!r.loop_anchor_ready(4000));
+        assert!(r.loop_anchor_ready(1));
+        r.seek(0).unwrap();
+        while r.available_frames() == 0 {
+            let p = r.offset() as usize;
+            r.accept(&bytes[p..p + r.length()]).unwrap();
+        }
+        assert!(!r.loop_anchor_ready(4000));
+        r.clear_loop_anchor();
+        assert!(r.loop_anchor.is_none());
+        assert!(r.acquisition.is_none());
     }
     #[test]
     fn mp3_strict_metadata_missing_trim_and_malformed_inputs() {

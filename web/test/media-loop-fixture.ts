@@ -1,12 +1,12 @@
 import { FakePlayback, deferred } from "./playback-fixture";
-import { wavLoopRegion } from "../src/wav-loop";
-export class FakeWavLoopPlayback extends FakePlayback {
+import { mediaLoopRegion } from "../src/media-loop";
+export class FakeMediaLoopPlayback extends FakePlayback {
   anchorAndDiscard=false;
   loopCalls:{a:number;b:number;enabled:boolean;edit:boolean}[]=[];
   pendingLoop:ReturnType<typeof deferred<void>>|undefined;
   async setLoop(a:number,b:number,enabled:boolean,edit=false){
     this.loopCalls.push({a,b,enabled,edit});
-    const region=wavLoopRegion(a,b,this.sourceRate,this.ready.sampleRate,this.totalFrames);
+    const region=mediaLoopRegion(a,b,this.sourceRate,this.ready.sampleRate,this.totalFrames);
     const cursor=this.snapshot.pcmPosition;
     const inside=cursor>=region.pcmA&&cursor<region.pcmB;
     const loopEnabled=enabled&&(!edit||inside);

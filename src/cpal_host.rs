@@ -1,10 +1,10 @@
 use crate::compiled_plan::{CompiledPlan, RenderInstance};
+use crate::media_loop::{LoopRegion, PreparedMediaLoop};
 use crate::prepared_kernel::{Output, RenderStatus};
 use crate::prepared_pcm::{
     BlockMeta, ChannelLayout, OwnedPcmBlock, PreparedBlockSource, PreparedPcmInput, StreamSpec,
 };
 use crate::sample_rate::{PcmTimeline, PreparedRateConverter};
-use crate::wav_loop::{LoopRegion, PreparedWavLoop};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, Sample, SampleFormat, SizedSample};
 use rtrb::{Consumer, PopError, Producer, PushError, RingBuffer};
@@ -162,9 +162,9 @@ impl SharedObservation {
         enabled: bool,
         timeline: PcmTimeline,
         output_rate: u32,
-        wav: bool,
+        supported: bool,
     ) -> Result<u64, u32> {
-        if !wav || a >= b || b > u64::from(u32::MAX) {
+        if !supported || a >= b || b > u64::from(u32::MAX) {
             return Err(73);
         }
         LoopRegion::new(
@@ -181,9 +181,9 @@ impl SharedObservation {
         b: u64,
         timeline: PcmTimeline,
         output_rate: u32,
-        wav: bool,
+        supported: bool,
     ) -> Result<Option<u64>, u32> {
-        if !wav || a >= b || b > u64::from(u32::MAX) {
+        if !supported || a >= b || b > u64::from(u32::MAX) {
             return Err(73);
         }
         LoopRegion::new(
@@ -384,7 +384,7 @@ impl Drop for WorkerControl {
 
 struct NativePcmPreparation {
     linear: PreparedRateConverter,
-    loop_pcm: Option<PreparedWavLoop>,
+    loop_pcm: Option<PreparedMediaLoop>,
     start_pending: Option<u64>,
     read_revision: u64,
 }
@@ -407,19 +407,19 @@ impl NativePcmPreparation {
     fn source_frames_read(&self) -> u64 {
         self.loop_pcm.as_ref().map_or_else(
             || self.linear.source_frames_read(),
-            PreparedWavLoop::source_frames_read,
+            PreparedMediaLoop::source_frames_read,
         )
     }
     fn input_frames_needed(&self) -> usize {
         self.loop_pcm.as_ref().map_or_else(
             || self.linear.input_frames_needed(),
-            PreparedWavLoop::input_frames_needed,
+            PreparedMediaLoop::input_frames_needed,
         )
     }
     fn available_frames(&self) -> usize {
         self.loop_pcm.as_ref().map_or_else(
             || self.linear.available_frames(),
-            PreparedWavLoop::available_frames,
+            PreparedMediaLoop::available_frames,
         )
     }
     fn output(&self, channel: usize) -> &[f32] {
@@ -526,7 +526,7 @@ fn spawn_worker(
             .map_or(u64::MAX, NativePcmPreparation::total_pcm_frames);
         let mut active_seek = PROOF_EPOCH << 32;
         let mut admitted = 0;
-        while !worker_stop.load(Ordering::Acquire) {
+        'worker: while !worker_stop.load(Ordering::Acquire) {
             let sequence = worker_sequence.load(Ordering::SeqCst);
             let requested = worker_seek.load(Ordering::SeqCst);
             let bounds = worker_bounds.load(Ordering::SeqCst);
@@ -549,11 +549,7 @@ fn spawn_worker(
                                     worker_failed.store(true, Ordering::Release);
                                     return;
                                 };
-                                if media.anchor_and_discard() {
-                                    worker_failed.store(true, Ordering::Release);
-                                    return;
-                                }
-                                match PreparedWavLoop::new(
+                                match PreparedMediaLoop::new(
                                     media.sample_rate(),
                                     output_rate,
                                     layout.channels(),
@@ -571,11 +567,54 @@ fn spawn_worker(
                             converter.start_pending = converter.loop_pcm.as_ref().map(|_| pcm);
                             converter.read_revision = 0;
                             total_frames = converter.total_pcm_frames();
-                            if let Some((_, media)) = &mut wav_file
-                                && media.seek(converter.source_frames_read()).is_err()
-                            {
-                                worker_failed.store(true, Ordering::Release);
-                                return;
+                            if let Some((file, media)) = &mut wav_file {
+                                media.cancel_loop_anchor();
+                                if let Some(anchor) = converter
+                                    .loop_pcm
+                                    .as_ref()
+                                    .and_then(PreparedMediaLoop::continuation_source_frame)
+                                {
+                                    if media.prepare_loop_anchor(anchor).is_err() {
+                                        worker_failed.store(true, Ordering::Release);
+                                        return;
+                                    }
+                                    let started = std::time::Instant::now();
+                                    while !media.loop_anchor_ready(anchor) {
+                                        if worker_seek.load(Ordering::Acquire) != active_seek
+                                            || worker_stop.load(Ordering::Acquire)
+                                        {
+                                            media.cancel_loop_anchor();
+                                            continue 'worker;
+                                        }
+                                        let n = media.length();
+                                        if n == 0
+                                            || started.elapsed().as_secs() >= 30
+                                            || file
+                                                .seek(SeekFrom::Start(media.offset()))
+                                                .and_then(|_| file.read_exact(&mut bytes[..n]))
+                                                .is_err()
+                                        {
+                                            worker_failed.store(true, Ordering::Release);
+                                            return;
+                                        }
+                                        if worker_seek.load(Ordering::Acquire) != active_seek
+                                            || worker_stop.load(Ordering::Acquire)
+                                        {
+                                            media.cancel_loop_anchor();
+                                            continue 'worker;
+                                        }
+                                        if media.accept(&bytes[..n]).is_err() {
+                                            worker_failed.store(true, Ordering::Release);
+                                            return;
+                                        }
+                                    }
+                                } else {
+                                    media.clear_loop_anchor();
+                                }
+                                if media.seek_loop(converter.source_frames_read()).is_err() {
+                                    worker_failed.store(true, Ordering::Release);
+                                    return;
+                                }
                             }
                         }
                         Err(_) => {
@@ -617,7 +656,7 @@ fn spawn_worker(
                             break;
                         }
                         if let Some(anchor) = converter.reader_anchor()
-                            && wav.seek(anchor).is_err()
+                            && wav.seek_loop(anchor).is_err()
                         {
                             worker_failed.store(true, Ordering::Release);
                             return;
@@ -1910,7 +1949,7 @@ mod tests {
     }
 
     #[test]
-    fn wav_loop_native_region_command_respects_disabled_and_pending_intent() {
+    fn media_loop_native_region_command_respects_disabled_and_pending_intent() {
         let (source, worker) = wav_source_at_rates(24, 2, 10003, 48000, 48000);
         let shared = Arc::new(SharedObservation::new());
         shared.playback_command.store(1, Ordering::Release);
@@ -1988,7 +2027,7 @@ mod tests {
     }
 
     #[test]
-    fn wav_loop_native_eof_drain_head_matches_reference_and_remains_cancellable() {
+    fn media_loop_native_eof_drain_head_matches_reference_and_remains_cancellable() {
         for (sr, ro) in [(44100, 48000), (48000, 44100)] {
             let total = 10003;
             let timeline = PcmTimeline::new(sr, ro, total as u64).unwrap();
@@ -2053,7 +2092,7 @@ mod tests {
     }
 
     #[test]
-    fn wav_loop_native_acknowledged_eos_pauses_before_head_consumption() {
+    fn media_loop_native_acknowledged_eos_pauses_before_head_consumption() {
         let (source, worker) = wav_source_at_rates(24, 2, 17, 48000, 48000);
         let shared = Arc::new(SharedObservation::new());
         let timeline = PcmTimeline::new(48000, 48000, 17).unwrap();
@@ -2092,7 +2131,7 @@ mod tests {
     }
 
     #[test]
-    fn wav_loop_native_terminal_read_failure_and_close_before_head_readiness() {
+    fn media_loop_native_terminal_read_failure_and_close_before_head_readiness() {
         use std::io::Write;
         let path =
             std::env::temp_dir().join(format!("kkb-loop-read-failure-{}", std::process::id()));
@@ -2158,10 +2197,45 @@ mod tests {
     }
 
     #[test]
-    fn wav_loop_native_worker_rings_callback_reference_controls_and_underrun() {
-        for (sr, ro) in [(48000, 48000), (44100, 48000), (48000, 44100)] {
-            for (a, b) in [(7001, 7018), (137, 9503)] {
-                let total = 10003;
+    fn media_loop_native_worker_rings_callback_reference_controls_and_underrun() {
+        let mut cases = vec![
+            (48000, 48000, None),
+            (44100, 48000, None),
+            (48000, 44100, None),
+        ];
+        for name in [
+            "cbr-44100-1",
+            "cbr-44100-2",
+            "cbr-48000-1",
+            "cbr-48000-2",
+            "vbr-44100-1",
+            "vbr-44100-2",
+            "vbr-48000-1",
+            "vbr-48000-2",
+            "crc",
+            "vbri",
+            "loop-crc-44100-1",
+            "loop-crc-44100-2",
+            "loop-crc-48000-1",
+            "loop-crc-48000-2",
+            "loop-dual-48000-2",
+        ] {
+            for ro in [44100, 48000] {
+                let (sr, _) = crate::local_mp3::tests::planar_fixture(name);
+                cases.push((sr, ro, Some(name)));
+            }
+        }
+        for (sr, ro, name) in cases {
+            let mp3 = name.map(crate::local_mp3::tests::planar_fixture);
+            let total = mp3.as_ref().map_or(10003, |(_, p)| p[0].len());
+            let late = total as u64 - 5000;
+            let end = late + (4097 * u64::from(sr)).div_ceil(u64::from(ro));
+            let regions = if name.is_none() {
+                [(7001, 7018), (137, 9503)] // Retain both original WAV control/reference cases.
+            } else {
+                [(137, 154), (late, end)]
+            };
+            for (a, b) in regions {
                 let input: Vec<Vec<f32>> = (0..2)
                     .map(|ch| {
                         (0..total)
@@ -2169,21 +2243,45 @@ mod tests {
                             .collect()
                     })
                     .collect();
+                let input = mp3.as_ref().map_or(input, |(_, p)| {
+                    if p.len() == 1 {
+                        vec![p[0].clone(), p[0].clone()]
+                    } else {
+                        p.clone()
+                    }
+                });
                 let reference = crate::sample_rate::tests::convert(sr, ro, &input, &[73, 311]);
                 let timeline = PcmTimeline::new(sr, ro, total as u64).unwrap();
                 let r = LoopRegion::new(
-                    timeline.seek_pcm_frame(a).unwrap(),
-                    timeline.seek_pcm_frame(b).unwrap(),
+                    (a * u64::from(ro)).div_ceil(u64::from(sr)),
+                    (b * u64::from(ro)).div_ceil(u64::from(sr)),
                     ro,
                 )
                 .unwrap();
-                let (source, worker) = wav_source_at_rates(24, 2, total, sr, ro);
+                let channels = mp3.as_ref().map_or(2, |(_, p)| p.len());
+                let (source, worker) = if let Some(name) = name {
+                    let mut file =
+                        std::fs::File::open(format!("tools/fixtures/mp3/{name}.mp3")).unwrap();
+                    let media = crate::local_media::read_header(&mut file).unwrap();
+                    spawn_worker(
+                        if channels == 1 {
+                            ChannelLayout::Mono
+                        } else {
+                            ChannelLayout::Stereo
+                        },
+                        Some((file, media)),
+                        ro,
+                    )
+                } else {
+                    wav_source_at_rates(24, 2, total, sr, ro)
+                };
                 let shared = Arc::new(SharedObservation::new());
                 shared.playback_command.store(1, Ordering::Release);
                 let mut p =
-                    CallbackProcessor::prepare(ro, 2, 4096, source, Arc::clone(&shared)).unwrap();
+                    CallbackProcessor::prepare(ro, channels, 4096, source, Arc::clone(&shared))
+                        .unwrap();
                 p.timeline = Some(timeline);
-                let mut small = [0.0f32; 34];
+                let mut small = vec![0.0f32; 17 * channels];
                 let epoch = shared.request_loop(a, b, true, timeline, ro, true).unwrap();
                 let deadline = Instant::now() + Duration::from_secs(3);
                 while p.input.active_epoch() != epoch || p.input.preparing() {
@@ -2196,15 +2294,15 @@ mod tests {
                 assert_eq!(p.input.pcm_position(), r.a);
                 shared.playback_command.store(0, Ordering::Release);
                 let mut consumed = 0u64;
-                for count in [1, 17, 257, 1024, 3, 997, 37, 1024, 1023] {
+                for count in [1, 17, 257, 1024, 3, 997, 37, 1024, 1023].repeat(4) {
                     // Device-free pacing gives the real bounded worker time to return slots.
                     std::thread::sleep(Duration::from_millis(15));
-                    let mut out = vec![0.0; count * 2];
+                    let mut out = vec![0.0; count * channels];
                     p.process(&mut out);
                     assert!(!p.input.loop_recovering());
                     for f in 0..count {
                         let at = r.a + (consumed + f as u64) % r.period();
-                        for ch in 0..2 {
+                        for ch in 0..channels {
                             let raw = reference[ch][at as usize];
                             let expected = if at < r.b - r.fade as u64 {
                                 raw
@@ -2217,7 +2315,11 @@ mod tests {
                                     (1.0 - w) * raw + w * reference[ch][r.a as usize]
                                 }
                             };
-                            assert_eq!(out[f * 2 + ch], expected * 0.5, "{sr}->{ro} frame{at}");
+                            assert_eq!(
+                                out[f * channels + ch],
+                                expected * 0.5,
+                                "{sr}->{ro} frame{at}"
+                            );
                         }
                     }
                     consumed += count as u64;
@@ -2233,7 +2335,7 @@ mod tests {
                 shared.playback_command.store(0, Ordering::Release);
                 worker.stalled.store(true, Ordering::Release);
                 for _ in 0..12 {
-                    p.process(&mut [0f32; 2048]);
+                    p.process(&mut vec![0f32; 1024 * channels]);
                     if p.input.loop_recovering() {
                         break;
                     }
@@ -2241,7 +2343,7 @@ mod tests {
                 assert!(p.input.loop_recovering());
                 let held = p.input.pcm_position();
                 for _ in 0..4 {
-                    p.process(&mut [0f32; 2048]);
+                    p.process(&mut vec![0f32; 1024 * channels]);
                     assert_eq!(p.input.pcm_position(), held);
                 }
                 let before = p.instance.next_frame();
@@ -2267,7 +2369,7 @@ mod tests {
                         {
                             break;
                         }
-                        p.process(&mut [0f32; 2]);
+                        p.process(&mut vec![0f32; channels]);
                     }
                     let pcm = p.input.pcm_position();
                     assert_ne!(
@@ -2313,6 +2415,111 @@ mod tests {
         }
     }
 
+    #[test]
+    fn mp3_late_over_head_native_worker_has_bounded_normal_replenishment() {
+        use std::io::{Read, Seek, SeekFrom};
+        let fixture = std::fs::read("tools/fixtures/mp3/cbr-48000-2.mp3").unwrap();
+        let mut bytes = Vec::with_capacity(25000 * 384);
+        for _ in 0..25000 {
+            bytes.extend_from_slice(&fixture[384..768]);
+        }
+        let path =
+            std::env::temp_dir().join(format!("kkb-mp3-loop-bound-{}.mp3", std::process::id()));
+        std::fs::write(&path, &bytes).unwrap();
+        let mut file = std::fs::File::open(&path).unwrap();
+        let mut reader = crate::local_media::read_header(&mut file).unwrap();
+        let total = reader.total_frames();
+        let ro = 44100;
+        let sr = 48000;
+        let a = total - 6000;
+        let b = a + (4097 * u64::from(sr)).div_ceil(u64::from(ro));
+        let pa = (a * u64::from(ro)).div_ceil(u64::from(sr));
+        let pb = (b * u64::from(ro)).div_ceil(u64::from(sr));
+        let mut converter = PreparedRateConverter::new(sr, ro, 2, total).unwrap();
+        let mut reference = [Vec::new(), Vec::new()];
+        let mut position = 0;
+        // Uninterrupted oracle from zero, retain only the independent realized region.
+        while position < pb {
+            let n = converter.input_frames_needed().min(73);
+            if n > 0 {
+                reader.request(n).unwrap();
+                while reader.available_frames() == 0 {
+                    let at = reader.offset() as usize;
+                    reader.accept(&bytes[at..at + reader.length()]).unwrap();
+                }
+                converter.push(&reader.take(n).unwrap()).unwrap();
+            }
+            let n = converter.available_frames().min(97);
+            for (ch, out) in reference.iter_mut().enumerate() {
+                for j in 0..n {
+                    let at = position + j as u64;
+                    if at >= pa && at < pb {
+                        out.push(converter.output(ch)[j]);
+                    }
+                }
+            }
+            converter.consume(n).unwrap();
+            position += n as u64;
+        }
+        reader.seek(0).unwrap();
+        file.seek(SeekFrom::Start(0)).unwrap();
+        let mut magic = [0; 4];
+        file.read_exact(&mut magic).unwrap();
+        let (source, worker) = spawn_worker(ChannelLayout::Stereo, Some((file, reader)), ro);
+        let shared = Arc::new(SharedObservation::new());
+        shared.playback_command.store(1, Ordering::Release);
+        let timeline = PcmTimeline::new(sr, ro, total).unwrap();
+        let mut p = CallbackProcessor::prepare(ro, 2, 1024, source, Arc::clone(&shared)).unwrap();
+        p.timeline = Some(timeline);
+        let epoch = shared.request_loop(a, b, true, timeline, ro, true).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while p.input.active_epoch() != epoch || p.input.preparing() {
+            p.process(&mut [0.; 34]);
+            assert!(!worker.failed.load(Ordering::Acquire));
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        let initial = worker.decoded_packets.load(Ordering::Acquire);
+        shared.playback_command.store(0, Ordering::Release);
+        let period = pb - pa;
+        let fade = (ro / 200) as usize;
+        let mut consumed = 0;
+        for _ in 0..20 {
+            std::thread::sleep(Duration::from_millis(15));
+            let mut out = [0.; 2048];
+            p.process(&mut out);
+            assert!(!p.input.loop_recovering());
+            for j in 0..1024 {
+                let at = (consumed + j) % period as usize;
+                for ch in 0..2 {
+                    let x = reference[ch][at];
+                    let y = if at < period as usize - fade {
+                        x
+                    } else {
+                        let f = at - (period as usize - fade);
+                        if f == fade - 1 {
+                            reference[ch][0]
+                        } else {
+                            let w = f as f32 / (fade - 1) as f32;
+                            (1. - w) * x + w * reference[ch][0]
+                        }
+                    };
+                    assert_eq!(out[j * 2 + ch], y * 0.5);
+                }
+            }
+            consumed += 1024;
+        }
+        let packets = worker.decoded_packets.load(Ordering::Acquire) - initial;
+        assert!(
+            packets < 100,
+            "normal replenishment replayed {packets} source packets"
+        );
+        assert_eq!(p.input.loop_underruns(), 0);
+        assert_eq!(p.input.active_epoch(), epoch);
+        assert!(p.input.loop_iteration() >= 4);
+        worker.stop();
+        std::fs::remove_file(path).unwrap();
+    }
     #[test]
     fn wav_seek_lifecycle_preserves_instance_clock_and_reclaims_paused_slots() {
         for (source_rate, output_rate, bits, channels) in [
@@ -2740,7 +2947,7 @@ mod tests {
                         action == "loop on",
                         timeline,
                         supported.sample_rate(),
-                        !anchor_and_discard,
+                        true,
                     ) {
                         Ok(epoch) => println!(
                             "loop request epoch={epoch}; source [{},{}), output [{},{}); fixed realized period, quantization accumulates",
@@ -2749,7 +2956,7 @@ mod tests {
                             timeline.seek_pcm_frame(region.0).unwrap(),
                             timeline.seek_pcm_frame(region.1).unwrap()
                         ),
-                        Err(_) => println!("unsupported WAV loop interval; MP3 loops unavailable"),
+                        Err(_) => println!("unsupported media loop interval"),
                     }
                 }
                 action if action.starts_with("region ") => {
@@ -2767,7 +2974,6 @@ mod tests {
                             supported.sample_rate(),
                         )
                         .is_ok()
-                        && !anchor_and_discard
                     {
                         region = (values[0], values[1]);
                         let _ = shared.request_region(
@@ -2775,10 +2981,10 @@ mod tests {
                             region.1,
                             timeline,
                             supported.sample_rate(),
-                            !anchor_and_discard,
+                            true,
                         );
                     } else {
-                        println!("invalid WAV region");
+                        println!("invalid media region");
                     }
                 }
                 "stall" => worker.stalled.store(true, Ordering::Release),

@@ -1,18 +1,18 @@
 import { expect, test } from "bun:test";
-import { wavLoopRegion } from "../src/wav-loop";
+import { mediaLoopRegion } from "../src/media-loop";
 import { PlaybackOwner } from "../src/playback-owner";
-import { FakeWavLoopPlayback } from "./wav-loop-fixture";
+import { FakeMediaLoopPlayback } from "./media-loop-fixture";
 import { deferred } from "./playback-fixture";
 const analyse=async()=>{throw Error("No fixture waveform");};
 test("WAV loop bounds preserve requested and realized grid; reject too-short without rounding expansion",()=>{
-  expect(wavLoopRegion(7001,17004,44100,48000,19007)).toEqual({a:7001,b:17004,pcmA:7621,pcmB:18508,period:10887,fade:240});
-  expect(wavLoopRegion(7001,17004,48000,44100,19007).pcmA).toBe(6433);
-  expect(()=>wavLoopRegion(0,7,48000,48000,10)).toThrow();
-  expect(wavLoopRegion(0,8,48000,48000,10).fade).toBe(2);
-  expect(()=>wavLoopRegion(0,8,399,399,10)).toThrow();
+  expect(mediaLoopRegion(7001,17004,44100,48000,19007)).toEqual({a:7001,b:17004,pcmA:7621,pcmB:18508,period:10887,fade:240});
+  expect(mediaLoopRegion(7001,17004,48000,44100,19007).pcmA).toBe(6433);
+  expect(()=>mediaLoopRegion(0,7,48000,48000,10)).toThrow();
+  expect(mediaLoopRegion(0,8,48000,48000,10).fade).toBe(2);
+  expect(()=>mediaLoopRegion(0,8,399,399,10)).toThrow();
 });
 test("PlaybackOwner loop edits are inert disabled, preserve paused enable intent, reject invalid region, and use private loop control",async()=>{
-  const p=new FakeWavLoopPlayback();const owner=new PlaybackOwner(async()=>p,analyse);
+  const p=new FakeMediaLoopPlayback();const owner=new PlaybackOwner(async()=>p,analyse);
   try{
     await owner.load(new File([],"loop.wav"));expect(owner.getState().loop.enabled).toBe(false);
     await owner.setLoopRegion(48000,96000);expect(p.loopCalls.length).toBe(0);
@@ -23,7 +23,7 @@ test("PlaybackOwner loop edits are inert disabled, preserve paused enable intent
   }finally{await owner.close();}
 });
 test("PlaybackOwner retains only executing and latest loop change; replacement cannot apply queued region",async()=>{
-  const p=new FakeWavLoopPlayback();const owner=new PlaybackOwner(async()=>p,analyse);
+  const p=new FakeMediaLoopPlayback();const owner=new PlaybackOwner(async()=>p,analyse);
   try{
     await owner.load(new File([],"loop.wav"));const held=p.pendingLoop=deferred<void>();const first=owner.setLoopEnabled(true);await Bun.sleep(1);
     for(let i=1;i<=20;i++)void owner.setLoopRegion(i*1000,480000);
@@ -33,7 +33,7 @@ test("PlaybackOwner retains only executing and latest loop change; replacement c
   }finally{await owner.close();}
 });
 test.each(["seek cancels waiting enable", "pause replaces queued enable"] as const)("%s retires intent before disabled editing", async scenario => {
-  const playback = new FakeWavLoopPlayback();
+  const playback = new FakeMediaLoopPlayback();
   const owner = new PlaybackOwner(async () => playback, analyse);
   try {
     await owner.load(new File([], "loop.wav"));
@@ -60,10 +60,10 @@ test.each(["seek cancels waiting enable", "pause replaces queued enable"] as con
   } finally { await owner.close(); }
 });
 
-test("MP3 loop metadata/control stays unavailable; terminal source failure is distinct from LoopUnderrun",async()=>{
-  const p=new FakeWavLoopPlayback();p.anchorAndDiscard=true;const owner=new PlaybackOwner(async()=>p,analyse);
-  try{await owner.load(new File([],"fixture.mp3"));expect(owner.getState().loop.supported).toBe(false);await owner.setLoopEnabled(true);expect(p.loopCalls).toEqual([]);
-    p.anchorAndDiscard=false;await owner.load(new File([],"fixture.wav"));await owner.setLoopEnabled(true);
+test("MP3 shares loop controls and replacement reset; terminal source failure is distinct from LoopUnderrun",async()=>{
+  const p=new FakeMediaLoopPlayback();p.anchorAndDiscard=true;const owner=new PlaybackOwner(async()=>p,analyse);
+  try{await owner.load(new File([],"fixture.mp3"));expect(owner.getState().loop.supported).toBe(true);await owner.setLoopEnabled(true);expect(p.loopCalls).toHaveLength(1);expect(p.paused).toBe(true);
+    p.anchorAndDiscard=false;await owner.load(new File([],"fixture.wav"));expect(owner.getState().loop.enabled).toBe(false);expect(owner.getState().loop.region?.a).toBe(0);await owner.setLoopEnabled(true);
     const revision=owner.getOscilloscopeRevision();p.snapshot={...p.snapshot,loopUnderruns:1,loopRecovering:true,ready:false};await owner.refresh();expect(owner.getState().loop.phase).toBe("Failed");expect(owner.getOscilloscopeRevision()).toBeGreaterThan(revision);
     p.snapshot={...p.snapshot,loopRecovering:false,ready:true};await owner.refresh();expect(owner.getState().loop.phase).toBe("Armed");expect(owner.getState().loop.error).toBeNull();
     p.pendingStatus=deferred();const poll=owner.refresh();p.pendingStatus.reject(Error("media read failed"));await poll;expect(owner.getState().phase).toBe("error");expect(owner.getState().loop.phase).toBe("Failed");expect(owner.getState().loop.error).toContain("retry this track");
@@ -71,7 +71,7 @@ test("MP3 loop metadata/control stays unavailable; terminal source failure is di
 });
 
 test("PlaybackOwner newest edit survives enable waiting for a held poll",async()=>{
-  const p=new FakeWavLoopPlayback();const owner=new PlaybackOwner(async()=>p,analyse);
+  const p=new FakeMediaLoopPlayback();const owner=new PlaybackOwner(async()=>p,analyse);
   try{
     await owner.load(new File([],"loop.wav"));
     const held=p.pendingStatus=deferred();const poll=owner.refresh();const enable=owner.setLoopEnabled(true);
@@ -84,7 +84,7 @@ test("PlaybackOwner newest edit survives enable waiting for a held poll",async()
   }finally{await owner.close();}
 });
 test("PlaybackOwner held-poll queue cannot revive R2 after preparing R3 supersedes",async()=>{
-  const p=new FakeWavLoopPlayback();const owner=new PlaybackOwner(async()=>p,analyse);
+  const p=new FakeMediaLoopPlayback();const owner=new PlaybackOwner(async()=>p,analyse);
   try{
     await owner.load(new File([],"loop.wav"));await owner.setLoopEnabled(true);
     const heldPoll=p.pendingStatus=deferred();const poll=owner.refresh();

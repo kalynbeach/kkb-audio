@@ -41,3 +41,7 @@ Primary interpretation sources:
 - https://raw.githubusercontent.com/FFmpeg/FFmpeg/n9.0.1/libavformat/mp3dec.c
 - https://raw.githubusercontent.com/lameproject/lame/master/libmp3lame/bitstream.c
 - Pinned unmodified Symphonia 0.6.1 bundle/core source; see dated evidence.
+
+## #20 loop-history fixtures
+
+`bun tools/generate-mp3-loop-fixtures.ts` uses the existing authored PCM16 fixture and LAME4.0, explicitly forcing MPEG-1 sample rate. `loop-crc-{44100,48000}-{1,2}.mp3` uses32kbit/s CRC with mono or ordinary stereo. These small frames contain no Info/Xing packet: validated media lengths are46080 at44100 and49536 at48000, without recovered trim. The48000-stereo minimum main-data payload is58bytes. `loop-dual-48000-2.mp3` uses128kbit/s dual-channel (`-m d`), also from the authored one-second source. These exercise the unchanged strict inspector and bounded restoration paths, not pre-encode PCM equality. No audible output or new encoder compatibility claim.

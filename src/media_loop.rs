@@ -1,4 +1,4 @@
-//! WAV-only, fixed output-grid loop preparation. Workers own the converter and
+//! Shared fixed output-grid loop preparation. Workers own the converter and
 //! bounded head; the renderer applies held-head smoothing before downstream DSP.
 use crate::sample_rate::{PcmTimeline, PreparedRateConverter};
 #[cfg(target_arch = "wasm32")]
@@ -52,12 +52,13 @@ impl LoopRegion {
     }
 }
 
-/// Worker-only preparation for one WAV region. Creation does not imply readiness.
+/// Worker-only preparation for one decoded-media region. Creation does not imply readiness.
 /// Call prepare_head after each bounded input push until head_ready, then start.
 /// The existing finite converter reconstructs globally aligned history, including
-/// source outside A/B used by its filter. No MP3 reader is admitted by the hosts.
+/// source outside A/B used by its filter. Hosts prepare codec continuation history
+/// before arming; the converter does not own or decode encoded history.
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-pub struct PreparedWavLoop {
+pub struct PreparedMediaLoop {
     converter: PreparedRateConverter,
     region: LoopRegion,
     head: Vec<Vec<f32>>,
@@ -66,9 +67,10 @@ pub struct PreparedWavLoop {
     position: u64,
     reading_head: bool,
     read_revision: u64,
+    continuation_source: Option<u64>,
 }
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
-impl PreparedWavLoop {
+impl PreparedMediaLoop {
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen(constructor))]
     pub fn new(
         source_rate: u32,
@@ -89,8 +91,14 @@ impl PreparedWavLoop {
         )?;
         let mut converter =
             PreparedRateConverter::new(source_rate, output_rate, channels, source_frames)?;
-        converter.seek(a)?;
         let head_length = region.period().min(HEAD_FRAMES as u64) as usize;
+        let continuation_source = if region.period() > HEAD_FRAMES as u64 {
+            converter.seek_output_frame(region.a + head_length as u64)?;
+            Some(converter.source_frames_read())
+        } else {
+            None
+        };
+        converter.seek(a)?;
         Ok(Self {
             converter,
             region,
@@ -100,7 +108,11 @@ impl PreparedWavLoop {
             position: region.a,
             reading_head: false,
             read_revision: 1,
+            continuation_source,
         })
+    }
+    pub fn continuation_source_frame(&self) -> Option<u64> {
+        self.continuation_source
     }
     pub fn pcm_a(&self) -> u64 {
         self.region.a
@@ -204,7 +216,7 @@ impl PreparedWavLoop {
         Ok(())
     }
 }
-impl PreparedWavLoop {
+impl PreparedMediaLoop {
     fn reset_converter(&mut self, pcm: u64) -> Result<(), u32> {
         self.converter.seek_output_frame(pcm)?;
         self.read_revision = self.read_revision.checked_add(1).ok_or(INVALID_LOOP)?;
@@ -291,7 +303,7 @@ mod tests {
         out
     }
     #[test]
-    fn wav_loop_head_and_repeated_pcm_match_independent_uninterrupted_conversion() {
+    fn media_loop_head_and_repeated_pcm_match_independent_uninterrupted_conversion() {
         for (sr, ro) in [(48000, 48000), (44100, 48000), (48000, 44100)] {
             for (length, a, b) in [
                 (8, 0, 8),
@@ -315,7 +327,7 @@ mod tests {
                         .collect::<Vec<_>>(),
                 ];
                 let reference = convert(&source, sr, ro);
-                let candidate = PreparedWavLoop::new(sr, ro, 2, length as u64, a, b);
+                let candidate = PreparedMediaLoop::new(sr, ro, 2, length as u64, a, b);
                 let timeline = PcmTimeline::new(sr, ro, length as u64).unwrap();
                 let pa = timeline.seek_pcm_frame(a).unwrap();
                 let pb = timeline.seek_pcm_frame(b).unwrap();
@@ -324,7 +336,7 @@ mod tests {
                     continue;
                 }
                 let mut c = candidate.unwrap();
-                let feed = |c: &mut PreparedWavLoop| {
+                let feed = |c: &mut PreparedMediaLoop| {
                     let n = c.input_frames_needed().min(311);
                     if n > 0 {
                         let at = c.source_frames_read() as usize;

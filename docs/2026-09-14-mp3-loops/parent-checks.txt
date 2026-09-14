@@ -1,0 +1,52 @@
+Parent verification; Bun1.4.0, Rust1.98.0; copy: /tmp/kkb20-final-20260914
+390 source/copy paths matched before independent checks; no production source changes followed.
+cargo fmt --check: exit0
+cargo test --all-targets --all-features: exit0
+test result: ok. 84 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 78.16s
+bun run check: exit0;160 formal tests, plus build/typecheck/memory/kernel/plan/callback audits
+$ bun run build:worklet && bun run typecheck && bun test web/test && bun run check:wasm && bun run check:kernel && bun run check:wav && bun run check:mp3 && bun run check:waveform && bun run check:plan && bun run check:lab && bun run check:lab-ui && bun run check:player-ui && bun run audit:worklet && bun run audit:plan
+$ bun tools/build-worklet.ts
+$ bun x tsc --noEmit
+(pass) PreparedPlanarAdapter > memory buffer identity change becomes permanent silence [0.04ms]
+(pass) compiled plan host adapter > capacity, malformed layout, and detached memory become permanent silence before Wasm [0.15ms]
+ 104 pass
+ 0 fail
+Ran 104 tests across 17 files. [3.79s]
+$ bun tools/check-wasm-memory.ts web/dist/kkb_audio_bg.wasm
+{"bytes":16777216,"exportedName":"memory","maximumPages":256,"minimumPages":256,"shared":false}
+$ bun tools/check-worklet-kernel.ts
+{"sampleRates":[44100,48000],"channels":[1,2],"totalFrames":1000,"gain":0.5,"partitionEquality":"exact","partialEpochRejection":true,"starvationAndRecovery":true,"stableMemoryPcmRenderCallsPerConfiguration":10000,"builtProcessorTransferAndRetry":true,"nativeToWasmBitIdentityClaim":false}
+$ bun test tools/check-local-wav.test.ts tools/check-sample-rate.test.ts tools/check-local-pcm-scheduling.test.ts tools/check-wav-seek.test.ts tools/check-wav-loop.test.ts
+ 13 pass
+ 0 fail
+Ran 13 tests across 5 files. [2.31s]
+$ bun test tools/check-local-mp3.test.ts tools/check-mp3-loop.test.ts
+ 4 pass
+ 0 fail
+Ran 4 tests across 2 files. [68.55s]
+$ bun test tools/check-source-waveform.test.ts
+ 3 pass
+ 0 fail
+Ran 3 tests across 1 file. [194.00ms]
+$ bun tools/check-worklet-plan.ts
+{"sampleRates":[44100,48000],"channels":[1,2],"totalFrames":1000,"maximumReferenceError":0,"partitionEquality":"exact","observationWindowFrames":64,"stableMemoryRenderCallsPerConfiguration":10000,"invalidDescriptionRejected":true,"capacityFailureTerminal":true,"builtProcessorHandshakeAndFailureSilence":true}
+$ bun test tools/check-lab.test.ts tools/check-lab-canvas.test.ts
+ 6 pass
+ 0 fail
+Ran 6 tests across 2 files. [132.00ms]
+$ bun test tools/check-lab-ui.test.tsx
+ 8 pass
+ 0 fail
+Ran 8 tests across 1 file. [2.21s]
+$ bun test tools/check-player-ui.test.tsx
+ 22 pass
+ 0 fail
+Ran 22 tests across 1 file. [960.00ms]
+$ bun tools/audit-worklet.ts web/dist/worklet-processor.js
+{"bytes":46477,"forbiddenPatterns":[],"processorRegistrations":1,"synchronousInstantiation":true,"auditedCallbackBodies":["processor.process","WorkletKernel.render","PreparedPlanarAdapter.process","PreparedPlanarAdapter.#fail","wasmRenderFailure","fillSilence"],"callbackForbiddenPatterns":[]}
+$ bun tools/audit-plan-worklet.ts web/dist/plan-processor.js
+{"bytes":35209,"forbiddenPatterns":[],"processorRegistrations":1,"synchronousInstantiation":true,"auditedCallbackBodies":["processor.process","WorkletPlan.render","PreparedPlanAdapter.process","PreparedPlanAdapter.#fail","planSilence"],"callbackForbiddenPatterns":[]}
+Final input identity: 166 paths match; all 13738 daily file hashes unchanged.
+Final rebuilt Wasm, pcm-worker and worklet-processor match the actual final browser-served SHA256 values.
+Both independent implementation reviews PASS. Native release/Clippy and muted browser results are retained worker evidence; parent independently reran debug Rust/full Bun, inspected source/diff/screenshots and verified hashes.
+Human listening remains pending. Initial missed browser field commit has unknown cause, not claimed repaired or accepted owner state loss.

@@ -1,7 +1,7 @@
 import { afterAll, afterEach, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { PlaybackOwner } from "../web/src/playback-owner";
-import { FakeWavLoopPlayback } from "../web/test/wav-loop-fixture";
+import { FakeMediaLoopPlayback } from "../web/test/media-loop-fixture";
 import { FakePlayback, deferred } from "../web/test/playback-fixture";
 
 GlobalRegistrator.register({ url: "http://localhost/player.html" });
@@ -22,7 +22,7 @@ afterEach(cleanup);
 afterAll(() => GlobalRegistrator.unregister());
 
 test("WAV loop disclosure, exact frame fields, keyboard handles and terminal retry clarity",async()=>{
-  const playback=new FakeWavLoopPlayback();const owner=new PlaybackOwner(async()=>playback,unavailableWaveform);
+  const playback=new FakeMediaLoopPlayback();const owner=new PlaybackOwner(async()=>playback,unavailableWaveform);
   const view=render(<PlayerApp owner={owner}/>);await act(()=>owner.load(new File([],"loop.wav")));
   await userEvent.setup().click(view.getByRole("button",{name:"Loop editor"}));
   expect(playback.loopCalls).toEqual([]);expect(view.getByRole("checkbox",{name:"Loop"})).toBeTruthy();
@@ -364,7 +364,7 @@ test("reduced motion observed by polling redraws only a baseline even without a 
 });
 
 test("initial seven-output-frame WAV exposes its loop reason while linear Play remains usable",async()=>{
-  const p=new FakeWavLoopPlayback();p.totalFrames=7;
+  const p=new FakeMediaLoopPlayback();p.totalFrames=7;
   const owner=new PlaybackOwner(async()=>p,unavailableWaveform);const view=render(<PlayerApp owner={owner}/>);
   try{
     await act(()=>owner.load(new File([],"seven.wav")));
@@ -379,7 +379,7 @@ test("initial seven-output-frame WAV exposes its loop reason while linear Play r
 
 test("loop disclosure preserves the single failed visual caption and closed enabled cue",async()=>{
   const original=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=()=>null;
-  const p=new FakeWavLoopPlayback();const owner=new PlaybackOwner(async()=>p,unavailableWaveform);
+  const p=new FakeMediaLoopPlayback();const owner=new PlaybackOwner(async()=>p,unavailableWaveform);
   try{
     const view=render(<PlayerApp owner={owner}/>);await act(()=>owner.load(new File([],"loop.wav")));
     const caption=view.container.querySelector("figcaption")!;const canvas=view.container.querySelector("canvas");

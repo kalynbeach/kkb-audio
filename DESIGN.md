@@ -139,12 +139,11 @@ Player extraction is grounded in [`web/player.css`](web/player.css), [`web/src/p
 
 [Dated implementation evidence](docs/2026-09-13-compact-player.md) distinguishes original checks from the repair's current screenshots and 47-assertion muted browser run. The repair mobile compact screenshot includes a transient Settings exit snapshot, not a settled-state rule. Documentation is not parent acceptance, publication or device/accessibility certification.
 
-## WAV loop interaction (#19, implemented for review)
+## Shared WAV/MP3 loop interaction (#19/#20)
 
 The repeat utility discloses an editor independently of enabling looping. Its opaque absolute overlay
 sits above the visual's bottom edge without resizing that visual or the 40px full-track waveform.
-It persists across replacement while the new track resets whole/off. MP3 controls explicitly do not
-offer loops. One hatched interval and labelled A/B handles remain distinct from the consumed playhead.
+It persists across replacement while the new track resets whole/off. MP3 reuses the same controls on its validated decoded-and-trimmed media timeline. One hatched interval and labelled A/B handles remain distinct from the consumed playhead.
 Exact fields accept fractional mm:ss or source frames suffixed `f` (Enter/blur commit, Escape restores);
 arrow handles use 1 second / Shift 5 seconds and Shift-drag creates a region. Invalid or too-short
 requests retain the accepted interval with feedback, rather than a prototype one-second floor.

@@ -1,4 +1,4 @@
-import { LocalMedia, PreparedRateConverter, PreparedWavLoop, initSync } from "./generated/kkb_audio.js";
+import { LocalMedia, PreparedRateConverter, PreparedMediaLoop, initSync } from "./generated/kkb_audio.js";
 import { isPcmStreamConfig } from "./pcm-protocol";
 import { fillDeterministic } from "./pcm-worker-pool";
 import { LocalPcmProducer } from "./local-pcm-producer";
@@ -16,22 +16,26 @@ let outputRate: number | undefined;
 let transport: MessagePort | undefined;
 type LoopRequest = { a: number; b: number };
 type LoopChange = LoopRequest & { enabled: boolean; edit: boolean };
-let wavLoop: PreparedWavLoop | undefined;
+let mediaLoop: PreparedMediaLoop | undefined;
 let loopReadRevision = 0n;
 let latestSeek: { epoch: number; target: number; loop?: LoopRequest; recovery?: boolean; loopChange?: LoopChange } | undefined;
 let reportedUnderruns = 0;
 async function feedLoop(): Promise<void> {
-  const loop = wavLoop!;
+  const loop = mediaLoop!;
   if (loop.read_revision() !== loopReadRevision) {
     loopReadRevision = loop.read_revision();
-    media!.seek(loop.source_frames_read());
+    media!.seek_loop(loop.source_frames_read());
   }
   const needed = Math.min(loop.input_frames_needed(), WAV_READ_FRAMES);
   if (!needed) return;
   media!.request(needed);
+  const started = performance.now();
   while (media!.available_frames() === 0) {
     if (latestSeek) return;
-    media!.accept(await readWindow(Number(media!.offset()), media!.length()));
+    if (performance.now() - started > 30000 || !media!.length()) throw new Error("Loop reconstruction timed out or truncated");
+    const bytes = await readWindow(Number(media!.offset()), media!.length());
+    if (latestSeek) return;
+    media!.accept(bytes);
   }
   if (!latestSeek) loop.push(media!.take(needed));
 }
@@ -86,23 +90,35 @@ async function runSeeks(): Promise<void> {
       let pcmFrame = reply.pcmFrame;
       if (request.loopChange) request.loop = reply.loopEnabled ? { a: request.loopChange.a, b: request.loopChange.b } : undefined;
       if (request.loop) {
-        if (media!.anchor_and_discard()) throw new Error("MP3 looping is unavailable");
         if (!request.recovery) {
-          wavLoop?.free();
-          wavLoop = new PreparedWavLoop(media!.sample_rate(), outputRate!, media!.channels(), media!.total_frames(), BigInt(request.loop.a), BigInt(request.loop.b));
+          mediaLoop?.free();
+          mediaLoop = new PreparedMediaLoop(media!.sample_rate(), outputRate!, media!.channels(), media!.total_frames(), BigInt(request.loop.a), BigInt(request.loop.b));
           loopReadRevision = 0n;
-          while (!wavLoop.head_ready() && !latestSeek) { await feedLoop(); wavLoop.prepare_head(); }
+          const continuation = mediaLoop.continuation_source_frame();
+          if (continuation !== undefined) {
+            media!.prepare_loop_anchor(continuation);
+            const started = performance.now();
+            while (!media!.loop_anchor_ready(continuation) && !latestSeek) {
+              if (performance.now() - started > 30000 || !media!.length()) throw new Error("Loop anchor preparation timed out or truncated");
+              const bytes = await readWindow(Number(media!.offset()), media!.length());
+              if (latestSeek) break;
+              media!.accept(bytes);
+            }
+            if (latestSeek) { media!.cancel_loop_anchor(); continue; }
+          } else media!.clear_loop_anchor();
+          while (!mediaLoop.head_ready() && !latestSeek) { await feedLoop(); mediaLoop.prepare_head(); }
           if (latestSeek) continue;
         }
         pcmFrame = Number(request.loopChange ? converter!.seek_output_frame(BigInt(pcmFrame)) : converter!.seek(BigInt(request.target)));
-        wavLoop!.start(BigInt(pcmFrame));
+        mediaLoop!.start(BigInt(pcmFrame));
         producer!.totalPcmFrames = Number.MAX_SAFE_INTEGER;
-        producer!.loopRegion = { a: Number(wavLoop!.pcm_a()), b: Number(wavLoop!.pcm_b()) };
+        producer!.loopRegion = { a: Number(mediaLoop!.pcm_a()), b: Number(mediaLoop!.pcm_b()) };
         transport!.postMessage({ type: "loop-head", epoch: request.epoch, recovery: request.recovery === true,
-          a: Number(wavLoop!.pcm_a()), b: Number(wavLoop!.pcm_b()), left: wavLoop!.head_sample(0), right: wavLoop!.head_sample(1) });
+          a: Number(mediaLoop!.pcm_a()), b: Number(mediaLoop!.pcm_b()), left: mediaLoop!.head_sample(0), right: mediaLoop!.head_sample(1) });
       } else {
-        const hadLoop = wavLoop !== undefined;
-        wavLoop?.free(); wavLoop = undefined;
+        const hadLoop = mediaLoop !== undefined;
+        mediaLoop?.free(); mediaLoop = undefined;
+        media!.clear_loop_anchor();
         if(request.loopChange)converter!.seek_output_frame(BigInt(pcmFrame));else converter!.seek(BigInt(request.target));
         media!.seek(converter!.source_frames_read());
         producer!.totalPcmFrames = Number(converter!.total_pcm_frames());
@@ -149,8 +165,9 @@ self.onmessage = async (event: MessageEvent) => {
     }
     if (value.type === "seek") {
       if (!producer || !media || !Number.isSafeInteger(value.epoch) || value.epoch <= producer.config.epoch || !Number.isSafeInteger(value.target) || value.target < 0 || value.target > Number(media.total_frames())) throw new Error("invalid seek");
-      if (value.loop && (media.anchor_and_discard() || !Number.isSafeInteger(value.loop.a) || !Number.isSafeInteger(value.loop.b) || value.loop.a < 0 || value.loop.a >= value.loop.b || value.loop.b > Number(media.total_frames()))) throw new Error("Invalid or unsupported WAV loop");
-      if (value.loopChange && (media.anchor_and_discard() || !Number.isSafeInteger(value.loopChange.a) || !Number.isSafeInteger(value.loopChange.b) || value.loopChange.a < 0 || value.loopChange.a >= value.loopChange.b || value.loopChange.b > Number(media.total_frames()) || typeof value.loopChange.enabled !== "boolean" || typeof value.loopChange.edit !== "boolean")) throw new Error("Invalid WAV loop change");
+      if (value.loop && (!Number.isSafeInteger(value.loop.a) || !Number.isSafeInteger(value.loop.b) || value.loop.a < 0 || value.loop.a >= value.loop.b || value.loop.b > Number(media.total_frames()))) throw new Error("Invalid media loop");
+      if (value.loopChange && (!Number.isSafeInteger(value.loopChange.a) || !Number.isSafeInteger(value.loopChange.b) || value.loopChange.a < 0 || value.loopChange.a >= value.loopChange.b || value.loopChange.b > Number(media.total_frames()) || typeof value.loopChange.enabled !== "boolean" || typeof value.loopChange.edit !== "boolean")) throw new Error("Invalid media loop change");
+      media.cancel_loop_anchor();
       latestSeek = { epoch: value.epoch, target: value.target, loop: value.loop, recovery: value.recovery === true, loopChange: value.loopChange };
       self.postMessage({ type: "seek-accepted", epoch: value.epoch });
       seekReady?.();
@@ -166,7 +183,7 @@ self.onmessage = async (event: MessageEvent) => {
     if (value.type === "activate") { producer?.activate(); return; }
     if (value.type === "stall") { producer?.stall(value.value === true); return; }
     if (value.type === "producer-status") {
-      self.postMessage({ type: "producer-status", epoch: producer?.config.epoch, polls: producer?.polls, preparedPcmFrames: producer?.preparedPcmFrames, initialAdmittedBlocks: producer?.initialAdmittedBlocks, admittedPcmFrames: producer?.admittedPcmFrames, rejections: producer?.rejections, maxPollDelayMilliseconds: producer?.maxPollDelayMilliseconds, sourceFramesRead: converter ? Number(converter.source_frames_read()) : undefined }); return;
+      self.postMessage({ type: "producer-status", epoch: producer?.config.epoch, polls: producer?.polls, preparedPcmFrames: producer?.preparedPcmFrames, initialAdmittedBlocks: producer?.initialAdmittedBlocks, admittedPcmFrames: producer?.admittedPcmFrames, rejections: producer?.rejections, maxPollDelayMilliseconds: producer?.maxPollDelayMilliseconds, loopRestorePackets: media ? Number(media.loop_restore_packets()) : 0, sourceFramesRead: converter ? Number(converter.source_frames_read()) : undefined }); return;
     }
     if (producer !== undefined || value.type !== "initialize" || !isPcmStreamConfig(value.config) || !(value.port instanceof MessagePort)) throw new Error("invalid initialization");
     const config = value.config;
@@ -178,13 +195,13 @@ self.onmessage = async (event: MessageEvent) => {
         if (!media || !file) { fillDeterministic(buffer, config, start); return; }
         const output = new Float32Array(buffer);
         let written = 0;
-        if (wavLoop) {
+        if (mediaLoop) {
           while (written < frames && !latestSeek) {
             await feedLoop();
             if (latestSeek) return;
-            const copied = Math.min(wavLoop.available_frames(), frames - written);
-            for (let channel = 0; channel < config.channelCount; channel++) output.set(new Float32Array(memory!.buffer, wavLoop.output_ptr(channel), copied), channel * config.slotFrames + written);
-            wavLoop.consume(copied);
+            const copied = Math.min(mediaLoop.available_frames(), frames - written);
+            for (let channel = 0; channel < config.channelCount; channel++) output.set(new Float32Array(memory!.buffer, mediaLoop.output_ptr(channel), copied), channel * config.slotFrames + written);
+            mediaLoop.consume(copied);
             written += copied;
           }
           return;

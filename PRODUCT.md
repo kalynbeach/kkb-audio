@@ -58,7 +58,7 @@ Hidden/internal-library, reduced-motion and Settings Pause visual stop reads/dra
 tap; returning waits for fresh rendered history without starting audio. Canvas/analyser failure is
 visual-only. No extra decoding, audio callback work, microphone or playback owner is introduced.
 [Live signal evidence](docs/2026-09-13-live-oscilloscope.md) records timing and support limitations.
-WAV loops (#19) are implemented for review, with one region defaulting to whole-track/off. Opening
+WAV/MP3 loops (#19/#20) are implemented, with one region defaulting to whole-track/off. Opening
 its opaque editor does not enable looping or start audio. Exact fields (fractional mm:ss or source
 frames suffixed `f`), independent labelled handles, hatched region, Shift-drag and Reset preserve the
 approved compact composition. Fields expose requested boundaries; details distinguish realized output
@@ -70,8 +70,7 @@ track retry, not a dead loop-only Retry. Held-head smoothing is not a universal 
 human listening remains pending. Review repairs retain latest control intent before preparation,
 pause an acknowledgment-time EOS before any loop head can play, expose initial short-file rejection,
 and keep visual explanations visible above the bounded editor. See [loop evidence](docs/2026-09-14-wav-loops.md).
-MP3 loops (#20), persistence/catalog, queues, HTTP, broader codecs and deployment remain separate/out
-of scope. No fake signal, clock or dead loop controls ship.
+MP3 loop continuation uses a bounded private encoded anchor on the decoded-and-trimmed timeline; internal carrier/predecessor PCM is discarded, never media. See [MP3 loop evidence](docs/2026-09-14-mp3-loops.md). Persistence/catalog, queues, HTTP, broader codecs and deployment remain out of scope. No fake signal, clock or dead loop controls ship.
 Muted/device-free checks are not listening, broad browser, device or background certification; see
 [implementation evidence](docs/2026-09-13-compact-player.md).
 

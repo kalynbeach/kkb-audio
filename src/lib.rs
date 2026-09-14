@@ -180,7 +180,7 @@ mod local_media;
 mod sample_rate;
 
 #[allow(dead_code)]
-mod wav_loop;
+mod media_loop;
 
 // Gate A remains private and does not consume the prepared PCM seam.
 #[allow(dead_code)]

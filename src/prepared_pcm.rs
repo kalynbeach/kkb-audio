@@ -1,5 +1,5 @@
 //! Private host-neutral prepared-PCM seam used by the Milestone 3 proofs.
-use crate::wav_loop::LoopRegion;
+use crate::media_loop::LoopRegion;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ChannelLayout {
@@ -989,14 +989,14 @@ mod tests {
         (result, input.loop_iteration(), contributions)
     }
     #[test]
-    fn wav_loop_partition_and_contribution_accounting_includes_many_wraps_per_block() {
+    fn media_loop_partition_and_contribution_accounting_includes_many_wraps_per_block() {
         let all = render_loop_partitions(&[1000]);
         assert_eq!(all, render_loop_partitions(&[1; 1000]));
         assert_eq!(all, render_loop_partitions(&[17, 257, 1, 513, 212]));
         assert_eq!(all.1, 58);
     }
     #[test]
-    fn wav_loop_underrun_fades_exactly_holds_cursor_and_reprimes_start() {
+    fn media_loop_underrun_fades_exactly_holds_cursor_and_reprimes_start() {
         let mut first = block(0, 2, 0, 4, false);
         first.left = [0.5; 4];
         first.right = [-0.25; 4];
