@@ -525,4 +525,32 @@ records the final parent isolated 147-test check, 39-assertion pre-final-fix bro
 reduced-motion pixel confirmation, bounded real foreground workload and preserved failures.
 Independent reviews passed after the parent corrected their shared failure-caption P2 and obtained
 a focused recheck. Browser evidence predates that caption-only repair. No merge or deployment;
-#19/#20 remain separate and unimplemented.
+#19/#20 remain separate; the following #19 implementation status supersedes “unimplemented” for WAV only.
+
+Implementation status, 2026-09-14 (#19): WAV held-head seam smoothing, fixed realized converted-period
+repetition, bounded head preparation, native/browser loop control and player overlay are implemented
+and parent-accepted for stacked PR publication. The parent resolved all six gates, then refined terminal source-failure classification and
+exact acknowledgment-time PCM capture for loop changes. The [canonical loop contract](2026-08-28-kkb-audio-system-architecture.md#loop-contract)
+records these enduring decisions; [dated evidence](2026-09-14-wav-loops.md) records checks, failures,
+resource bounds and remaining listening acceptance. Normal wraps preserve render state; explicit changes may
+prepare silence, and LoopUnderrun extends a failed iteration with bounded fade/re-prime. The fixed
+output period does not promise bounded cumulative source-duration drift. MP3 looping (#20) remains
+unimplemented and unavailable. Muted numerical/runtime checks are not human listening acceptance,
+publication, issue closure, merge or deployment authorization.
+
+#19 bounded review repair (2026-09-14): the original engine/player reviews blocked publication, and
+an additional parent-reproduced owner race was included in the same repair batch. Red-capable
+regressions now cover native EOF-drain head readiness, acknowledgment-time EOS pause, disabled/pending
+native region intent, both held-poll owner timings and initial short-WAV capability feedback.
+Current isolated checks report 80 Rust tests passing per debug/release configuration (2 physical tests
+ignored) and 157 formal Bun tests passing, with Clippy/fixed-memory/allocator/callback gates retained.
+Targeted muted runtime verifies real EOS suspension-before-readiness, latest owner sequences, visible
+single visual captions, 320px nonoverlapping centered controls, 361px sizing and settled light/dark
+compositions. The [repair evidence](2026-09-14-wav-loops.md#bounded-review-repair-2026-09-14) links a bounded
+repository-hosted set and corrects the initial caption/mode overclaims. Both retained rechecks found
+a remaining cancelled-enable intent leak. The parent reproduced seek cancellation and queued-enable
+replacement by Pause, repaired intent retirement, and retained both red/green regressions. The final
+isolated Bun suite passes 159 tests; both retained reviewers passed the focused correction. Parent
+verified 159 final source/build inputs and all 13,738 unchanged daily-output files, then accepted
+stacked PR publication. Muted browser evidence predates that final owner-only correction, explicitly
+qualified in the evidence. #20 and human listening remain separate; no merge/deployment authorization.

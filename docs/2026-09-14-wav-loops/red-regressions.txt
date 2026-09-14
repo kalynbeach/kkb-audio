@@ -1,0 +1,34 @@
+Retained red regressions before their fixes. Full logs remain in /tmp/kkb-audio-19-repair/.
+
+native-head-red:
+thread 'cpal_host::tests::wav_loop_native_eof_drain_head_matches_reference_and_remains_cancellable' (19294382) panicked at src/cpal_host.rs:1864:17:
+EOF loop head did not become ready 44100->48000; WorkerControl drop cancels the worker
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 80 filtered out; finished in 2.05s
+
+native-eos-red:
+thread 'cpal_host::tests::wav_loop_native_acknowledged_eos_pauses_before_head_consumption' (19294421) panicked at src/cpal_host.rs:1903:9:
+EOS must be captured at acknowledgment
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 80 filtered out; finished in 0.00s
+
+native-region-red:
+thread 'cpal_host::tests::wav_loop_native_region_command_respects_disabled_and_pending_intent' (19308591) panicked at src/cpal_host.rs:1884:9:
+assertion `left == right` failed: including edit after acknowledged off must stay off
+  left: 2
+ right: 0
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 81 filtered out; finished in 0.01s
+
+owner-red:
+Expected: 48000
+Received: 0
+(fail) PlaybackOwner newest edit survives enable waiting for a held poll [1.64ms]
+Expected: 3000
+Received: 2000
+(fail) PlaybackOwner held-poll queue cannot revive R2 after preparing R3 supersedes [2.83ms]
+
+ui-red:
+Expected: false
+Received: true
+(fail) initial seven-output-frame WAV exposes its loop reason while linear Play remains usable [5.29ms]
+
+Draft repair check failures: a possibly-undefined loopPause guard was narrowed; Clippy requested a collapsed let-chain. Both repaired, no contract change.
+Browser fixture: a20ms wall-time assumption failed to establish EOS; state-based bounded waiting was used before the successful acknowledgment test. Browser page error log empty.

@@ -22,6 +22,13 @@ export const HostFailure = {
 } as const;
 
 export interface WorkletKernelBinding {
+  loop_extension_frames?(): bigint;
+  loop_lost_frames?(): bigint;
+  loop_iteration?(): bigint;
+  loop_underruns?(): bigint;
+  loop_recovering?(): boolean;
+  loop_seam_frames?(): number;
+  loop_first_iteration?(): bigint;
   epoch(): bigint;
   ready(): boolean;
   source_position(): bigint;
@@ -47,6 +54,13 @@ export interface WorkletKernelBinding {
 export interface WorkletMemory { readonly buffer: ArrayBuffer; }
 
 export type RenderSnapshot = {
+  loopExtensionFrames?: number;
+  loopLostFrames?: number;
+  loopIteration?: number;
+  loopUnderruns?: number;
+  loopRecovering?: boolean;
+  loopSeamFrames?: number;
+  loopFirstIteration?: number;
   epoch: number;
   presentationTime: null;
   ready: boolean;
@@ -171,6 +185,13 @@ export class PreparedPlanarAdapter {
 
   snapshot(): RenderSnapshot {
     return {
+      loopExtensionFrames: Number(this.#kernel.loop_extension_frames?.() ?? 0n),
+      loopLostFrames: Number(this.#kernel.loop_lost_frames?.() ?? 0n),
+      loopIteration: Number(this.#kernel.loop_iteration?.() ?? 0n),
+      loopUnderruns: Number(this.#kernel.loop_underruns?.() ?? 0n),
+      loopRecovering: this.#kernel.loop_recovering?.() ?? false,
+      loopSeamFrames: this.#kernel.loop_seam_frames?.() ?? 0,
+      loopFirstIteration: Number(this.#kernel.loop_first_iteration?.() ?? 0n),
       epoch: Number(this.#kernel.epoch()),
       presentationTime: null,
       ready: this.#kernel.ready(),

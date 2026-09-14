@@ -1,6 +1,7 @@
 import { afterAll, afterEach, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { PlaybackOwner } from "../web/src/playback-owner";
+import { FakeWavLoopPlayback } from "../web/test/wav-loop-fixture";
 import { FakePlayback, deferred } from "../web/test/playback-fixture";
 
 GlobalRegistrator.register({ url: "http://localhost/player.html" });
@@ -19,6 +20,26 @@ const { default: userEvent } = await import("@testing-library/user-event");
 const { PlayerApp } = await import("../web/src/player-app");
 afterEach(cleanup);
 afterAll(() => GlobalRegistrator.unregister());
+
+test("WAV loop disclosure, exact frame fields, keyboard handles and terminal retry clarity",async()=>{
+  const playback=new FakeWavLoopPlayback();const owner=new PlaybackOwner(async()=>playback,unavailableWaveform);
+  const view=render(<PlayerApp owner={owner}/>);await act(()=>owner.load(new File([],"loop.wav")));
+  await userEvent.setup().click(view.getByRole("button",{name:"Loop editor"}));
+  expect(playback.loopCalls).toEqual([]);expect(view.getByRole("checkbox",{name:"Loop"})).toBeTruthy();
+  const a=view.getByRole("textbox",{name:"Loop A time"});
+  fireEvent.change(a,{target:{value:"48000f"}});fireEvent.keyDown(a,{key:"Enter"});await waitFor(()=>expect(owner.getState().loop.region?.a).toBe(48000));
+  expect(playback.loopCalls).toEqual([]);
+  fireEvent.change(a,{target:{value:"bad"}});fireEvent.keyDown(a,{key:"Enter"});expect(a.getAttribute("aria-invalid")).toBe("true");fireEvent.keyDown(a,{key:"Escape"});expect(a.getAttribute("aria-invalid")).toBe("false");
+  await userEvent.setup().click(view.getByRole("checkbox",{name:"Loop"}));await waitFor(()=>expect(owner.getState().loop.phase).toBe("Armed"));expect(playback.paused).toBe(true);
+  fireEvent.keyDown(view.getByRole("slider",{name:"Loop A"}),{key:"ArrowRight",shiftKey:true});await waitFor(()=>expect(owner.getState().loop.region?.a).toBe(288000));await waitFor(()=>expect(owner.getState().loop.enabled).toBe(false));expect(playback.snapshot.pcmPosition).toBe(48000);
+  await act(()=>owner.setLoopEnabled(true));await act(()=>owner.play());
+  playback.snapshot={...playback.snapshot,ready:false,loopRecovering:true,loopUnderruns:1};await act(()=>owner.refresh());
+  expect(view.getByRole("button",{name:/^Pause$/}).hasAttribute("disabled")).toBe(false);
+  await act(()=>owner.pause());expect(view.getByRole("button",{name:/^Play$/})).toBeTruthy();
+  playback.snapshot={...playback.snapshot,ready:true,loopRecovering:false};await act(()=>owner.refresh());
+  playback.pendingStatus=deferred();const failure=owner.refresh();playback.pendingStatus.reject(Error("terminal source failure"));await act(()=>failure);
+  expect(view.queryByRole("checkbox",{name:"Loop"})).toBeNull();expect(view.getByText(/Loop Failed — source unavailable/)).toBeTruthy();
+});
 
 async function setup() {
   const playback = new FakePlayback();
@@ -340,4 +361,38 @@ test("reduced motion observed by polling redraws only a baseline even without a 
     expect(owner.getState().phase).toBe("playing");
     await act(() => owner.close());
   } finally { HTMLCanvasElement.prototype.getContext = originalContext; globalThis.matchMedia = originalMedia; }
+});
+
+test("initial seven-output-frame WAV exposes its loop reason while linear Play remains usable",async()=>{
+  const p=new FakeWavLoopPlayback();p.totalFrames=7;
+  const owner=new PlaybackOwner(async()=>p,unavailableWaveform);const view=render(<PlayerApp owner={owner}/>);
+  try{
+    await act(()=>owner.load(new File([],"seven.wav")));
+    const trigger=view.getByRole("button",{name:"Loop editor"});expect(trigger.hasAttribute("disabled")).toBe(false);
+    await userEvent.setup().click(trigger);
+    expect(view.getByRole("group",{name:"Loop editor"}).textContent).toContain("8");
+    expect(view.queryByRole("checkbox",{name:"Loop"})).toBeNull();
+    expect(view.getByRole("button",{name:/^Play$/}).hasAttribute("disabled")).toBe(false);
+    await act(()=>owner.play());expect(owner.getState().phase).toBe("playing");expect(p.loopCalls).toEqual([]);
+  }finally{await act(()=>owner.close());}
+});
+
+test("loop disclosure preserves the single failed visual caption and closed enabled cue",async()=>{
+  const original=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=()=>null;
+  const p=new FakeWavLoopPlayback();const owner=new PlaybackOwner(async()=>p,unavailableWaveform);
+  try{
+    const view=render(<PlayerApp owner={owner}/>);await act(()=>owner.load(new File([],"loop.wav")));
+    const caption=view.container.querySelector("figcaption")!;const canvas=view.container.querySelector("canvas");
+    const trigger=view.getByRole("button",{name:"Loop editor"});
+    await userEvent.setup().click(trigger);
+    expect(view.container.querySelector(".player-oscilloscope")?.getAttribute("data-loop-editing")).toBe("true");
+    fireEvent.click(view.getByText("Loop coordinates & limits"));
+    expect(view.container.querySelector("figcaption")).toBe(caption);expect(caption.querySelectorAll('[role="status"]').length).toBe(1);
+    expect(caption.textContent).toContain("Visual unavailable");expect(view.container.querySelector("canvas")).toBe(canvas);
+    await act(()=>owner.setLoopEnabled(true));await userEvent.setup().click(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");expect(trigger.getAttribute("data-active")).toBe("true");
+    expect(trigger.getAttribute("title")).toContain("Loop enabled");
+    await act(()=>owner.setLoopEnabled(false));expect(trigger.getAttribute("data-active")).toBe("false");
+    expect(caption.textContent).toContain("Visual unavailable");
+  }finally{await act(()=>owner.close());HTMLCanvasElement.prototype.getContext=original;}
 });

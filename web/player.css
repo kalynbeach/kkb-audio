@@ -24,6 +24,7 @@ button[data-slot="button"] { transition: background-color 120ms ease-out; }
 .player-track-header { padding: 10px 12px 9px; height: 64px; flex: none; min-width: 0; }
 .player-track-header h1 { font-family: var(--pi-font-sans); font-size: 22px; line-height: 27px; font-weight: 500; letter-spacing: -0.025em; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .player-track-header p { font-family: "TX-02", monospace; color: var(--muted-foreground); font-size: 12px; line-height: 17px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-visual-area { position: relative; flex: 1; min-height: 0; display: flex; }
 .player-main-field { min-height: 0; flex: 1; display: flex; padding: 0 5px; }
 .player-visual { margin: 0; width: 100%; min-height: 0; background: var(--muted); overflow: hidden; }
 .player-static-signal { height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 10px; color: var(--muted-foreground); font-family: "TX-02", monospace; font-size: 12px; text-align: center; }
@@ -178,6 +179,13 @@ button[data-slot="button"] { transition: background-color 120ms ease-out; }
   .player-app-header [data-slot="button"] { width: 44px; height: 44px; }
 }
 
+/* At the smallest supported widths only utilities use 34×44 targets: no
+   overlapping hitboxes or displacement of the independently centered transport. */
+@media (max-width: 360px) {
+  .player-utilities [data-slot="button"] { width: 34px; }
+  .player-transport { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+}
+
 /* Signal palettes are painted by Canvas2D; fallback surfaces use the same pair. */
 .player-oscilloscope { position: relative; background: #edf1e8; }
 .dark .player-oscilloscope { background: #0b140e; }
@@ -185,3 +193,28 @@ button[data-slot="button"] { transition: background-color 120ms ease-out; }
 .player-oscilloscope canvas[hidden] { display: none; }
 .player-oscilloscope figcaption { position: absolute; inset: auto 12px 12px; display: flex; flex-direction: column; gap: 4px; color: #36533d; font: 11px/16px "TX-02", monospace; pointer-events: none; }
 .dark .player-oscilloscope figcaption { color: #b5c6ae; }
+.player-oscilloscope[data-loop-editing="true"] figcaption { top: 12px; bottom: auto; }
+
+/* Opaque disclosure above the unchanged visual/waveform sizing flow. */
+/* The actual caption stays above the editor, including its two-line states.
+   The containing visual area supplies the height, not a viewport approximation. */
+.player-loop-overlay { position: absolute; bottom: 0; left: 5px; right: 5px; z-index: 4; padding: 6px; border: 1px solid var(--border); background: var(--card); color: var(--card-foreground); max-height: min(250px, calc(100% - 64px)); overflow-y: auto; }
+.player-loop-fields { display: flex; align-items: center; gap: 6px; min-height: 28px; }
+.player-loop-field { display: flex; align-items: center; gap: 3px; min-width: 0; flex: 1; }
+.player-loop-field input { width: 100%; min-width: 0; height: 28px; padding: 0 2px; font: 11px "TX-02", monospace; box-shadow: none; }
+.player-loop-enable { display: flex; align-items: center; gap: 3px; font: 11px "TX-02", monospace; }
+.player-loop-fields [data-slot="button"] { font: 11px "TX-02", monospace; padding-inline: 3px; }
+.player-loop-message, .player-loop-details { font: 11px/16px "TX-02", monospace; margin-top: 4px; }
+.player-loop-details summary { cursor: pointer; }
+.player-loop-details p { margin-top: 6px; overflow-wrap: anywhere; }
+.player-loop-region { position: absolute; top: 0; bottom: 0; z-index: 2; background: repeating-linear-gradient(135deg, transparent 0 3px, color-mix(in srgb,var(--foreground) 20%,transparent) 3px 4px); pointer-events: none; }
+.player-loop-boundary { position: absolute; top: 0; bottom: 0; z-index: 3; width: 16px; margin-left: -8px; border: 0; background: transparent; cursor: ew-resize; touch-action: none; }
+.player-loop-boundary::after { content: ""; position: absolute; top: 0; bottom: 0; left: 7px; border-left: 1px solid var(--foreground); }
+.player-loop-boundary span { position: absolute; top: 0; background: var(--card); color: var(--foreground); font: 11px "Departure Mono", monospace; padding: 1px; z-index: 1; }
+.player-loop-boundary-a span { left: 8px; }.player-loop-boundary-b span { right: 8px; }
+.player-waveform[data-editing="true"] .player-range { cursor: crosshair; }
+::view-transition-group(.loop-layer) { z-index: 20; animation: none; }
+::view-transition-old(.loop-layer) { animation: 120ms ease-in both loop-fade reverse; }
+::view-transition-new(.loop-layer) { animation: 180ms ease-out both loop-fade; }
+@keyframes loop-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { ::view-transition-old(.loop-layer), ::view-transition-new(.loop-layer) { animation-duration: 0s; } }

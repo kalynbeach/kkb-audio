@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { PlaybackOwner } from "./playback-owner";
 import { drawOscilloscope, OscilloscopeHistory, OSCILLOSCOPE_INTERVAL } from "./oscilloscope-render";
 
-export function PlayerOscilloscope({ owner, paused }: { owner: PlaybackOwner; paused: boolean }) {
+export function PlayerOscilloscope({ owner, paused, editing = false }: { owner: PlaybackOwner; paused: boolean; editing?: boolean }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [label, setLabel] = useState("Play to observe");
   const [channels, setChannels] = useState<1 | 2 | null>(null);
@@ -90,7 +90,7 @@ export function PlayerOscilloscope({ owner, paused }: { owner: PlaybackOwner; pa
       owner.releaseOscilloscope();
     };
   }, [owner, paused]);
-  return <figure className="player-visual player-oscilloscope" aria-label="Live oscilloscope, rendered signal before listening volume">
+  return <figure className="player-visual player-oscilloscope" data-loop-editing={editing} aria-label="Live oscilloscope, rendered signal before listening volume">
     <canvas ref={canvas} aria-hidden="true" />
     <figcaption><span role="status">{label}</span>{channels ? <span>{channels === 1 ? "Mono" : "L solid / R dashed"} · before volume</span> : null}</figcaption>
   </figure>;

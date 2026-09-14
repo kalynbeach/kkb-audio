@@ -1,0 +1,121 @@
+Parent checks; Bun 1.4.0; isolated copy only: /tmp/kkb-audio-19-validation-20260914
+Before parent cleanup: cargo fmt --check; cargo test --all-targets --all-features; bun run check. Exit 0.
+test result: ok. 80 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 4.45s
+
+RED: bun test web/test/wav-loop.test.ts; exit 1 (two introduced assertions fail before production correction)
+bun test v1.4.0 (34cbb9a40)
+
+web/test/wav-loop.test.ts:
+(pass) WAV loop bounds preserve requested and realized grid; reject too-short without rounding expansion [0.37ms]
+(pass) PlaybackOwner loop edits are inert disabled, preserve paused enable intent, reject invalid region, and use private loop control [1.83ms]
+(pass) PlaybackOwner retains only executing and latest loop change; replacement cannot apply queued region [5.54ms]
+52 |     }
+53 |     expect(owner.getState().loop.enabled).toBe(false);
+54 |     expect(playback.loopCalls).toHaveLength(0);
+55 |     const pcm = playback.snapshot.pcmPosition;
+56 |     await owner.setLoopRegion(48000, 96000);
+57 |     expect(owner.getState().loop.enabled).toBe(false);
+                                               ^
+error: expect(received).toBe(expected)
+
+Expected: false
+Received: true
+
+      at <anonymous> (/private/tmp/kkb-audio-19-validation-20260914/web/test/wav-loop.test.ts:57:43)
+(fail) seek cancels waiting enable retires intent before disabled editing [1.97ms]
+52 |     }
+53 |     expect(owner.getState().loop.enabled).toBe(false);
+54 |     expect(playback.loopCalls).toHaveLength(0);
+55 |     const pcm = playback.snapshot.pcmPosition;
+56 |     await owner.setLoopRegion(48000, 96000);
+57 |     expect(owner.getState().loop.enabled).toBe(false);
+                                               ^
+error: expect(received).toBe(expected)
+
+Expected: false
+Received: true
+
+      at <anonymous> (/private/tmp/kkb-audio-19-validation-20260914/web/test/wav-loop.test.ts:57:43)
+(fail) pause replaces queued enable retires intent before disabled editing [1.44ms]
+(pass) MP3 loop metadata/control stays unavailable; terminal source failure is distinct from LoopUnderrun [0.39ms]
+(pass) PlaybackOwner newest edit survives enable waiting for a held poll [1.43ms]
+(pass) PlaybackOwner held-poll queue cannot revive R2 after preparing R3 supersedes [2.72ms]
+
+ 6 pass
+ 2 fail
+ 47 expect() calls
+Ran 8 tests across 1 file. [32.00ms]
+
+
+GREEN: identical test command; exit 0
+bun test v1.4.0 (34cbb9a40)
+
+web/test/wav-loop.test.ts:
+(pass) WAV loop bounds preserve requested and realized grid; reject too-short without rounding expansion [0.38ms]
+(pass) PlaybackOwner loop edits are inert disabled, preserve paused enable intent, reject invalid region, and use private loop control [1.95ms]
+(pass) PlaybackOwner retains only executing and latest loop change; replacement cannot apply queued region [5.69ms]
+(pass) seek cancels waiting enable retires intent before disabled editing [1.80ms]
+(pass) pause replaces queued enable retires intent before disabled editing [1.40ms]
+(pass) MP3 loop metadata/control stays unavailable; terminal source failure is distinct from LoopUnderrun [0.47ms]
+(pass) PlaybackOwner newest edit survives enable waiting for a held poll [1.48ms]
+(pass) PlaybackOwner held-poll queue cannot revive R2 after preparing R3 supersedes [2.80ms]
+
+ 8 pass
+ 0 fail
+ 51 expect() calls
+Ran 8 tests across 1 file. [31.00ms]
+
+
+FINAL: bun run check; exit 0; 159 formal tests
+$ bun run build:worklet && bun run typecheck && bun test web/test && bun run check:wasm && bun run check:kernel && bun run check:wav && bun run check:mp3 && bun run check:waveform && bun run check:plan && bun run check:lab && bun run check:lab-ui && bun run check:player-ui && bun run audit:worklet && bun run audit:plan
+$ bun tools/build-worklet.ts
+$ bun x tsc --noEmit
+(pass) PreparedPlanarAdapter > memory buffer identity change becomes permanent silence [0.06ms]
+(pass) compiled plan host adapter > capacity, malformed layout, and detached memory become permanent silence before Wasm [0.21ms]
+ 104 pass
+ 0 fail
+ 1170 expect() calls
+Ran 104 tests across 17 files. [3.84s]
+$ bun tools/check-wasm-memory.ts web/dist/kkb_audio_bg.wasm
+{"bytes":16777216,"exportedName":"memory","maximumPages":256,"minimumPages":256,"shared":false}
+$ bun tools/check-worklet-kernel.ts
+{"sampleRates":[44100,48000],"channels":[1,2],"totalFrames":1000,"gain":0.5,"partitionEquality":"exact","partialEpochRejection":true,"starvationAndRecovery":true,"stableMemoryPcmRenderCallsPerConfiguration":10000,"builtProcessorTransferAndRetry":true,"nativeToWasmBitIdentityClaim":false}
+$ bun test tools/check-local-wav.test.ts tools/check-sample-rate.test.ts tools/check-local-pcm-scheduling.test.ts tools/check-wav-seek.test.ts tools/check-wav-loop.test.ts
+ 13 pass
+ 0 fail
+ 431370 expect() calls
+Ran 13 tests across 5 files. [2.38s]
+$ bun test tools/check-local-mp3.test.ts
+ 3 pass
+ 0 fail
+ 3257474 expect() calls
+Ran 3 tests across 1 file. [3.48s]
+$ bun test tools/check-source-waveform.test.ts
+ 3 pass
+ 0 fail
+ 114859 expect() calls
+Ran 3 tests across 1 file. [194.00ms]
+$ bun tools/check-worklet-plan.ts
+{"sampleRates":[44100,48000],"channels":[1,2],"totalFrames":1000,"maximumReferenceError":0,"partitionEquality":"exact","observationWindowFrames":64,"stableMemoryRenderCallsPerConfiguration":10000,"invalidDescriptionRejected":true,"capacityFailureTerminal":true,"builtProcessorHandshakeAndFailureSilence":true}
+$ bun test tools/check-lab.test.ts tools/check-lab-canvas.test.ts
+ 6 pass
+ 0 fail
+ 89 expect() calls
+Ran 6 tests across 2 files. [131.00ms]
+$ bun test tools/check-lab-ui.test.tsx
+ 8 pass
+ 0 fail
+ 97 expect() calls
+Ran 8 tests across 1 file. [2.33s]
+$ bun test tools/check-player-ui.test.tsx
+ 22 pass
+ 0 fail
+ 174 expect() calls
+Ran 22 tests across 1 file. [929.00ms]
+$ bun tools/audit-worklet.ts web/dist/worklet-processor.js
+{"bytes":44697,"forbiddenPatterns":[],"processorRegistrations":1,"synchronousInstantiation":true,"auditedCallbackBodies":["processor.process","WorkletKernel.render","PreparedPlanarAdapter.process","PreparedPlanarAdapter.#fail","wasmRenderFailure","fillSilence"],"callbackForbiddenPatterns":[]}
+$ bun tools/audit-plan-worklet.ts web/dist/plan-processor.js
+{"bytes":33429,"forbiddenPatterns":[],"processorRegistrations":1,"synchronousInstantiation":true,"auditedCallbackBodies":["processor.process","WorkletPlan.render","PreparedPlanAdapter.process","PreparedPlanAdapter.#fail","planSilence"],"callbackForbiddenPatterns":[]}
+
+Identity: 159 final inputs match copy; all 13738 daily output file hashes unchanged.
+Browser screenshots/runtime predate this final owner-only correction; no fresh Chrome, audible or physical-device claim.

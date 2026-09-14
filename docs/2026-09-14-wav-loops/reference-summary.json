@@ -1,0 +1,27 @@
+{
+  "configuration": "Native actual WAV worker/rings/compiled callback; PCM24 stereo, source10003frames, source region[9000,10003).",
+  "cases": [
+    {
+      "sourceRate": 44100,
+      "outputRate": 48000,
+      "pcmA": 9796,
+      "pcmB": 10888,
+      "headFrames": 1092,
+      "fadeFrames": 240,
+      "outputFramesChecked": 2191
+    },
+    {
+      "sourceRate": 48000,
+      "outputRate": 44100,
+      "pcmA": 8269,
+      "pcmB": 9191,
+      "headFrames": 922,
+      "fadeFrames": 220,
+      "outputFramesChecked": 1851
+    }
+  ],
+  "reference": "Independent source decode values → uninterrupted pinned conversion with73/311input partitions → ceil-grid crop → held-head formula → repetition → downstream0.5gain. Each stereo output sample asserts same-build exact equality; candidate callbacks≤511frames.",
+  "regression": "Review-derived converter chunk calculation:1084 initial head frames +8 EOF drain frames. Executed native red test timed out in2s and cancelled its worker. Native preparation now calls prepare_head/start on every bounded fill iteration including needed=0; exact sample references pass.",
+  "failureAndCancellation": "Same EOF-region test coverage includes authored truncated-source terminal failure and stop while head not ready; no physical output. Native EOS and off/pending-region command tests use the actual control path.",
+  "limits": "These are selected same-build references, not cross-platform bit identity or audible-smoothness acceptance."
+}

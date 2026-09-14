@@ -1,0 +1,49 @@
+Final repair checks: Bun1.4.0, Rust/Cargo1.98.0; isolated plain copy /tmp/kkb-audio-19-validation-20260914.
+
+final-rust-debug:
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.67s
+test result: ok. 80 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 4.45s
+
+final-rust-release:
+    Finished `release` profile [optimized] target(s) in 5.65s
+test result: ok. 80 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 1.20s
+
+final-clippy-native:
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.47s
+
+final-clippy-wasm:
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.75s
+
+cargo fmt --check: passed (empty final-fmt.log).
+
+bun run check, actual formal-test summaries:
+ 102 pass
+ 0 fail
+Ran 102 tests across 17 files. [3.81s]
+{"bytes":16777216,"exportedName":"memory","maximumPages":256,"minimumPages":256,"shared":false}
+{"sampleRates":[44100,48000],"channels":[1,2],"totalFrames":1000,"gain":0.5,"partitionEquality":"exact","partialEpochRejection":true,"starvationAndRecovery":true,"stableMemoryPcmRenderCallsPerConfiguration":10000,"builtProcessorTransferAndRetry":true,"nativeToWasmBitIdentityClaim":false}
+{"simulatedRate":48000,"totalFrames":480000,"callbacks":3793,"naturalStarvation":0,"injectedStarvationCallbacks":43,"supplyPolls":5080,"rejectedBlocks":0,"maximumPendingTimers":1,"browserDeadlineClaim":false}
+ 13 pass
+ 0 fail
+Ran 13 tests across 5 files. [2.40s]
+ 3 pass
+ 0 fail
+Ran 3 tests across 1 file. [3.40s]
+ 3 pass
+ 0 fail
+Ran 3 tests across 1 file. [230.00ms]
+{"sampleRates":[44100,48000],"channels":[1,2],"totalFrames":1000,"maximumReferenceError":0,"partitionEquality":"exact","observationWindowFrames":64,"stableMemoryRenderCallsPerConfiguration":10000,"invalidDescriptionRejected":true,"capacityFailureTerminal":true,"builtProcessorHandshakeAndFailureSilence":true}
+ 6 pass
+ 0 fail
+Ran 6 tests across 2 files. [133.00ms]
+ 8 pass
+ 0 fail
+Ran 8 tests across 1 file. [2.30s]
+ 22 pass
+ 0 fail
+Ran 22 tests across 1 file. [940.00ms]
+{"bytes":44697,"forbiddenPatterns":[],"processorRegistrations":1,"synchronousInstantiation":true,"auditedCallbackBodies":["processor.process","WorkletKernel.render","PreparedPlanarAdapter.process","PreparedPlanarAdapter.#fail","wasmRenderFailure","fillSilence"],"callbackForbiddenPatterns":[]}
+{"bytes":33429,"forbiddenPatterns":[],"processorRegistrations":1,"synchronousInstantiation":true,"auditedCallbackBodies":["processor.process","WorkletPlan.render","PreparedPlanAdapter.process","PreparedPlanAdapter.#fail","planSilence"],"callbackForbiddenPatterns":[]}
+
+Formal Bun total:102+13+3+3+6+8+22=157. Native debug/release repeat the same80 tests;2 physical tests ignored per run. Standalone audits are not extra test counts.
+Callback allocator/deallocator probes passed with [0,0,0,0], including native EOS pause CAS.

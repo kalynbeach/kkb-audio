@@ -1,4 +1,4 @@
-import { LocalMedia, PreparedRateConverter, initSync } from "./generated/kkb_audio.js";
+import { LocalMedia, PreparedRateConverter, PreparedWavLoop, initSync } from "./generated/kkb_audio.js";
 import { isPcmStreamConfig } from "./pcm-protocol";
 import { fillDeterministic } from "./pcm-worker-pool";
 import { LocalPcmProducer } from "./local-pcm-producer";
@@ -14,7 +14,27 @@ let converter: PreparedRateConverter | undefined;
 let memory: WebAssembly.Memory | undefined;
 let outputRate: number | undefined;
 let transport: MessagePort | undefined;
-let latestSeek: { epoch: number; target: number } | undefined;
+type LoopRequest = { a: number; b: number };
+type LoopChange = LoopRequest & { enabled: boolean; edit: boolean };
+let wavLoop: PreparedWavLoop | undefined;
+let loopReadRevision = 0n;
+let latestSeek: { epoch: number; target: number; loop?: LoopRequest; recovery?: boolean; loopChange?: LoopChange } | undefined;
+let reportedUnderruns = 0;
+async function feedLoop(): Promise<void> {
+  const loop = wavLoop!;
+  if (loop.read_revision() !== loopReadRevision) {
+    loopReadRevision = loop.read_revision();
+    media!.seek(loop.source_frames_read());
+  }
+  const needed = Math.min(loop.input_frames_needed(), WAV_READ_FRAMES);
+  if (!needed) return;
+  media!.request(needed);
+  while (media!.available_frames() === 0) {
+    if (latestSeek) return;
+    media!.accept(await readWindow(Number(media!.offset()), media!.length()));
+  }
+  if (!latestSeek) loop.push(media!.take(needed));
+}
 let seeking = false;
 let seekReady: (() => void) | undefined;
 let cachedBytes = new Uint8Array(0);
@@ -38,10 +58,12 @@ async function readWindow(offset: number, length: number): Promise<Uint8Array> {
   }
   return cachedBytes.subarray(offset - cachedOffset, offset - cachedOffset + length);
 }
-let transitionReply: ((value: { pcmFrame: number }) => void) | undefined;
+type LoopTransition = { pcmFrame: number; loopEnabled?: boolean; pauseRequired?: boolean };
+let transitionReply: ((value: LoopTransition) => void) | undefined;
+let loopPause: { epoch: number; resolve: () => void } | undefined;
 
-function transition(type: "begin-seek" | "finish-seek", epoch: number, target: number): Promise<{ pcmFrame: number }> {
-  return new Promise(resolve => { transitionReply = resolve; transport!.postMessage({ type, epoch, target }); });
+function transition(type: "begin-seek" | "finish-seek", epoch: number, target: number, extra: Record<string, unknown> = {}): Promise<LoopTransition> {
+  return new Promise(resolve => { transitionReply = resolve; transport!.postMessage({ type, epoch, target, ...extra }); });
 }
 async function runSeeks(): Promise<void> {
   if (seeking) return;
@@ -51,10 +73,42 @@ async function runSeeks(): Promise<void> {
       await producer!.quiesce();
       const request = latestSeek;
       latestSeek = undefined;
-      const { pcmFrame } = await transition("begin-seek", request.epoch, request.target);
+      const reply = await transition("begin-seek", request.epoch, request.target, { recovery: request.recovery === true, loopChange: request.loopChange });
+      if (reply.pauseRequired) {
+        // EOS was captured with PCM. No new supply/finish can precede confirmed
+        // context suspension, even if a newer request is already waiting.
+        await new Promise<void>(resolve => {
+          loopPause = { epoch: request.epoch, resolve };
+          self.postMessage({ type: "loop-ended", epoch: request.epoch });
+        });
+      }
       if (latestSeek) continue;
-      converter!.seek(BigInt(request.target));
-      media!.seek(converter!.source_frames_read());
+      let pcmFrame = reply.pcmFrame;
+      if (request.loopChange) request.loop = reply.loopEnabled ? { a: request.loopChange.a, b: request.loopChange.b } : undefined;
+      if (request.loop) {
+        if (media!.anchor_and_discard()) throw new Error("MP3 looping is unavailable");
+        if (!request.recovery) {
+          wavLoop?.free();
+          wavLoop = new PreparedWavLoop(media!.sample_rate(), outputRate!, media!.channels(), media!.total_frames(), BigInt(request.loop.a), BigInt(request.loop.b));
+          loopReadRevision = 0n;
+          while (!wavLoop.head_ready() && !latestSeek) { await feedLoop(); wavLoop.prepare_head(); }
+          if (latestSeek) continue;
+        }
+        pcmFrame = Number(request.loopChange ? converter!.seek_output_frame(BigInt(pcmFrame)) : converter!.seek(BigInt(request.target)));
+        wavLoop!.start(BigInt(pcmFrame));
+        producer!.totalPcmFrames = Number.MAX_SAFE_INTEGER;
+        producer!.loopRegion = { a: Number(wavLoop!.pcm_a()), b: Number(wavLoop!.pcm_b()) };
+        transport!.postMessage({ type: "loop-head", epoch: request.epoch, recovery: request.recovery === true,
+          a: Number(wavLoop!.pcm_a()), b: Number(wavLoop!.pcm_b()), left: wavLoop!.head_sample(0), right: wavLoop!.head_sample(1) });
+      } else {
+        const hadLoop = wavLoop !== undefined;
+        wavLoop?.free(); wavLoop = undefined;
+        if(request.loopChange)converter!.seek_output_frame(BigInt(pcmFrame));else converter!.seek(BigInt(request.target));
+        media!.seek(converter!.source_frames_read());
+        producer!.totalPcmFrames = Number(converter!.total_pcm_frames());
+        producer!.loopRegion = undefined;
+        if (hadLoop) transport!.postMessage({ type: "loop-head", epoch: request.epoch, disabled: true });
+      }
       const ready = new Promise<void>(resolve => { seekReady = resolve; });
       producer!.reset(request.epoch, pcmFrame);
       await ready;
@@ -64,7 +118,7 @@ async function runSeeks(): Promise<void> {
       if (!latestSeek) {
         const actualMediaFrame = Math.min(Number(media!.total_frames()), Math.floor(pcmFrame * media!.sample_rate() / outputRate!));
         const result = actualMediaFrame !== request.target ? "Adjusted" : media!.anchor_and_discard() || media!.sample_rate() !== outputRate ? "AnchorAndDiscard" : "Exact";
-        self.postMessage({ type: "seek-complete", epoch: request.epoch, requestedFrame: request.target, pcmFrame, result });
+        self.postMessage({ type: "seek-complete", epoch: request.epoch, requestedFrame: request.loopChange ? actualMediaFrame : request.target, pcmFrame, result, loopEnabled: request.loop !== undefined });
       }
     }
   } catch (error) { fail(error); }
@@ -95,10 +149,18 @@ self.onmessage = async (event: MessageEvent) => {
     }
     if (value.type === "seek") {
       if (!producer || !media || !Number.isSafeInteger(value.epoch) || value.epoch <= producer.config.epoch || !Number.isSafeInteger(value.target) || value.target < 0 || value.target > Number(media.total_frames())) throw new Error("invalid seek");
-      latestSeek = { epoch: value.epoch, target: value.target };
+      if (value.loop && (media.anchor_and_discard() || !Number.isSafeInteger(value.loop.a) || !Number.isSafeInteger(value.loop.b) || value.loop.a < 0 || value.loop.a >= value.loop.b || value.loop.b > Number(media.total_frames()))) throw new Error("Invalid or unsupported WAV loop");
+      if (value.loopChange && (media.anchor_and_discard() || !Number.isSafeInteger(value.loopChange.a) || !Number.isSafeInteger(value.loopChange.b) || value.loopChange.a < 0 || value.loopChange.a >= value.loopChange.b || value.loopChange.b > Number(media.total_frames()) || typeof value.loopChange.enabled !== "boolean" || typeof value.loopChange.edit !== "boolean")) throw new Error("Invalid WAV loop change");
+      latestSeek = { epoch: value.epoch, target: value.target, loop: value.loop, recovery: value.recovery === true, loopChange: value.loopChange };
       self.postMessage({ type: "seek-accepted", epoch: value.epoch });
       seekReady?.();
       void runSeeks();
+      return;
+    }
+    if (value.type === "loop-paused") {
+      if (loopPause && loopPause.epoch === value.epoch) {
+        const resolve = loopPause.resolve; loopPause = undefined; resolve();
+      }
       return;
     }
     if (value.type === "activate") { producer?.activate(); return; }
@@ -116,6 +178,17 @@ self.onmessage = async (event: MessageEvent) => {
         if (!media || !file) { fillDeterministic(buffer, config, start); return; }
         const output = new Float32Array(buffer);
         let written = 0;
+        if (wavLoop) {
+          while (written < frames && !latestSeek) {
+            await feedLoop();
+            if (latestSeek) return;
+            const copied = Math.min(wavLoop.available_frames(), frames - written);
+            for (let channel = 0; channel < config.channelCount; channel++) output.set(new Float32Array(memory!.buffer, wavLoop.output_ptr(channel), copied), channel * config.slotFrames + written);
+            wavLoop.consume(copied);
+            written += copied;
+          }
+          return;
+        }
         while (written < frames) {
           const needed = Math.min(converter!.input_frames_needed(), WAV_READ_FRAMES);
           if (needed > 0) {
@@ -147,7 +220,13 @@ self.onmessage = async (event: MessageEvent) => {
     port.onmessage = message => {
       if (message.data?.type === "seek-transition") {
         const resolve = transitionReply; transitionReply = undefined; resolve?.(message.data);
-      } else producer?.accept(message.data);
+      } else {
+        if (message.data?.type === "supply" && message.data.loopUnderruns > reportedUnderruns) {
+          reportedUnderruns = message.data.loopUnderruns;
+          self.postMessage({ type: "loop-underrun", epoch: producer!.config.epoch, count: reportedUnderruns });
+        }
+        producer?.accept(message.data);
+      }
     };
     port.start();
     producer.start();

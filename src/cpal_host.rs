@@ -4,6 +4,7 @@ use crate::prepared_pcm::{
     BlockMeta, ChannelLayout, OwnedPcmBlock, PreparedBlockSource, PreparedPcmInput, StreamSpec,
 };
 use crate::sample_rate::{PcmTimeline, PreparedRateConverter};
+use crate::wav_loop::{LoopRegion, PreparedWavLoop};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, Sample, SampleFormat, SizedSample};
 use rtrb::{Consumer, PopError, Producer, PushError, RingBuffer};
@@ -47,6 +48,19 @@ struct SharedObservation {
     host_failed: AtomicBool,
     playback_command: AtomicU64,
     seek_command: AtomicU64,
+    command_sequence: AtomicU64,
+    next_epoch: AtomicU64,
+    loop_bounds: AtomicU64,
+    loop_effective_bounds: AtomicU64,
+    loop_change: AtomicU32,
+    loop_state: AtomicU32,
+    loop_extension_frames: AtomicU64,
+    loop_lost_frames: AtomicU64,
+    loop_iteration: AtomicU64,
+    loop_underruns: AtomicU64,
+    loop_recovering: AtomicBool,
+    loop_seam_frames: AtomicUsize,
+    loop_first_iteration: AtomicU64,
     snapshot_sequence: AtomicU64,
     epoch: AtomicU64,
     seek_ready: AtomicBool,
@@ -76,6 +90,19 @@ impl SharedObservation {
             host_failed: AtomicBool::new(false),
             playback_command: AtomicU64::new(0),
             seek_command: AtomicU64::new(PROOF_EPOCH << 32),
+            command_sequence: AtomicU64::new(0),
+            next_epoch: AtomicU64::new(PROOF_EPOCH + 1),
+            loop_bounds: AtomicU64::new(0),
+            loop_effective_bounds: AtomicU64::new(0),
+            loop_change: AtomicU32::new(0),
+            loop_state: AtomicU32::new(0),
+            loop_extension_frames: AtomicU64::new(0),
+            loop_lost_frames: AtomicU64::new(0),
+            loop_iteration: AtomicU64::new(0),
+            loop_underruns: AtomicU64::new(0),
+            loop_recovering: AtomicBool::new(false),
+            loop_seam_frames: AtomicUsize::new(0),
+            loop_first_iteration: AtomicU64::new(0),
             snapshot_sequence: AtomicU64::new(0),
             epoch: AtomicU64::new(PROOF_EPOCH),
             seek_ready: AtomicBool::new(false),
@@ -104,13 +131,84 @@ impl SharedObservation {
     fn request_seek(&self, target: u64, timeline: PcmTimeline) -> Result<u64, u32> {
         timeline.seek_pcm_frame(target)?;
         let target = u32::try_from(target).map_err(|_| 71_u32)?;
-        let epoch = (self.seek_command.load(Ordering::Acquire) >> 32) + 1;
+        let bounds = self.loop_effective_bounds.load(Ordering::Acquire);
+        let bounds = if bounds != 0
+            && (u64::from(target) < bounds >> 32 || u64::from(target) >= u64::from(bounds as u32))
+        {
+            0
+        } else {
+            bounds
+        };
+        self.request_position(target, bounds, 0)
+    }
+    fn request_position(&self, target: u32, bounds: u64, loop_change: u32) -> Result<u64, u32> {
+        self.command_sequence.fetch_add(1, Ordering::SeqCst);
+        let epoch = self.next_epoch.fetch_add(1, Ordering::SeqCst);
         if epoch > u64::from(u32::MAX) {
+            self.command_sequence.fetch_add(1, Ordering::SeqCst);
             return Err(71);
         }
+        self.loop_bounds.store(bounds, Ordering::SeqCst);
+        self.loop_change.store(loop_change, Ordering::SeqCst);
         self.seek_command
-            .store((epoch << 32) | u64::from(target), Ordering::Release);
+            .store((epoch << 32) | u64::from(target), Ordering::SeqCst);
+        self.command_sequence.fetch_add(1, Ordering::SeqCst);
         Ok(epoch)
+    }
+    fn request_loop(
+        &self,
+        a: u64,
+        b: u64,
+        enabled: bool,
+        timeline: PcmTimeline,
+        output_rate: u32,
+        wav: bool,
+    ) -> Result<u64, u32> {
+        if !wav || a >= b || b > u64::from(u32::MAX) {
+            return Err(73);
+        }
+        LoopRegion::new(
+            timeline.seek_pcm_frame(a)?,
+            timeline.seek_pcm_frame(b)?,
+            output_rate,
+        )?;
+        self.request_position(0, (a << 32) | b, 1 | (u32::from(enabled) << 1))
+    }
+
+    fn request_region(
+        &self,
+        a: u64,
+        b: u64,
+        timeline: PcmTimeline,
+        output_rate: u32,
+        wav: bool,
+    ) -> Result<Option<u64>, u32> {
+        if !wav || a >= b || b > u64::from(u32::MAX) {
+            return Err(73);
+        }
+        LoopRegion::new(
+            timeline.seek_pcm_frame(a)?,
+            timeline.seek_pcm_frame(b)?,
+            output_rate,
+        )?;
+        let snapshot = self.playback_snapshot();
+        let pending = self.seek_command.load(Ordering::SeqCst) >> 32 > snapshot.epoch;
+        let change = self.loop_change.load(Ordering::SeqCst);
+        let enabled = if pending {
+            if change != 0 {
+                change & 2 != 0
+            } else {
+                self.loop_bounds.load(Ordering::SeqCst) != 0
+            }
+        } else {
+            snapshot.loop_enabled
+        };
+        if !enabled {
+            return Ok(None);
+        }
+        // Before an enable is acknowledged, editing its bounds is still enable intent.
+        let flags = if pending && change == 3 { 3 } else { 7 };
+        self.request_position(0, (a << 32) | b, flags).map(Some)
     }
 
     // Control-side retries only. Callback publication is fixed stores, never a retry loop.
@@ -122,6 +220,15 @@ impl SharedObservation {
                 continue;
             }
             let snapshot = PlaybackSnapshot {
+                loop_enabled: self.loop_effective_bounds.load(Ordering::SeqCst) != 0,
+                loop_state: self.loop_state.load(Ordering::SeqCst),
+                loop_extension_frames: self.loop_extension_frames.load(Ordering::SeqCst),
+                loop_lost_frames: self.loop_lost_frames.load(Ordering::SeqCst),
+                loop_iteration: self.loop_iteration.load(Ordering::SeqCst),
+                loop_underruns: self.loop_underruns.load(Ordering::SeqCst),
+                loop_recovering: self.loop_recovering.load(Ordering::SeqCst),
+                loop_seam_frames: self.loop_seam_frames.load(Ordering::SeqCst),
+                loop_first_iteration: self.loop_first_iteration.load(Ordering::SeqCst),
                 epoch: self.epoch.load(Ordering::SeqCst),
                 source_position: self.source_position.load(Ordering::SeqCst),
                 pcm_position: self.pcm_position.load(Ordering::SeqCst),
@@ -196,6 +303,16 @@ struct ObservationSnapshot {
 
 #[derive(Debug, PartialEq, Eq)]
 struct PlaybackSnapshot {
+    loop_enabled: bool,
+    /// Disabled / Preparing / Armed / Active / Failed = 0 / 1 / 2 / 3 / 4.
+    loop_state: u32,
+    loop_extension_frames: u64,
+    loop_lost_frames: u64,
+    loop_iteration: u64,
+    loop_underruns: u64,
+    loop_recovering: bool,
+    loop_seam_frames: usize,
+    loop_first_iteration: u64,
     epoch: u64,
     source_position: u64,
     pcm_position: u64,
@@ -207,7 +324,12 @@ struct PlaybackSnapshot {
 }
 
 struct NativeSource {
+    failed: Arc<AtomicBool>,
     seek: Arc<AtomicU64>,
+    command_sequence: Arc<AtomicU64>,
+    loop_bounds: Arc<AtomicU64>,
+    pcm_target: Arc<AtomicU64>,
+    head: Arc<[AtomicU32; 2]>,
     ready_epoch: Arc<AtomicU64>,
     ready: Consumer<OwnedPcmBlock>,
     retired: Producer<OwnedPcmBlock>,
@@ -260,6 +382,87 @@ impl Drop for WorkerControl {
     }
 }
 
+struct NativePcmPreparation {
+    linear: PreparedRateConverter,
+    loop_pcm: Option<PreparedWavLoop>,
+    start_pending: Option<u64>,
+    read_revision: u64,
+}
+impl NativePcmPreparation {
+    fn new(sr: u32, ro: u32, channels: usize, total: u64) -> Result<Self, u32> {
+        Ok(Self {
+            linear: PreparedRateConverter::new(sr, ro, channels, total)?,
+            loop_pcm: None,
+            start_pending: None,
+            read_revision: 0,
+        })
+    }
+    fn total_pcm_frames(&self) -> u64 {
+        if self.loop_pcm.is_some() {
+            u64::MAX
+        } else {
+            self.linear.total_pcm_frames()
+        }
+    }
+    fn source_frames_read(&self) -> u64 {
+        self.loop_pcm.as_ref().map_or_else(
+            || self.linear.source_frames_read(),
+            PreparedWavLoop::source_frames_read,
+        )
+    }
+    fn input_frames_needed(&self) -> usize {
+        self.loop_pcm.as_ref().map_or_else(
+            || self.linear.input_frames_needed(),
+            PreparedWavLoop::input_frames_needed,
+        )
+    }
+    fn available_frames(&self) -> usize {
+        self.loop_pcm.as_ref().map_or_else(
+            || self.linear.available_frames(),
+            PreparedWavLoop::available_frames,
+        )
+    }
+    fn output(&self, channel: usize) -> &[f32] {
+        self.loop_pcm
+            .as_ref()
+            .map_or_else(|| self.linear.output(channel), |l| l.output(channel))
+    }
+    fn consume(&mut self, n: usize) -> Result<(), u32> {
+        match &mut self.loop_pcm {
+            Some(l) => l.consume(n),
+            None => self.linear.consume(n),
+        }
+    }
+    fn push(&mut self, pcm: &[f32]) -> Result<(), u32> {
+        if let Some(l) = &mut self.loop_pcm {
+            l.push(pcm)
+        } else {
+            self.linear.push(pcm)
+        }
+    }
+    // Consuming the final conversion chunk can expose drain frames without a push.
+    fn prepare_head(&mut self) -> Result<(), u32> {
+        if let Some(l) = &mut self.loop_pcm
+            && let Some(start) = self.start_pending
+        {
+            l.prepare_head()?;
+            if l.head_ready() {
+                l.start(start)?;
+                self.start_pending = None;
+            }
+        }
+        Ok(())
+    }
+    fn reader_anchor(&mut self) -> Option<u64> {
+        let l = self.loop_pcm.as_ref()?;
+        if l.read_revision() == self.read_revision {
+            return None;
+        }
+        self.read_revision = l.read_revision();
+        Some(l.source_frames_read())
+    }
+}
+
 fn spawn_pcm_worker(layout: ChannelLayout) -> (NativeSource, WorkerControl) {
     spawn_worker(layout, None, 48_000)
 }
@@ -279,6 +482,14 @@ fn spawn_worker(
     let failed = Arc::new(AtomicBool::new(false));
     let seek = Arc::new(AtomicU64::new(PROOF_EPOCH << 32));
     let ready_epoch = Arc::new(AtomicU64::new(0));
+    let command_sequence = Arc::new(AtomicU64::new(0));
+    let loop_bounds = Arc::new(AtomicU64::new(0));
+    let pcm_target = Arc::new(AtomicU64::new(0));
+    let worker_pcm_target = Arc::clone(&pcm_target);
+    let head = Arc::new([AtomicU32::new(0), AtomicU32::new(0)]);
+    let worker_sequence = Arc::clone(&command_sequence);
+    let worker_bounds = Arc::clone(&loop_bounds);
+    let worker_head = Arc::clone(&head);
     let decoded_packets = Arc::new(AtomicU64::new(0));
     let worker_decoded_packets = Arc::clone(&decoded_packets);
     let worker_seek = Arc::clone(&seek);
@@ -296,7 +507,7 @@ fn spawn_worker(
         let mut exhausted = false;
         let mut bytes = [0_u8; PCM_SLOT_FRAMES * 6];
         let mut converter = match wav_file.as_ref() {
-            Some((_, wav)) => match PreparedRateConverter::new(
+            Some((_, wav)) => match NativePcmPreparation::new(
                 wav.sample_rate(),
                 output_rate,
                 layout.channels(),
@@ -310,21 +521,56 @@ fn spawn_worker(
             },
             None => None,
         };
-        let total_frames = converter
+        let mut total_frames = converter
             .as_ref()
-            .map_or(u64::MAX, PreparedRateConverter::total_pcm_frames);
+            .map_or(u64::MAX, NativePcmPreparation::total_pcm_frames);
         let mut active_seek = PROOF_EPOCH << 32;
         let mut admitted = 0;
         while !worker_stop.load(Ordering::Acquire) {
-            let requested = worker_seek.load(Ordering::Acquire);
+            let sequence = worker_sequence.load(Ordering::SeqCst);
+            let requested = worker_seek.load(Ordering::SeqCst);
+            let bounds = worker_bounds.load(Ordering::SeqCst);
+            let pcm_target = worker_pcm_target.load(Ordering::SeqCst);
+            if sequence & 1 != 0 || sequence != worker_sequence.load(Ordering::SeqCst) {
+                continue;
+            }
             if requested != active_seek {
                 active_seek = requested;
                 admitted = 0;
                 worker_ready.store(false, Ordering::Release);
                 if let Some(converter) = &mut converter {
-                    match converter.seek(u64::from(requested as u32)) {
+                    match converter.linear.seek_output_frame(pcm_target) {
                         Ok(pcm) => {
                             next_frame = pcm;
+                            converter.loop_pcm = if bounds == 0 {
+                                None
+                            } else {
+                                let Some((_, media)) = &wav_file else {
+                                    worker_failed.store(true, Ordering::Release);
+                                    return;
+                                };
+                                if media.anchor_and_discard() {
+                                    worker_failed.store(true, Ordering::Release);
+                                    return;
+                                }
+                                match PreparedWavLoop::new(
+                                    media.sample_rate(),
+                                    output_rate,
+                                    layout.channels(),
+                                    media.total_frames(),
+                                    bounds >> 32,
+                                    u64::from(bounds as u32),
+                                ) {
+                                    Ok(l) => Some(l),
+                                    Err(_) => {
+                                        worker_failed.store(true, Ordering::Release);
+                                        return;
+                                    }
+                                }
+                            };
+                            converter.start_pending = converter.loop_pcm.as_ref().map(|_| pcm);
+                            converter.read_revision = 0;
+                            total_frames = converter.total_pcm_frames();
                             if let Some((_, media)) = &mut wav_file
                                 && media.seek(converter.source_frames_read()).is_err()
                             {
@@ -350,7 +596,14 @@ fn spawn_worker(
                 block.meta = BlockMeta {
                     slot_id: block.meta.slot_id,
                     epoch: active_seek >> 32,
-                    pcm_frame_start: next_frame,
+                    pcm_frame_start: converter.as_ref().and_then(|c| c.loop_pcm.as_ref()).map_or(
+                        next_frame,
+                        |l| {
+                            LoopRegion::new(l.pcm_a(), l.pcm_b(), output_rate)
+                                .expect("prepared region")
+                                .position(next_frame)
+                        },
+                    ),
                     valid_frames: (total_frames - next_frame).min(PCM_SLOT_FRAMES as u64) as usize,
                     discontinuity: admitted == 0,
                     end_of_stream: total_frames - next_frame <= PCM_SLOT_FRAMES as u64,
@@ -362,6 +615,12 @@ fn spawn_worker(
                             || worker_stop.load(Ordering::Acquire)
                         {
                             break;
+                        }
+                        if let Some(anchor) = converter.reader_anchor()
+                            && wav.seek(anchor).is_err()
+                        {
+                            worker_failed.store(true, Ordering::Release);
+                            return;
                         }
                         let needed = converter.input_frames_needed().min(PCM_SLOT_FRAMES);
                         if needed > 0 {
@@ -412,6 +671,10 @@ fn spawn_worker(
                                 return;
                             }
                         }
+                        if converter.prepare_head().is_err() {
+                            worker_failed.store(true, Ordering::Release);
+                            return;
+                        }
                         let copied = converter
                             .available_frames()
                             .min(block.meta.valid_frames - written);
@@ -449,6 +712,12 @@ fn spawn_worker(
                 }
             }
             if admitted >= PCM_SLOT_COUNT || next_frame == total_frames {
+                if let Some(l) = converter.as_ref().and_then(|c| c.loop_pcm.as_ref()) {
+                    for channel in 0..2 {
+                        worker_head[channel]
+                            .store(l.head_sample(channel).to_bits(), Ordering::Release);
+                    }
+                }
                 worker_ready_epoch.store(active_seek >> 32, Ordering::Release);
                 worker_ready.store(true, Ordering::Release);
             }
@@ -474,6 +743,11 @@ fn spawn_worker(
     (
         NativeSource {
             seek,
+            command_sequence,
+            loop_bounds,
+            pcm_target,
+            head,
+            failed: Arc::clone(&failed),
             ready_epoch,
             ready: ready_consumer,
             retired: retired_producer,
@@ -502,6 +776,8 @@ struct CallbackProcessor {
     right: Box<[f32]>,
     failed: FailureCode,
     paused: bool,
+    loop_bounds: u64,
+    configure_loop_pending: bool,
     callback_count: u64,
     minimum_frames: usize,
     maximum_observed_frames: usize,
@@ -558,6 +834,8 @@ impl CallbackProcessor {
             right,
             failed: FailureCode::None,
             paused: false,
+            loop_bounds: 0,
+            configure_loop_pending: false,
             callback_count: 0,
             minimum_frames: usize::MAX,
             maximum_observed_frames: 0,
@@ -576,6 +854,9 @@ impl CallbackProcessor {
         output.fill(T::EQUILIBRIUM);
         self.callback_count = self.callback_count.saturating_add(1);
 
+        if self.input.source_mut().failed.load(Ordering::Acquire) {
+            return self.finish_silent(FailureCode::Render, 0, started);
+        }
         if self.shared.host_failed.load(Ordering::Relaxed) {
             return self.finish_silent(FailureCode::Host, 0, started);
         }
@@ -594,23 +875,122 @@ impl CallbackProcessor {
             return self.finish_silent(FailureCode::CapacityExceeded, frame_count, started);
         }
         self.record_frame_count(frame_count);
-        let command = self.shared.playback_command.load(Ordering::Acquire);
+        let mut command = self.shared.playback_command.load(Ordering::Acquire);
         self.paused = command & 1 != 0;
-        let seek = self.shared.seek_command.load(Ordering::Acquire);
-        if seek >> 32 > self.input.active_epoch()
+        let sequence = self.shared.command_sequence.load(Ordering::SeqCst);
+        let seek = self.shared.seek_command.load(Ordering::SeqCst);
+        let bounds = self.shared.loop_bounds.load(Ordering::SeqCst);
+        let change = self.shared.loop_change.load(Ordering::SeqCst);
+        let stable =
+            sequence & 1 == 0 && sequence == self.shared.command_sequence.load(Ordering::SeqCst);
+        if stable
+            && seek >> 32 > self.input.active_epoch()
             && let Some(timeline) = self.timeline
         {
-            let Ok(pcm) = timeline.seek_pcm_frame(u64::from(seek as u32)) else {
+            let Ok(mut pcm) = timeline.seek_pcm_frame(u64::from(seek as u32)) else {
                 return self.finish_silent(FailureCode::Render, frame_count, started);
             };
+            self.loop_bounds = bounds;
+            let mut region = if bounds == 0 {
+                None
+            } else {
+                match LoopRegion::new(
+                    timeline.seek_pcm_frame(bounds >> 32).unwrap_or(0),
+                    timeline
+                        .seek_pcm_frame(u64::from(bounds as u32))
+                        .unwrap_or(0),
+                    self.sample_rate,
+                ) {
+                    Ok(r) => Some(r),
+                    Err(_) => return self.finish_silent(FailureCode::Render, frame_count, started),
+                }
+            };
+            if change != 0
+                && let Some(r) = region
+            {
+                let cursor = self.input.pcm_position();
+                let inside = cursor >= r.a && cursor < r.b;
+                let enabled = change & 2 != 0;
+                let edit = change & 4 != 0;
+                pcm = if enabled && !edit && !inside {
+                    r.a
+                } else {
+                    cursor
+                };
+                if !enabled || (edit && !inside) {
+                    region = None;
+                    self.loop_bounds = 0;
+                }
+            }
+            if change != 0 && region.is_some() && self.input.ended() {
+                // Capture EOS with PCM, before begin_seek clears it. One bounded CAS;
+                // a newer explicit transport command is left for the next callback.
+                let paused_command = command | 1;
+                let _ = self.shared.playback_command.compare_exchange(
+                    command,
+                    paused_command,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                );
+                command = paused_command;
+                self.paused = true;
+            }
             self.input
                 .begin_seek(seek >> 32, pcm, pcm == timeline.total_pcm_frames());
+            self.input.configure_loop(region, [0.0; 2]);
+            self.configure_loop_pending = true;
             self.instance.clear_source_observations();
-            self.input.source_mut().seek.store(seek, Ordering::Release);
+            self.publish_worker_request(seek, pcm);
+        } else if stable
+            && self.input.loop_needs_recovery()
+            && let Some(timeline) = self.timeline
+        {
+            let epoch = self.shared.next_epoch.fetch_add(1, Ordering::SeqCst);
+            if epoch > u64::from(u32::MAX) {
+                return self.finish_silent(FailureCode::Render, frame_count, started);
+            }
+            if sequence == self.shared.command_sequence.load(Ordering::SeqCst) {
+                let target = self.loop_bounds >> 32;
+                if timeline.seek_pcm_frame(target).is_err() {
+                    return self.finish_silent(FailureCode::Render, frame_count, started);
+                }
+                self.input.begin_loop_recovery(epoch);
+                self.instance.clear_source_observations();
+                self.publish_worker_request(
+                    (epoch << 32) | target,
+                    timeline
+                        .seek_pcm_frame(target)
+                        .expect("validated loop start"),
+                );
+            }
         }
         self.input.reclaim_stale();
-        if self.input.source_mut().ready_epoch.load(Ordering::Acquire) == self.input.active_epoch()
+        if self.input.preparing()
+            && self.input.source_mut().ready_epoch.load(Ordering::Acquire)
+                == self.input.active_epoch()
         {
+            if self.configure_loop_pending {
+                let head = std::array::from_fn(|c| {
+                    f32::from_bits(self.input.source_mut().head[c].load(Ordering::Acquire))
+                });
+                let region = if self.loop_bounds == 0 {
+                    None
+                } else {
+                    let t = self.timeline.expect("local timeline");
+                    Some(
+                        LoopRegion::new(
+                            t.seek_pcm_frame(self.loop_bounds >> 32)
+                                .expect("validated A"),
+                            t.seek_pcm_frame(u64::from(self.loop_bounds as u32))
+                                .expect("validated B"),
+                            self.sample_rate,
+                        )
+                        .expect("validated loop"),
+                    )
+                };
+                self.input.configure_loop(region, head);
+                self.configure_loop_pending = false;
+            }
             self.input.finish_seek();
         }
         if command & 1 != 0 {
@@ -669,6 +1049,15 @@ impl CallbackProcessor {
             .acknowledged_command
             .store(command, Ordering::Release);
         ProcessStatus::Rendered
+    }
+
+    fn publish_worker_request(&mut self, seek: u64, pcm: u64) {
+        let source = self.input.source_mut();
+        source.command_sequence.fetch_add(1, Ordering::SeqCst);
+        source.loop_bounds.store(self.loop_bounds, Ordering::SeqCst);
+        source.pcm_target.store(pcm, Ordering::SeqCst);
+        source.seek.store(seek, Ordering::SeqCst);
+        source.command_sequence.fetch_add(1, Ordering::SeqCst);
     }
 
     fn record_frame_count(&mut self, frame_count: usize) {
@@ -742,9 +1131,46 @@ impl CallbackProcessor {
         self.shared
             .epoch
             .store(self.input.active_epoch(), Ordering::SeqCst);
-        let ready = !self.input.preparing()
+        let ready = failure == FailureCode::None
+            && !self.input.preparing()
             && self.input.source_mut().ready_epoch.load(Ordering::Acquire)
                 == self.input.active_epoch();
+        let loop_state = if self.loop_bounds == 0 {
+            0
+        } else if failure != FailureCode::None || self.input.loop_recovering() {
+            4
+        } else if !ready {
+            1
+        } else if self.paused {
+            2
+        } else {
+            3
+        };
+        self.shared.loop_state.store(loop_state, Ordering::SeqCst);
+        self.shared
+            .loop_effective_bounds
+            .store(self.loop_bounds, Ordering::SeqCst);
+        self.shared
+            .loop_extension_frames
+            .store(self.input.loop_extension_frames(), Ordering::SeqCst);
+        self.shared
+            .loop_lost_frames
+            .store(self.input.loop_lost_frames(), Ordering::SeqCst);
+        self.shared
+            .loop_iteration
+            .store(self.input.loop_iteration(), Ordering::SeqCst);
+        self.shared
+            .loop_underruns
+            .store(self.input.loop_underruns(), Ordering::SeqCst);
+        self.shared
+            .loop_recovering
+            .store(self.input.loop_recovering(), Ordering::SeqCst);
+        self.shared
+            .loop_seam_frames
+            .store(self.input.seam_frames(), Ordering::SeqCst);
+        self.shared
+            .loop_first_iteration
+            .store(self.input.callback_first_iteration(), Ordering::SeqCst);
         self.shared.seek_ready.store(ready, Ordering::SeqCst);
         self.shared.paused.store(self.paused, Ordering::SeqCst);
         self.shared.source_position.store(
@@ -877,6 +1303,11 @@ mod tests {
             pcm_frame += block_frames as u64;
         }
         NativeSource {
+            failed: Arc::new(AtomicBool::new(false)),
+            command_sequence: Arc::new(AtomicU64::new(0)),
+            loop_bounds: Arc::new(AtomicU64::new(0)),
+            pcm_target: Arc::new(AtomicU64::new(0)),
+            head: Arc::new([AtomicU32::new(0), AtomicU32::new(0)]),
             ready,
             retired,
             seek: Arc::new(AtomicU64::new(PROOF_EPOCH << 32)),
@@ -1140,6 +1571,10 @@ mod tests {
         let (mut capacity, _) = prepared_processor(2, 2);
         let (mut host, host_shared) = prepared_processor(1, 8);
         let (mut truncated, _) = prepared_processor(2, 16);
+        let (mut looping, _) = prepared_processor(2, 8);
+        let loop_timeline = PcmTimeline::new(48000, 48000, 100).unwrap();
+        looping.timeline = Some(loop_timeline);
+        let mut loop_output = [0.0; 8];
         let mut valid_output = [f32::NAN; 8];
         let mut malformed_output = [1.0; 3];
         let mut oversized = [1.0; 3];
@@ -1149,6 +1584,32 @@ mod tests {
 
         reset_allocator_counts();
         MEASURE_ALLOCATIONS.with(|active| active.set(true));
+        looping
+            .shared
+            .request_loop(0, 32, true, loop_timeline, 48000, true)
+            .unwrap();
+        black_box(looping.process(&mut loop_output)); // Acknowledgment-time loop change, reclaim.
+        looping
+            .input
+            .source_mut()
+            .ready_epoch
+            .store(2, Ordering::Release);
+        black_box(looping.process(&mut loop_output)); // Arm, then deliberately underrun.
+        black_box(looping.process(&mut loop_output)); // Fresh-epoch recovery publication.
+        looping
+            .input
+            .source_mut()
+            .ready_epoch
+            .store(3, Ordering::Release);
+        black_box(looping.process(&mut loop_output));
+        let epoch = looping.input.active_epoch();
+        looping.input.begin_seek(epoch, 100, true);
+        looping.input.finish_seek();
+        looping
+            .shared
+            .request_loop(0, 32, true, loop_timeline, 48000, true)
+            .unwrap();
+        black_box(looping.process(&mut loop_output)); // EOS acknowledgment's bounded pause CAS.
         black_box(valid.process(black_box(&mut valid_output)));
         valid.shared.playback_command.store(1, Ordering::Release);
         valid
@@ -1444,6 +1905,410 @@ mod tests {
                         worker.stop();
                     }
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn wav_loop_native_region_command_respects_disabled_and_pending_intent() {
+        let (source, worker) = wav_source_at_rates(24, 2, 10003, 48000, 48000);
+        let shared = Arc::new(SharedObservation::new());
+        shared.playback_command.store(1, Ordering::Release);
+        let timeline = PcmTimeline::new(48000, 48000, 10003).unwrap();
+        let mut p =
+            CallbackProcessor::prepare(48000, 2, 1024, source, Arc::clone(&shared)).unwrap();
+        p.timeline = Some(timeline);
+        let wait = |p: &mut CallbackProcessor, epoch: u64| {
+            let deadline = Instant::now() + Duration::from_secs(2);
+            while p.input.active_epoch() != epoch || p.input.preparing() {
+                p.process(&mut [0f32; 34]);
+                assert!(Instant::now() < deadline);
+                std::thread::sleep(Duration::from_millis(1));
+            }
+        };
+        let off = shared
+            .request_loop(0, 10003, false, timeline, 48000, true)
+            .unwrap();
+        wait(&mut p, off);
+        let edit = shared
+            .request_region(0, 9000, timeline, 48000, true)
+            .unwrap();
+        if let Some(epoch) = edit {
+            wait(&mut p, epoch);
+        }
+        assert_eq!(
+            shared.playback_snapshot().loop_state,
+            0,
+            "including edit after acknowledged off must stay off"
+        );
+        let on = shared
+            .request_loop(0, 9000, true, timeline, 48000, true)
+            .unwrap();
+        wait(&mut p, on);
+        let off = shared
+            .request_loop(0, 9000, false, timeline, 48000, true)
+            .unwrap();
+        assert_eq!(
+            shared
+                .request_region(0, 8000, timeline, 48000, true)
+                .unwrap(),
+            None
+        );
+        wait(&mut p, off);
+        assert_eq!(shared.playback_snapshot().loop_state, 0);
+        shared
+            .request_loop(1000, 9000, true, timeline, 48000, true)
+            .unwrap();
+        let edit = shared
+            .request_region(2000, 8000, timeline, 48000, true)
+            .unwrap()
+            .unwrap();
+        wait(&mut p, edit);
+        assert_eq!(p.input.pcm_position(), 2000);
+        assert_eq!(shared.playback_snapshot().loop_state, 2);
+        let excluded = shared
+            .request_region(3000, 7000, timeline, 48000, true)
+            .unwrap()
+            .unwrap();
+        wait(&mut p, excluded);
+        assert_eq!(p.input.pcm_position(), 2000);
+        assert_eq!(shared.playback_snapshot().loop_state, 0);
+        assert_eq!(
+            shared
+                .request_region(1000, 9000, timeline, 48000, true)
+                .unwrap(),
+            None
+        );
+        assert!(
+            shared
+                .request_region(0, 9000, timeline, 48000, false)
+                .is_err()
+        );
+        worker.stop();
+    }
+
+    #[test]
+    fn wav_loop_native_eof_drain_head_matches_reference_and_remains_cancellable() {
+        for (sr, ro) in [(44100, 48000), (48000, 44100)] {
+            let total = 10003;
+            let timeline = PcmTimeline::new(sr, ro, total as u64).unwrap();
+            let a = timeline.seek_pcm_frame(9000).unwrap();
+            let b = timeline.seek_pcm_frame(total as u64).unwrap();
+            let fade = ((ro / 200) as usize).min((b - a) as usize / 4);
+            let original: Vec<Vec<f32>> = (0..2)
+                .map(|ch| {
+                    (0..total)
+                        .map(|f| crate::local_wav::tests::expected(f, ch, 24))
+                        .collect()
+                })
+                .collect();
+            let reference = crate::sample_rate::tests::convert(sr, ro, &original, &[73, 311]);
+            let (source, worker) = wav_source_at_rates(24, 2, total, sr, ro);
+            let shared = Arc::new(SharedObservation::new());
+            shared.playback_command.store(1, Ordering::Release);
+            let mut p =
+                CallbackProcessor::prepare(ro, 2, 1024, source, Arc::clone(&shared)).unwrap();
+            p.timeline = Some(timeline);
+            let epoch = shared
+                .request_loop(9000, 10003, true, timeline, ro, true)
+                .unwrap();
+            let deadline = Instant::now() + Duration::from_secs(2);
+            while p.input.active_epoch() != epoch || p.input.preparing() {
+                p.process(&mut [0f32; 34]);
+                assert!(!worker.failed.load(Ordering::Acquire));
+                assert!(
+                    Instant::now() < deadline,
+                    "EOF loop head did not become ready {sr}->{ro}; WorkerControl drop cancels the worker"
+                );
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            assert_eq!(p.input.pcm_position(), a);
+            shared.playback_command.store(0, Ordering::Release);
+            let mut consumed = 0;
+            while consumed < 2 * (b - a) + 7 {
+                let count = (2 * (b - a) + 7 - consumed).min(511) as usize;
+                let mut out = vec![0f32; count * 2];
+                p.process(&mut out);
+                assert!(!p.input.loop_recovering());
+                for j in 0..count {
+                    for ch in 0..2 {
+                        let at = a + (consumed + j as u64) % (b - a);
+                        let raw = reference[ch][at as usize];
+                        let expected = if at < b - fade as u64 {
+                            raw
+                        } else if at == b - 1 {
+                            reference[ch][a as usize]
+                        } else {
+                            let w = (at - (b - fade as u64)) as f32 / (fade - 1) as f32;
+                            (1.0 - w) * raw + w * reference[ch][a as usize]
+                        };
+                        assert_eq!(out[j * 2 + ch], expected * 0.5);
+                    }
+                }
+                consumed += count as u64;
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            worker.stop();
+        }
+    }
+
+    #[test]
+    fn wav_loop_native_acknowledged_eos_pauses_before_head_consumption() {
+        let (source, worker) = wav_source_at_rates(24, 2, 17, 48000, 48000);
+        let shared = Arc::new(SharedObservation::new());
+        let timeline = PcmTimeline::new(48000, 48000, 17).unwrap();
+        let mut p =
+            CallbackProcessor::prepare(48000, 2, 1024, source, Arc::clone(&shared)).unwrap();
+        p.timeline = Some(timeline);
+        p.process(&mut [0f32; 34]);
+        assert!(p.input.ended());
+        shared.ended.store(false, Ordering::Release); // Deliberately stale control observation.
+        let clock = p.instance.next_frame();
+        let epoch = shared
+            .request_loop(0, 16, true, timeline, 48000, true)
+            .unwrap();
+        let mut out = [1f32; 34];
+        p.process(&mut out);
+        assert!(
+            shared.playback_snapshot().paused,
+            "EOS must be captured at acknowledgment"
+        );
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while p.input.preparing() {
+            p.process(&mut out);
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert_eq!(p.input.active_epoch(), epoch);
+        assert_eq!(p.input.pcm_position(), 0);
+        assert_eq!(p.instance.next_frame(), clock);
+        assert_positive_zero(&out);
+        assert_eq!(shared.playback_snapshot().loop_state, 2);
+        shared.playback_command.store(2, Ordering::Release);
+        p.process(&mut out);
+        assert_eq!(p.instance.next_frame(), clock + 17);
+        assert!(!shared.playback_snapshot().paused);
+        worker.stop();
+    }
+
+    #[test]
+    fn wav_loop_native_terminal_read_failure_and_close_before_head_readiness() {
+        use std::io::Write;
+        let path =
+            std::env::temp_dir().join(format!("kkb-loop-read-failure-{}", std::process::id()));
+        let mut file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .open(&path)
+            .unwrap();
+        std::fs::remove_file(&path).unwrap();
+        file.write_all(&crate::local_wav::tests::fixture(24, 2, 44100, 10003))
+            .unwrap();
+        let media = crate::local_media::read_header(&mut file).unwrap();
+        let fault = file.try_clone().unwrap();
+        let (source, worker) = spawn_worker(ChannelLayout::Stereo, Some((file, media)), 48000);
+        let shared = Arc::new(SharedObservation::new());
+        shared.playback_command.store(1, Ordering::Release);
+        let timeline = PcmTimeline::new(44100, 48000, 10003).unwrap();
+        let mut p =
+            CallbackProcessor::prepare(48000, 2, 1024, source, Arc::clone(&shared)).unwrap();
+        p.timeline = Some(timeline);
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while !worker.ready.load(Ordering::Acquire) {
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        fault.set_len(0).unwrap();
+        shared
+            .request_loop(9000, 10003, true, timeline, 48000, true)
+            .unwrap();
+        let mut out = [1f32; 34];
+        let deadline = Instant::now() + Duration::from_secs(3);
+        while !worker.failed.load(Ordering::Acquire) {
+            p.process(&mut out);
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        assert_eq!(
+            p.process(&mut out),
+            ProcessStatus::Silent(FailureCode::Render)
+        );
+        assert_positive_zero(&out);
+        assert_eq!(shared.playback_snapshot().loop_state, 4);
+        assert!(!shared.playback_snapshot().ready);
+        assert_eq!(p.input.loop_underruns(), 0);
+        worker.stop();
+        let (source, worker) = wav_source_at_rates(24, 2, 10003, 44100, 48000);
+        worker.stalled.store(true, Ordering::Release);
+        let shared = Arc::new(SharedObservation::new());
+        shared.playback_command.store(1, Ordering::Release);
+        let timeline = PcmTimeline::new(44100, 48000, 10003).unwrap();
+        let mut p =
+            CallbackProcessor::prepare(48000, 2, 1024, source, Arc::clone(&shared)).unwrap();
+        p.timeline = Some(timeline);
+        shared
+            .request_loop(9000, 10003, true, timeline, 48000, true)
+            .unwrap();
+        p.process(&mut out);
+        assert!(p.input.preparing());
+        assert_eq!(p.input.loop_underruns(), 0);
+        assert_eq!(shared.playback_snapshot().loop_state, 1);
+        worker.stop();
+    }
+
+    #[test]
+    fn wav_loop_native_worker_rings_callback_reference_controls_and_underrun() {
+        for (sr, ro) in [(48000, 48000), (44100, 48000), (48000, 44100)] {
+            for (a, b) in [(7001, 7018), (137, 9503)] {
+                let total = 10003;
+                let input: Vec<Vec<f32>> = (0..2)
+                    .map(|ch| {
+                        (0..total)
+                            .map(|f| crate::local_wav::tests::expected(f, ch, 24))
+                            .collect()
+                    })
+                    .collect();
+                let reference = crate::sample_rate::tests::convert(sr, ro, &input, &[73, 311]);
+                let timeline = PcmTimeline::new(sr, ro, total as u64).unwrap();
+                let r = LoopRegion::new(
+                    timeline.seek_pcm_frame(a).unwrap(),
+                    timeline.seek_pcm_frame(b).unwrap(),
+                    ro,
+                )
+                .unwrap();
+                let (source, worker) = wav_source_at_rates(24, 2, total, sr, ro);
+                let shared = Arc::new(SharedObservation::new());
+                shared.playback_command.store(1, Ordering::Release);
+                let mut p =
+                    CallbackProcessor::prepare(ro, 2, 4096, source, Arc::clone(&shared)).unwrap();
+                p.timeline = Some(timeline);
+                let mut small = [0.0f32; 34];
+                let epoch = shared.request_loop(a, b, true, timeline, ro, true).unwrap();
+                let deadline = Instant::now() + Duration::from_secs(3);
+                while p.input.active_epoch() != epoch || p.input.preparing() {
+                    p.process(&mut small);
+                    assert!(!worker.failed.load(Ordering::Acquire));
+                    assert!(Instant::now() < deadline);
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                assert_eq!(p.instance.next_frame(), 0);
+                assert_eq!(p.input.pcm_position(), r.a);
+                shared.playback_command.store(0, Ordering::Release);
+                let mut consumed = 0u64;
+                for count in [1, 17, 257, 1024, 3, 997, 37, 1024, 1023] {
+                    // Device-free pacing gives the real bounded worker time to return slots.
+                    std::thread::sleep(Duration::from_millis(15));
+                    let mut out = vec![0.0; count * 2];
+                    p.process(&mut out);
+                    assert!(!p.input.loop_recovering());
+                    for f in 0..count {
+                        let at = r.a + (consumed + f as u64) % r.period();
+                        for ch in 0..2 {
+                            let raw = reference[ch][at as usize];
+                            let expected = if at < r.b - r.fade as u64 {
+                                raw
+                            } else {
+                                let j = (at - (r.b - r.fade as u64)) as usize;
+                                if j == r.fade - 1 {
+                                    reference[ch][r.a as usize]
+                                } else {
+                                    let w = j as f32 / (r.fade - 1) as f32;
+                                    (1.0 - w) * raw + w * reference[ch][r.a as usize]
+                                }
+                            };
+                            assert_eq!(out[f * 2 + ch], expected * 0.5, "{sr}->{ro} frame{at}");
+                        }
+                    }
+                    consumed += count as u64;
+                    assert_eq!(p.input.pcm_position(), r.a + consumed % r.period());
+                    assert_eq!(p.input.loop_iteration(), (consumed - 1) / r.period());
+                }
+                let clock = p.instance.next_frame();
+                let cursor = p.input.pcm_position();
+                shared.playback_command.store(1, Ordering::Release);
+                p.process(&mut small);
+                assert_eq!(p.instance.next_frame(), clock);
+                assert_eq!(p.input.pcm_position(), cursor);
+                shared.playback_command.store(0, Ordering::Release);
+                worker.stalled.store(true, Ordering::Release);
+                for _ in 0..12 {
+                    p.process(&mut [0f32; 2048]);
+                    if p.input.loop_recovering() {
+                        break;
+                    }
+                }
+                assert!(p.input.loop_recovering());
+                let held = p.input.pcm_position();
+                for _ in 0..4 {
+                    p.process(&mut [0f32; 2048]);
+                    assert_eq!(p.input.pcm_position(), held);
+                }
+                let before = p.instance.next_frame();
+                worker.stalled.store(false, Ordering::Release);
+                let deadline = Instant::now() + Duration::from_secs(3);
+                while p.input.loop_recovering() {
+                    p.process(&mut small);
+                    assert!(Instant::now() < deadline);
+                    assert!(!worker.failed.load(Ordering::Acquire));
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                assert!(p.instance.next_frame() > before);
+                assert_eq!(p.input.loop_underruns(), 1);
+                assert!(p.input.active_epoch() > epoch);
+                assert!(!p.input.ended());
+                if sr < ro {
+                    for _ in 0..20 {
+                        let pcm = p.input.pcm_position();
+                        if timeline
+                            .seek_pcm_frame(timeline.source_position(pcm))
+                            .unwrap()
+                            != pcm
+                        {
+                            break;
+                        }
+                        p.process(&mut [0f32; 2]);
+                    }
+                    let pcm = p.input.pcm_position();
+                    assert_ne!(
+                        timeline
+                            .seek_pcm_frame(timeline.source_position(pcm))
+                            .unwrap(),
+                        pcm
+                    );
+                }
+                // Disable at the acknowledged cursor, not a stale source snapshot or B.
+                shared.playback_command.store(1, Ordering::Release);
+                p.process(&mut small);
+                let exact_pcm_cursor = p.input.pcm_position();
+                let disabled = shared
+                    .request_loop(a, b, false, timeline, ro, true)
+                    .unwrap();
+                let deadline = Instant::now() + Duration::from_secs(3);
+                while p.input.active_epoch() != disabled || p.input.preparing() {
+                    p.process(&mut small);
+                    assert!(Instant::now() < deadline);
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                assert_eq!(p.input.pcm_position(), exact_pcm_cursor);
+                // An edit can exclude the acknowledgment-time cursor; never relocate it.
+                let edited = shared
+                    .request_position(0, (4000u64 << 32) | 5000, 7)
+                    .unwrap();
+                let deadline = Instant::now() + Duration::from_secs(3);
+                while p.input.active_epoch() != edited || p.input.preparing() {
+                    p.process(&mut small);
+                    assert!(Instant::now() < deadline);
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                assert_eq!(p.input.pcm_position(), exact_pcm_cursor);
+                assert_eq!(shared.playback_snapshot().loop_state, 0);
+                assert!(
+                    shared
+                        .request_loop(a, b, true, timeline, ro, false)
+                        .is_err()
+                );
+                worker.stop();
             }
         }
     }
@@ -1827,6 +2692,7 @@ mod tests {
             supported.sample_format(),
             timeline.total_pcm_frames()
         );
+        let mut region = (0, total);
         for line in std::io::stdin().lock().lines() {
             match line.map_err(|e| e.to_string())?.trim() {
                 action @ ("play" | "pause") => {
@@ -1867,11 +2733,61 @@ mod tests {
                         println!("invalid source-frame target");
                     }
                 }
+                action @ ("loop on" | "loop off") => {
+                    match shared.request_loop(
+                        region.0,
+                        region.1,
+                        action == "loop on",
+                        timeline,
+                        supported.sample_rate(),
+                        !anchor_and_discard,
+                    ) {
+                        Ok(epoch) => println!(
+                            "loop request epoch={epoch}; source [{},{}), output [{},{}); fixed realized period, quantization accumulates",
+                            region.0,
+                            region.1,
+                            timeline.seek_pcm_frame(region.0).unwrap(),
+                            timeline.seek_pcm_frame(region.1).unwrap()
+                        ),
+                        Err(_) => println!("unsupported WAV loop interval; MP3 loops unavailable"),
+                    }
+                }
+                action if action.starts_with("region ") => {
+                    let values = action[7..]
+                        .split_whitespace()
+                        .map(str::parse::<u64>)
+                        .collect::<Result<Vec<_>, _>>();
+                    if let Ok(values) = values
+                        && values.len() == 2
+                        && values[0] < values[1]
+                        && timeline.seek_pcm_frame(values[1]).is_ok()
+                        && LoopRegion::new(
+                            timeline.seek_pcm_frame(values[0]).unwrap(),
+                            timeline.seek_pcm_frame(values[1]).unwrap(),
+                            supported.sample_rate(),
+                        )
+                        .is_ok()
+                        && !anchor_and_discard
+                    {
+                        region = (values[0], values[1]);
+                        let _ = shared.request_region(
+                            region.0,
+                            region.1,
+                            timeline,
+                            supported.sample_rate(),
+                            !anchor_and_discard,
+                        );
+                    } else {
+                        println!("invalid WAV region");
+                    }
+                }
                 "stall" => worker.stalled.store(true, Ordering::Release),
                 "feed" => worker.stalled.store(false, Ordering::Release),
                 "close" => break,
                 "status" => {}
-                _ => println!("commands: play, pause, seek FRAME, status, stall, feed, close"),
+                _ => println!(
+                    "commands: play, pause, seek FRAME, region A B, loop on, loop off, status, stall, feed, close"
+                ),
             }
             println!(
                 "playback={:?} totalFrames={} workerFailed={} observation={:?}",

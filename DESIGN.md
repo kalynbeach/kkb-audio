@@ -139,6 +139,34 @@ Player extraction is grounded in [`web/player.css`](web/player.css), [`web/src/p
 
 [Dated implementation evidence](docs/2026-09-13-compact-player.md) distinguishes original checks from the repair's current screenshots and 47-assertion muted browser run. The repair mobile compact screenshot includes a transient Settings exit snapshot, not a settled-state rule. Documentation is not parent acceptance, publication or device/accessibility certification.
 
+## WAV loop interaction (#19, implemented for review)
+
+The repeat utility discloses an editor independently of enabling looping. Its opaque absolute overlay
+sits above the visual's bottom edge without resizing that visual or the 40px full-track waveform.
+It persists across replacement while the new track resets whole/off. MP3 controls explicitly do not
+offer loops. One hatched interval and labelled A/B handles remain distinct from the consumed playhead.
+Exact fields accept fractional mm:ss or source frames suffixed `f` (Enter/blur commit, Escape restores);
+arrow handles use 1 second / Shift 5 seconds and Shift-drag creates a region. Invalid or too-short
+requests retain the accepted interval with feedback, rather than a prototype one-second floor.
+
+Preparation/failure and exact requested-versus-realized coordinates share that opaque surface. Fixed
+output-grid periods and accumulated conversion quantization are disclosed, not hidden behind rounded
+times. Enable and edit inclusion use the renderer-acknowledged cursor, not a stale visual snapshot.
+Normal wraps retain the untagged live visual; explicit control/recovery discontinuities clear it.
+Review repair keeps the single actual oscilloscope caption above the editor, including reduced,
+paused/warming, channel and failure explanations. The overlay is bounded by the actual visual area,
+reserving 64px above it; expanded details scroll internally instead of covering track identity.
+An initially too-short WAV can disclose its exact loop rejection reason while retaining linear Play.
+The closed editor trigger retains its enabled/off cue; hatching/handles remain editing-only.
+
+**Parent-approved smallest-width exception:** at viewport widths ≤360px, only Volume and Loop use
+34×44px targets. Their order/placement, the 56px transport height, central 44/40/44px faces and 44px
+Library target are unchanged. At 320px, the utility-to-playback gap is 2px and transport remains exactly
+card-centered with disjoint hitboxes; at 361px utility targets return to 44×44px. This is not a claim
+that every target is 44×44px at the smallest width. Canvas, visual, waveform and identity bounds do
+not resize with disclosure. No font, asset, theme or entitlement change is implied. [Dated evidence](docs/2026-09-14-wav-loops.md)
+separates runtime verification from still-pending human listening and parent acceptance.
+
 ## Colors
 
 Warm paper and ink in light mode become near-black surfaces and pale ink in dark mode; hierarchy comes from semantic pairing rather than a new brand accent.

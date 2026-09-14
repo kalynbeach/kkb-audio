@@ -103,6 +103,7 @@ describe("PreparedPlanarAdapter", () => {
     expect(adapter.process([[twoHundredFiftySeven]])).toBe(true);
     expect(twoHundredFiftySeven[256]).toBe(256.25);
     expect(adapter.snapshot()).toEqual({
+      loopIteration: 0, loopUnderruns: 0, loopRecovering: false, loopSeamFrames: 0, loopFirstIteration: 0, loopExtensionFrames: 0, loopLostFrames: 0,
       epoch: 1, presentationTime: null, ready: true, sourcePosition: 0, pcmPosition: 0, renderFrame: 0, ended: false,
       failureCode: 0,
       invalidBlockCount: 0,

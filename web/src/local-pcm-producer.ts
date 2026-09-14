@@ -4,6 +4,7 @@ import { isAdmissionResultMessage, type PcmBlockMessage, type PcmStreamConfig } 
 // free-slot reply permits reuse. All producer coordinates are output-rate PCM frames. One read/admission at a time fixes source ordering.
 export class LocalPcmProducer {
   readonly buffers: ArrayBuffer[];
+  loopRegion: { a: number; b: number } | undefined;
   #slot = 0;
   #position = 0;
   #pending: PcmBlockMessage | undefined;
@@ -26,7 +27,7 @@ export class LocalPcmProducer {
   rejections = 0;
   constructor(
     readonly config: PcmStreamConfig,
-    readonly totalPcmFrames: number,
+    public totalPcmFrames: number,
     readonly fill: (buffer: ArrayBuffer, start: number, frames: number) => Promise<void>,
     readonly post: (message: unknown, transfer?: Transferable[]) => void,
     readonly ready: () => void,
@@ -109,7 +110,7 @@ export class LocalPcmProducer {
         await this.fill(buffer, this.#position, frames);
         if (this.#quiescing) { this.#busy = false; this.#becameIdle(); return; }
         this.preparedPcmFrames = this.#position + frames;
-        this.#pending = { type: "pcm", slotId: this.#slot, epoch: this.config.epoch, pcmFrameStart: this.#position, validFrames: frames, discontinuity: this.#position === this.#start, endOfStream: this.#position + frames === this.totalPcmFrames, buffer };
+        this.#pending = { type: "pcm", slotId: this.#slot, epoch: this.config.epoch, pcmFrameStart: this.loopRegion && this.#position >= this.loopRegion.b ? this.loopRegion.a + (this.#position - this.loopRegion.b) % (this.loopRegion.b - this.loopRegion.a) : this.#position, validFrames: frames, discontinuity: this.#position === this.#start, endOfStream: this.#position + frames === this.totalPcmFrames, buffer };
       }
       this.post(this.#pending, [this.#pending.buffer]);
     } catch (error) { this.#failure(error); }

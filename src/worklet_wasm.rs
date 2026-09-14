@@ -35,6 +35,8 @@ pub struct WorkletKernel {
     terminal: bool,
     timeline: Option<PcmTimeline>,
     sample_rate: u32,
+    loop_change_enabled: bool,
+    loop_change_ended: bool,
 }
 
 #[wasm_bindgen]
@@ -96,6 +98,8 @@ impl WorkletKernel {
             terminal: false,
             timeline: None,
             sample_rate,
+            loop_change_enabled: false,
+            loop_change_ended: false,
         }
     }
 
@@ -190,8 +194,113 @@ impl WorkletKernel {
         input.finish_seek();
         true
     }
+    pub fn begin_loop_change(
+        &mut self,
+        epoch: u64,
+        a: u64,
+        b: u64,
+        enabled: bool,
+        edit: bool,
+    ) -> Result<u64, u32> {
+        let timeline = self.timeline.as_ref().ok_or(73_u32)?;
+        let region = crate::wav_loop::LoopRegion::new(
+            timeline.seek_pcm_frame(a)?,
+            timeline.seek_pcm_frame(b)?,
+            self.sample_rate,
+        )?;
+        let input = self.input.as_mut().ok_or(73_u32)?;
+        if epoch <= input.active_epoch() {
+            return Err(73);
+        }
+        self.loop_change_ended = input.ended();
+        let cursor = input.pcm_position();
+        let inside = cursor >= region.a && cursor < region.b;
+        self.loop_change_enabled = enabled && (!edit || inside);
+        let pcm = if enabled && !edit && !inside {
+            region.a
+        } else {
+            cursor
+        };
+        input.begin_seek(epoch, pcm, pcm == timeline.total_pcm_frames());
+        input.configure_loop(self.loop_change_enabled.then_some(region), [0.0; 2]);
+        if let Some(instance) = &mut self.instance {
+            instance.clear_source_observations();
+        }
+        Ok(pcm)
+    }
+    pub fn loop_change_ended(&self) -> bool {
+        self.loop_change_ended
+    }
+    pub fn loop_change_enabled(&self) -> bool {
+        self.loop_change_enabled
+    }
+    pub fn configure_loop(
+        &mut self,
+        a: u64,
+        b: u64,
+        head_left: f32,
+        head_right: f32,
+        enabled: bool,
+    ) -> Result<(), u32> {
+        let region = if enabled {
+            Some(crate::wav_loop::LoopRegion::new(a, b, self.sample_rate)?)
+        } else {
+            None
+        };
+        self.input
+            .as_mut()
+            .ok_or(73_u32)?
+            .configure_loop(region, [head_left, head_right]);
+        Ok(())
+    }
+    pub fn begin_loop_recovery(&mut self, epoch: u64) -> Result<u64, u32> {
+        let input = self.input.as_mut().ok_or(73_u32)?;
+        if epoch <= input.active_epoch() || !input.loop_recovering() {
+            return Err(73);
+        }
+        input.begin_loop_recovery(epoch);
+        if let Some(instance) = &mut self.instance {
+            instance.clear_source_observations();
+        }
+        Ok(input.pcm_position())
+    }
+    pub fn loop_iteration(&self) -> u64 {
+        self.input
+            .as_ref()
+            .map_or(0, PreparedPcmInput::loop_iteration)
+    }
+    pub fn loop_extension_frames(&self) -> u64 {
+        self.input
+            .as_ref()
+            .map_or(0, PreparedPcmInput::loop_extension_frames)
+    }
+    pub fn loop_lost_frames(&self) -> u64 {
+        self.input
+            .as_ref()
+            .map_or(0, PreparedPcmInput::loop_lost_frames)
+    }
+    pub fn loop_underruns(&self) -> u64 {
+        self.input
+            .as_ref()
+            .map_or(0, PreparedPcmInput::loop_underruns)
+    }
+    pub fn loop_recovering(&self) -> bool {
+        self.input
+            .as_ref()
+            .is_some_and(PreparedPcmInput::loop_recovering)
+    }
+    pub fn loop_seam_frames(&self) -> usize {
+        self.input.as_ref().map_or(0, PreparedPcmInput::seam_frames)
+    }
+    pub fn loop_first_iteration(&self) -> u64 {
+        self.input
+            .as_ref()
+            .map_or(0, PreparedPcmInput::callback_first_iteration)
+    }
     pub fn ready(&self) -> bool {
-        self.input.as_ref().is_some_and(|input| !input.preparing())
+        self.input
+            .as_ref()
+            .is_some_and(|input| !input.preparing() && !input.loop_recovering())
     }
     pub fn epoch(&self) -> u64 {
         self.input

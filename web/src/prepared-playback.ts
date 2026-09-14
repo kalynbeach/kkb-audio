@@ -1,4 +1,5 @@
 import { OscilloscopeTap, type OscilloscopeBuffers, type OscilloscopeRead } from "./oscilloscope-tap";
+import { wavLoopRegion } from "./wav-loop";
 import { LOCAL_PCM_SLOT_FRAMES } from "./pcm-protocol";
 import {
   InitializationFailure,
@@ -40,6 +41,7 @@ export class InitializationError extends Error {
 }
 
 export type SeekResult = {
+  loopEnabled?: boolean;
   epoch: number;
   requestedFrame: number;
   pcmFrame: number;
@@ -68,7 +70,8 @@ export class PreparedProof {
   #epoch = 1;
   #observedEpoch = 1;
   #postedSeek: number | undefined;
-  #queuedSeek: { epoch: number; target: number } | undefined;
+  #queuedSeek: { epoch: number; target: number; loop?: { a: number; b: number }; recovery?: boolean; loopChange?: { a: number; b: number; enabled: boolean; edit: boolean } } | undefined;
+  #loop: { a: number; b: number } | undefined;
   #seekResolve: ((result: SeekResult) => void) | undefined;
   #seekReject: ((error: Error) => void) | undefined;
   producerObservation: unknown;
@@ -131,7 +134,20 @@ export class PreparedProof {
 
   acceptWorkerMessage(value: unknown): void {
     if (this.#closed || this.#runtimeFailure !== 0) return;
-    const message = value as { type?: string; epoch?: number; requestedFrame?: number; pcmFrame?: number; result?: SeekResult["result"] } | null;
+    const message = value as { type?: string; epoch?: number; requestedFrame?: number; pcmFrame?: number; result?: SeekResult["result"]; loopEnabled?: boolean } | null;
+    if (message?.type === "loop-ended" && Number.isSafeInteger(message.epoch) && message.epoch! <= this.#epoch) {
+      // Do not use status()/pause(): this acknowledgment must not overlap a poll.
+      // An obsolete begin still needs its pause acknowledgment to release the
+      // worker's single executing transition before the latest one can proceed.
+      void this.#context.suspend().then(() => {
+        if (!this.#closed && this.#runtimeFailure === 0) this.#worker?.postMessage({ type: "loop-paused", epoch: message.epoch });
+      }).catch(() => { if (!this.#closed) this.failRuntime(InitializationFailure.ContextState); });
+      return;
+    }
+    if (message?.type === "loop-underrun" && message.epoch === this.#epoch && this.#loop && !this.#seekResolve) {
+      void this.#seek(this.#loop.a, true).catch(() => {});
+      return;
+    }
     if (message?.type === "seek-accepted" && message.epoch === this.#postedSeek) {
       this.#postedSeek = undefined;
       this.#dispatchSeek();
@@ -142,8 +158,9 @@ export class PreparedProof {
       this.#observedEpoch = this.#epoch;
       const pcmFrame = message.pcmFrame!;
       const actualMediaFrame = Math.min(this.totalFrames!, Math.floor(pcmFrame * this.sourceRate! / this.#context.sampleRate));
+      if (message.loopEnabled === false) this.#loop = undefined;
       this.#seekResolve?.({ epoch: this.#epoch, requestedFrame: message.requestedFrame!, pcmFrame, actualMediaFrame,
-        result: message.result });
+        result: message.result, loopEnabled: message.loopEnabled });
     }
     const code = workerFailureCode(value);
     if (code !== undefined) this.failRuntime(code);
@@ -255,7 +272,18 @@ export class PreparedProof {
     return this.status();
   }
 
+  setLoop(a: number, b: number, enabled: boolean, edit = false): Promise<SeekResult> {
+    this.#throwIfUnavailable();
+    if (enabled && (this.anchorAndDiscard || !Number.isSafeInteger(a) || !Number.isSafeInteger(b) || a < 0 || a >= b || b > this.totalFrames!)) throw new Error("Loops require a supported WAV interval");
+    if (enabled) wavLoopRegion(a, b, this.sourceRate!, this.#context.sampleRate, this.totalFrames!);
+    this.#loop = enabled ? { a, b } : undefined;
+    return this.#seek(0, false, { a, b, enabled, edit });
+  }
   seek(target: number): Promise<SeekResult> {
+    if (this.#loop && (target < this.#loop.a || target >= this.#loop.b)) this.#loop = undefined;
+    return this.#seek(target, false);
+  }
+  #seek(target: number, recovery: boolean, loopChange?: { a: number; b: number; enabled: boolean; edit: boolean }): Promise<SeekResult> {
     this.#throwIfUnavailable();
     if (this.totalFrames === undefined || !Number.isSafeInteger(target) || target < 0 || target > this.totalFrames || this.#epoch === Number.MAX_SAFE_INTEGER) throw new Error("Seek requires a source frame in [0, totalFrames]");
     this.releaseOscilloscope();
@@ -268,7 +296,7 @@ export class PreparedProof {
       const timeout = setTimeout(() => { this.#seekReject?.(new Error("Seek preparation timed out")); this.failRuntime(InitializationFailure.Timeout); }, this.anchorAndDiscard ? 35000 : 5000);
       this.#seekResolve = result => { clear(); resolve(result); };
       this.#seekReject = error => { clear(); reject(error); };
-      this.#queuedSeek = { epoch: this.#epoch, target };
+      this.#queuedSeek = { epoch: this.#epoch, target, loop: this.#loop, recovery, loopChange };
       this.#dispatchSeek();
     });
   }
