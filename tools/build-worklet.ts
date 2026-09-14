@@ -60,6 +60,9 @@ copyFileSync(
   "node_modules/inter-ui/LICENSE.txt",
   join(outputDirectory, "Inter-LICENSE.txt"),
 );
+for (const name of ["DepartureMono-LICENSE.txt", "Phosphor-LICENSE.txt"]) {
+  copyFileSync(join("web/assets/player-prototype", name), join(outputDirectory, name));
+}
 copyFileSync("THIRD_PARTY_NOTICES.md", join(outputDirectory, "THIRD_PARTY_NOTICES.md"));
 copyFileSync("licenses/MPL-2.0.txt", join(outputDirectory, "MPL-2.0.txt"));
 copyFileSync("web/proof.html", join(outputDirectory, "index.html"));

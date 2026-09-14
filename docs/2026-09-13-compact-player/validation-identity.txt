@@ -1,0 +1,2 @@
+PASS 142 source/test/fixture/build-input files byte-identical to isolated copy
+Manifest SHA256 396cea47523bfdcc735f12abba10db64116e0d5b8140d07b557867e7e38513dd

@@ -1,7 +1,13 @@
 # Wave Player: mockup reference bundle
 
 Date: 2026-09-13. Issue: [#21](https://github.com/kalynbeach/kkb-audio/issues/21).
-Status: **v3 direction approved for a separate, non-shipping interactive prototype; final design approval remains pending**.
+Status: **interactive prototype approved as the current #21 direction; #22 compact local-player integration implemented for review**.
+
+Latest authority: Kalyn approved the actual working prototype as “the final design direction for now.”
+The [approval record](2026-09-13-wave-player-prototype.md#approval-and-next-boundary) supersedes the
+historical image-stage gates below. #22 keeps session actions in Settings and Open files in the
+empty player, with honest visual/metadata/timeline adaptations; see [implementation evidence](2026-09-13-compact-player.md).
+The remaining text preserves the earlier research and mockup-stage provenance, not a reopened gate.
 
 Kalyn explicitly approved proceeding in Pi after the six current v3 images were inspected. This approval carries forward the stated v3 composition and permits real-font, geometry, density and interaction refinements in the prototype only. It does not approve engine integration or #22. See the [prototype handoff](2026-09-13-wave-player-prototype.md).
 

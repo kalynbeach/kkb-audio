@@ -91,9 +91,29 @@ Build with `bun run build:worklet` and serve with `bun run serve:proof`, then op
 `bun run dev` also serves the player with React hot reload alongside the lab. When the global Bun
 version differs, first run `export PATH="$PWD/node_modules/.bin:$PATH"` to use the pinned Bun 1.4.0.
 
-Choose a nonempty little-endian RIFF PCM16/24 mono/stereo WAV or a supported local MP3. Playback supports the active context's
-rate and prepared 44100 ↔ 48000 Hz conversion only. Files stay local; unsupported files show an error
-and can be replaced. Loading/replacing never starts audio. Press **Play** explicitly.
+The compact #22 player follows the [approved interactive prototype](docs/2026-09-13-wave-player-prototype.md).
+Use **Open files** in the empty player or **Settings → Add files** to select several WAV/MP3 files.
+The session retains at most **100 File references**, in picker order; unsupported extensions and
+files beyond the limit are counted explicitly. Repeated/same-named files remain distinct entries.
+No file is read or prepared on addition or row selection. Only the active entry is prepared; filename
+is the honest identity, artist/album/artwork remain unavailable, and duration appears only after
+preparation. Reload discards the collection and preferences. Nothing is uploaded or persisted.
+
+Rows select independently of playback. Their **Play** target explicitly prepares and plays; the
+current row pauses/resumes/replays. Previous/next replace at zero preserving playing/paused intent,
+with no wrap or automatic advance. Ordinary preparation/replacement never autoplays. **Settings →
+Remove selected / Clear session** only discard session entries, never original files. Removing an
+inactive entry leaves playback untouched; removing the active entry or Clear cancels/closes it
+without selecting a playback successor. Removed selection moves to the next remaining row, or previous
+at the end. **Close track / Cancel loading** in Settings retains the collection; the visual loading
+state also offers Cancel. Errors leave rows available for another file or retry.
+
+Choose nonempty little-endian RIFF PCM16/24 mono/stereo WAV or supported MP3. Playback supports the
+active context's rate and prepared 44100 ↔ 48000 Hz conversion only. Library/theme/responsive
+changes do not replace the active owner or session. Desktop keeps a centered compact player and
+right companion library at ≥1212px; narrower browsing replaces only the visual region. Settings
+provides Light/Dark/System. The visual is honestly unavailable; the seek timeline is functional,
+not a simulated waveform. Waveform (#18), live visualization (#23) and loops (#19/#20) remain separate.
 
 MP3 support (#17) uses pinned Symphonia 0.6.1 in the shared Rust preparation path,
 not browser decoding. Accepted: MPEG-1 Layer III, 44.1/48 kHz mono/stereo, CBR/VBR
@@ -125,9 +145,10 @@ the consumed source-media cursor, **not measured audible presentation time**.
 
 Listening volume starts at **15% after the compiled 0.5 gain** (initial linear combined gain 0.075).
 Mute remembers the selected level; volume/mute never rebuild playback or move its cursor. Close
-cancels loading/seeking and releases the context/worker. Details remain secondary. No broad browser,
+cancels loading/seeking and releases the context/worker. Playback details and limits live in Settings. No broad browser,
 background, device or click-free-transition guarantee follows from the muted checks; see the
-[player evidence and limitations](docs/2026-09-10-local-wav-player-evidence.md).
+[compact-player evidence](docs/2026-09-13-compact-player.md) and
+[foundational playback limitations](docs/2026-09-10-local-wav-player-evidence.md).
 
 ## Audio-engine learning lab
 

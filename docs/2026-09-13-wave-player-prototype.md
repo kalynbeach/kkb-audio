@@ -2,9 +2,9 @@
 
 Date: 2026-09-13. Issue: [#21](https://github.com/kalynbeach/kkb-audio/issues/21). Surface mode: **Operate**.
 
-**Status: working, non-shipping study; Kalyn’s interactive-prototype approval is pending.**
+**Status: non-shipping study; Kalyn approved it as the current design direction for #22.**
 
-Kalyn explicitly approved moving from the six current [v3 mockups](2026-09-13-wave-player-mockups-v3/README.md) into this bounded prototype. That approves the direction and real-font, geometry, density and interaction refinements here—not a final design, engine integration, #22, or a replacement for the existing lab/player design rules.
+Kalyn first approved moving from the six current [v3 mockups](2026-09-13-wave-player-mockups-v3/README.md) into this bounded prototype. After its interaction refinements and publication in PR #24, Kalyn explicitly approved the working prototype as “the final design direction for now.” This clears #22’s design gate, not a frozen specification, audible-output permission or merge authorization. The lab remains unchanged; see the approval boundary below for the production-slice adaptations.
 
 The [design brief](2026-09-13-wave-player-design-brief.md), [design research](2026-09-13-wave-player-design-research.md) and [local source research](2026-09-13-wave-player-local-design-research.md) retain the image-stage provenance and corrections. Earlier images and prompts remain historical; prototype screenshots are browser evidence, not generated replacements for the v3 image set.
 
@@ -38,7 +38,7 @@ The review controls below the study expose empty, loading, paused, playing, ende
 
 ## Implemented geometry and type proposals
 
-These describe the prototype, **not approved production tokens**. The existing [DESIGN.md](../DESIGN.md) remains authoritative for the unchanged lab/demo.
+These describe the **approved current player direction** for #22. They do not change the unchanged lab’s tokens or authorize copying simulated capabilities into production. [DESIGN.md](../DESIGN.md) distinguishes the player handoff from lab guidance.
 
 | Element | Current study |
 | --- | --- |
@@ -57,7 +57,7 @@ These describe the prototype, **not approved production tokens**. The existing [
 
 Inter, TX-02 and Departure Mono are actually loaded. Regular-weight Phosphor SVG definitions are used instead of generated glyphs. The application composes the existing shadcn Button/Input/Slider/ToggleGroup with Base UI Popover and Dialog; shared component and palette source remain unchanged. React/React DOM and their type packages are now pinned to stable 19.3.0, as requested.
 
-The loop editor is an **opaque, absolutely positioned overlay** over the bottom of the visual area, not part of the sizing flow. Its fields and preparation/failure feedback share one surface. The visual keeps its full bounds; the waveform remains **40px high at the same x/y position and width** throughout the animation, rather than either surface shrinking to make room. Changing tracks keeps the editor disclosure open while resetting the new track’s loop. The open desktop library neither resizes nor shifts the centered player. These refinements follow Kalyn’s feedback; final prototype acceptance remains pending.
+The loop editor is an **opaque, absolutely positioned overlay** over the bottom of the visual area, not part of the sizing flow. Its fields and preparation/failure feedback share one surface. The visual keeps its full bounds; the waveform remains **40px high at the same x/y position and width** throughout the animation, rather than either surface shrinking to make room. Changing tracks keeps the editor disclosure open while resetting the new track’s loop. The open desktop library neither resizes nor shifts the centered player. These refinements are included in Kalyn’s current direction approval; engine loop constraints remain a separate decision.
 
 ## Interaction model
 
@@ -147,7 +147,7 @@ git diff --check
 
 These passed. After upgrading React, the existing `bun test web/test` suite (70 tests), `check:player-ui` (11 tests) and `check:lab-ui` (8 tests) also passed using the repository-local Bun. An initial combined invocation of both UI files hit Happy DOM cross-file document ownership errors; the repository’s configured separate commands passed unchanged. No shipping test or application source was changed to accommodate the upgrade.
 
-A fresh read-only finishing reviewer returned `disposition: ship` (meaning prototype review only, not product approval), but missed the oversized volume disclosure Kalyn subsequently rejected. That finding supersedes the review’s volume assessment. Kalyn’s later library correction also supersedes its library-state/density assessment; the reviewer’s original verdict does not approve this revised library. The popup was replaced with the slim strip and rechecked for named slider, keyboard input, mute, Escape/focus return and narrow dark-mode fit. The revised volume design still awaits Kalyn’s judgment. This evidence does **not** establish real audio behavior, engine timing, MP3 support, decoded waveform quality, live shader performance, actual touch-device behavior, screen-reader usability or browser coverage beyond the inspected Chromium surface. Dense touch targets, small metadata and long-title disclosure still deserve human judgment; the scrollable mobile library intentionally does not force every row above the fold. Long metadata is truncated visually to keep rows stable; richer metadata viewing/copying and multi-selection are not implemented.
+A fresh read-only finishing reviewer returned `disposition: ship` (meaning prototype review only, not product approval), but missed the oversized volume disclosure Kalyn subsequently rejected. That finding supersedes the review’s volume assessment. Kalyn’s later library correction also supersedes its library-state/density assessment; the reviewer’s original verdict does not approve this revised library. The popup was replaced with the slim strip and rechecked for named slider, keyboard input, mute, Escape/focus return and narrow dark-mode fit. The revised volume design is included in Kalyn’s subsequent direction approval. This evidence does **not** establish real audio behavior, engine timing, MP3 support, decoded waveform quality, live shader performance, actual touch-device behavior, screen-reader usability or browser coverage beyond the inspected Chromium surface. Dense touch targets, small metadata and long-title disclosure still deserve human judgment; the scrollable mobile library intentionally does not force every row above the fold. Long metadata is truncated visually to keep rows stable; richer metadata viewing/copying and multi-selection are not implemented.
 
 ## Files and asset provenance
 
@@ -163,7 +163,26 @@ Tooling changes are the optional prototype script plus the requested React/React
 
 - Image-generation gate: complete; model-routing limitation and verification waiver remain in v3 evidence.
 - Mockup-direction approval: **received**, specifically for this separate prototype and its refinements.
-- Interactive-prototype/final design approval: **pending**.
-- #22 and audio-engine integration: **not started or authorized by this prototype approval**.
+- Interactive-prototype/current design approval: **received** — “the final design direction for now.” [Recorded on #21](https://github.com/kalynbeach/kkb-audio/issues/21#issuecomment-5657329528).
+- #22 integration: **implemented for review**, stacked above MP3 PR #25; see [#22 evidence](2026-09-13-compact-player.md); the prototype remains silent and separate.
+- Session-action placement: Kalyn explicitly chose **Settings: Add files, Remove selected and Clear session**, plus **Open files in the empty player**. The library remains playback-only; this is a #22 adaptation, not a change to the silent study.
 
-After Kalyn reviews the working composition, record the exact accepted choices and remaining corrections before marking #21 complete or starting #22. The planned PR review order remains #21 → #17 → #22 → #18 → #23 → #19 → #20; this prototype does not change that dependency/stack plan or authorize merging.
+Accepted direction includes the compact centered anatomy, desktop companion/internal library,
+independent row selection and explicit playback controls, fixed geometry, slim Volume, broader
+Settings, paired modes and bounded disclosure motion. #22 uses honest file metadata/fallbacks,
+a functional seek timeline and static/empty visual; it must not ship synthetic waveforms, a
+synthetic clock, dead loop controls or a fake live signal. The one-second prototype loop minimum
+and audible seam behavior are not engine requirements; #19/#20 retain their decision gates.
+
+The PR review order remains #21 → #17 → #22 → #18 → #23 → #19 → #20. Direction approval does not
+authorize audible/device verification, deployment, issue closure or merging.
+
+### Font-notice correction during #22
+
+The original `DepartureMono-LICENSE.txt` accidentally contained the upstream website's MIT notice,
+not the font license. #22 replaces that notice with the actual SIL OFL 1.1, copyright 2022–2024
+Helena Zhang, from immutable upstream commit `75152a3f1e6dacdd248a6c397c97dbf27e33eea0`,
+[`public/assets/LICENSE`](https://github.com/rektdeckard/departure-mono/blob/75152a3f1e6dacdd248a6c397c97dbf27e33eea0/public/assets/LICENSE).
+The WOFF2 bytes remain unchanged and match that commit's font exactly (SHA256
+`5b4fed1daa90708aa9c6ee1190abca9dc22164a1c1def0020386e46b61038cfb`). This is a notice correction,
+not relicensing or a prototype behavior change. Existing TX-02 entitlement is not newly verified.

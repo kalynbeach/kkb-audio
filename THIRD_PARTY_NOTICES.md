@@ -133,3 +133,18 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
+
+## Compact player type and icons
+
+Inter is distributed with `Inter-LICENSE.txt`. The player uses the repository’s
+existing TX-02 font asset without changing its use/distribution boundary; license
+entitlement has not been verified by this change. Departure Mono by Helena Zhang is distributed
+under the SIL Open Font License 1.1 (`DepartureMono-LICENSE.txt`). Regular Phosphor
+SVG definitions from `@phosphor-icons/react` 2.1.10 are distributed under MIT
+(`Phosphor-LICENSE.txt`). The static phosphor study image is not shipped.
+
+Departure Mono font and OFL source: https://github.com/rektdeckard/departure-mono/tree/75152a3f1e6dacdd248a6c397c97dbf27e33eea0/public/assets
+The font is byte-identical to that upstream WOFF2 (SHA256
+`5b4fed1daa90708aa9c6ee1190abca9dc22164a1c1def0020386e46b61038cfb`).
+The prior prototype notice accidentally copied the website MIT license; the
+distributed `DepartureMono-LICENSE.txt` now contains the actual font OFL.
