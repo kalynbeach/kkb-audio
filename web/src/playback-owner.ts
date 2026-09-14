@@ -1,3 +1,4 @@
+import type { OscilloscopeBuffers, OscilloscopeRead } from "./oscilloscope-tap";
 import { prepareProof, type PreparedProof, type SeekResult } from "./prepared-playback";
 import { prepareWaveform, type PrepareWaveform } from "./prepare-waveform";
 import type { SourceWaveform } from "./source-waveform";
@@ -7,7 +8,8 @@ import type { RenderSnapshot } from "./render-adapter";
 // Private consumer seam, not a published session or command API.
 export type WavPlayback = Pick<PreparedProof,
   "close" | "play" | "pause" | "seek" | "status" | "setListeningGain" |
-  "totalFrames" | "sourceRate" | "paused" | "ready">;
+  "totalFrames" | "sourceRate" | "paused" | "ready"> &
+  Partial<Pick<PreparedProof, "readOscilloscope" | "releaseOscilloscope">>;
 type PrepareWav = (file: File, signal: AbortSignal) => Promise<WavPlayback>;
 export type PlaybackState = {
   phase: "empty" | "loading" | "paused" | "playing" | "seeking" | "ended" | "error";
@@ -43,6 +45,7 @@ export class PlaybackOwner {
   #listeners = new Set<() => void>();
   #lifecycle = new PreparationLifecycle<WavPlayback>();
   #generation = 0;
+  #visualRevision = 0;
   #poll: Promise<void> | undefined;
   #command: Promise<void> | undefined;
   #timer: ReturnType<typeof setInterval> | undefined;
@@ -54,6 +57,15 @@ export class PlaybackOwner {
     private readonly analyse: PrepareWaveform = prepareWaveform) {}
 
   getState = (): PlaybackState => this.#state;
+  getOscilloscopeRevision = (): number => this.#visualRevision;
+  readOscilloscope = (revision: number, buffers: OscilloscopeBuffers): OscilloscopeRead => {
+    if (revision !== this.#visualRevision || this.#state.phase !== "playing" || this.#state.busy) return "warming";
+    try { return this.#lifecycle.active?.readOscilloscope?.(buffers) ?? "unavailable"; }
+    catch { this.releaseOscilloscope(); return "unavailable"; }
+  };
+  releaseOscilloscope = (): void => {
+    try { this.#lifecycle.active?.releaseOscilloscope?.(); } catch { /* visual-only cleanup */ }
+  };
   subscribe = (listener: () => void): (() => void) => {
     this.#listeners.add(listener);
     return () => { this.#listeners.delete(listener); };
@@ -66,6 +78,7 @@ export class PlaybackOwner {
 
   async load(file: File): Promise<void> {
     const generation = ++this.#generation;
+    ++this.#visualRevision;
     this.#analysis?.abort();
     this.#analysis = undefined;
     this.#stopPolling();
@@ -101,6 +114,7 @@ export class PlaybackOwner {
 
   async close(): Promise<void> {
     ++this.#generation;
+    ++this.#visualRevision;
     this.#analysis?.abort();
     this.#analysis = undefined;
     this.#stopPolling();
@@ -146,6 +160,10 @@ export class PlaybackOwner {
     if (!playback || this.#state.busy || this.#state.phase === "error") return Promise.resolve();
     const generation = this.#generation;
     const poll = this.#poll;
+    if (action === "seek" || (action === "play" && this.#state.snapshot?.ended)) {
+      ++this.#visualRevision;
+      this.releaseOscilloscope();
+    }
     this.#publish({ busy: true, ...(action === "seek" ? { phase: "seeking" } : {}) });
     const command = (async () => {
       await poll;
@@ -194,6 +212,8 @@ export class PlaybackOwner {
 
   async #fail(error: unknown, generation: number): Promise<void> {
     if (generation !== this.#generation) return;
+    ++this.#visualRevision;
+    this.releaseOscilloscope();
     this.#stopPolling();
     this.#analysis?.abort();
     this.#publish({ phase: "error", busy: false, waveform: null, waveformPhase: "empty", error: error instanceof Error ? error.message : String(error) });

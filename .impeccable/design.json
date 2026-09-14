@@ -4,6 +4,16 @@
   "title": "Design System: Learning lab and local player",
   "extensions": {
     "colorMeta": {
+      "scope-surface": { "role": "neutral", "displayName": "Oscilloscope surface (light)" },
+      "scope-surface-dark": { "role": "neutral", "displayName": "Oscilloscope surface (dark)" },
+      "scope-left": { "role": "accent", "displayName": "Solid left/mono signal (light)" },
+      "scope-left-dark": { "role": "accent", "displayName": "Solid left/mono signal (dark)" },
+      "scope-right": { "role": "accent", "displayName": "Dashed right signal (light)" },
+      "scope-right-dark": { "role": "accent", "displayName": "Dashed right signal (dark)" },
+      "scope-baseline": { "role": "neutral", "displayName": "Oscilloscope baseline (light)" },
+      "scope-baseline-dark": { "role": "neutral", "displayName": "Oscilloscope baseline (dark)" },
+      "scope-caption": { "role": "neutral", "displayName": "Oscilloscope explanation (light)" },
+      "scope-caption-dark": { "role": "neutral", "displayName": "Oscilloscope explanation (dark)" },
       "pi-ground": {
         "role": "neutral",
         "displayName": "Warm page ground (light)",
@@ -394,7 +404,7 @@
       },
       {
         "name": "The Honest Media Rule",
-        "body": "Unavailable media is explicit; never portray invented artwork, metadata, elapsed time or decorative bars as actual source analysis.",
+        "body": "Unavailable media is explicit; never portray invented artwork, metadata, elapsed time or decorative bars as actual source analysis. The live oscilloscope uses paired signal/surface palettes, solid left/mono and dashed right traces of actual pre-volume rendered output. It is an approximate untagged browser history, not source/speaker sync. Reduced-motion, paused-visual and unavailable explanations preserve independent transport.",
         "section": "components"
       }
     ],

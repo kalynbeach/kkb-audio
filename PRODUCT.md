@@ -30,7 +30,7 @@ inactive entry does not interrupt; removing active or Clear cancels/closes witho
 successor. Removed selection moves to the next remaining row, or previous at the end. Original files
 are never modified. Failed files remain browsable and retryable.
 
-The centered 380 × 532 desktop player contains identity, an honest unavailable visual, a functional
+The centered 380 × 532 desktop player contains identity, a live oscilloscope with honest fallback, a functional
 40px source-waveform seek target with consumed time, and independent centered transport. At ≥1212px the library is
 a right companion; below it replaces only the visual region. Viewport, library and Light/Dark/System
 changes preserve the owner and playback. Volume is a slim anchored disclosure; mute retains the level,
@@ -46,8 +46,20 @@ At most 4096 time bins (32 KiB) retain channel min/max extrema, not signed avera
 combine all overlapping bins. Fixed full-scale amplitude is not listening volume or measured output.
 Seeks, mute and conversion do not rebuild it; replacement/close discard it and reject late jobs. There
 is no retained collection cache. See [waveform evidence](docs/2026-09-13-source-waveform.md) for source-frame
-mapping and bounded extra decoding costs. Live visualization (#23), loops (#19/#20), persistence/catalog,
-queues, HTTP, broader codecs and deployment remain pending/out of scope, with review order #18 → #23 → #19 → #20. No fake signal, clock or dead loop controls ship.
+mapping and bounded extra decoding costs.
+
+The separate live oscilloscope (#23) observes actual worklet output before
+listening volume/mute, including fixed engine gain and output-rate conversion. Mono has one solid
+trace; stereo independently overlays left solid/right dashed traces. Private browser analyser
+histories are untagged, approximate trailing windows, not source-frame or measured speaker sync.
+At most three 2048-sample windows/channel (48 KiB total) provide finite persistence at ≤30 Hz.
+Pause freezes the last observation; seeking clears it even while paused. Ended shows no live signal.
+Hidden/internal-library, reduced-motion and Settings Pause visual stop reads/drawing and detach the
+tap; returning waits for fresh rendered history without starting audio. Canvas/analyser failure is
+visual-only. No extra decoding, audio callback work, microphone or playback owner is introduced.
+[Live signal evidence](docs/2026-09-13-live-oscilloscope.md) records timing and support limitations.
+Loops (#19/#20), persistence/catalog, queues, HTTP, broader codecs and deployment remain pending/out
+of scope, after #23 review. No fake signal, clock or dead loop controls ship.
 Muted/device-free checks are not listening, broad browser, device or background certification; see
 [implementation evidence](docs/2026-09-13-compact-player.md).
 

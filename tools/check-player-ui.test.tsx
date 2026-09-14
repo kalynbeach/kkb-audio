@@ -261,3 +261,83 @@ test("completed source waveform keeps consumed progress separate and reconciles 
   await act(() => { owner.setVolume(0.8); owner.setMuted(true); });
   expect(view.container.querySelector(".player-wave-envelope path")!.getAttribute("d")).toBe(path);
 });
+
+test("Settings Pause visual leaves audio running and its stable canvas visible across status polls", async () => {
+  const original = HTMLCanvasElement.prototype.getContext;
+  let draws = 0;
+  const context = { fillRect() { draws++; }, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {}, setLineDash() {} };
+  HTMLCanvasElement.prototype.getContext = (() => context) as unknown as typeof original;
+  try {
+    const { owner, view } = await setup();
+    await act(() => owner.play());
+    const user = userEvent.setup();
+    await user.click(view.getByRole("button", { name: "Settings" }));
+    await user.click(view.getByRole("button", { name: "Pause visual" }));
+    expect(view.getByText("Visual paused · audio unchanged")).toBeTruthy();
+    expect(owner.getState().phase).toBe("playing");
+    const canvas = view.container.querySelector("canvas")!;
+    const before = draws;
+    await act(() => owner.refresh()); await act(() => owner.refresh());
+    expect(canvas.hidden).toBe(false); expect(draws).toBe(before);
+    await user.click(view.getByRole("button", { name: "Resume visual" }));
+    expect(owner.getState().phase).toBe("playing");
+    await act(() => owner.close());
+  } finally { HTMLCanvasElement.prototype.getContext = original; }
+});
+
+test("visual failure keeps its explanation after reduced motion is toggled without remounting", async () => {
+  const originalContext = HTMLCanvasElement.prototype.getContext;
+  const originalMedia = globalThis.matchMedia;
+  let reduced = false;
+  const query = originalMedia("(prefers-reduced-motion: reduce)");
+  Object.defineProperty(query, "matches", { configurable: true, get: () => reduced });
+  globalThis.matchMedia = value => value === "(prefers-reduced-motion: reduce)" ? query : originalMedia(value);
+  HTMLCanvasElement.prototype.getContext = () => null;
+  try {
+    const { owner, view } = await setup();
+    let reads = 0;
+    owner.readOscilloscope = () => { reads++; return 2; };
+    await act(() => owner.play());
+    expect(view.getByText("Visual unavailable · playback controls remain available")).toBeTruthy();
+    const canvas = view.container.querySelector("canvas");
+    for (const preference of [true, false]) {
+      reduced = preference;
+      await act(() => { query.dispatchEvent(new Event("change")); });
+      await act(() => owner.refresh());
+    }
+    expect(view.getByText("Visual unavailable · playback controls remain available")).toBeTruthy();
+    expect(view.container.querySelector("canvas")).toBe(canvas);
+    expect(canvas!.hidden).toBe(true);
+    expect(reads).toBe(0);
+    expect(owner.getState().phase).toBe("playing");
+    await act(() => owner.close());
+  } finally { HTMLCanvasElement.prototype.getContext = originalContext; globalThis.matchMedia = originalMedia; }
+});
+
+test("reduced motion observed by polling redraws only a baseline even without a media-change event", async () => {
+  const originalContext = HTMLCanvasElement.prototype.getContext;
+  const originalMedia = globalThis.matchMedia;
+  let reduced = false; let draws = 0; let vertices = 0;
+  const query = originalMedia("(prefers-reduced-motion: reduce)");
+  Object.defineProperty(query, "matches", { configurable: true, get: () => reduced });
+  globalThis.matchMedia = value => value === "(prefers-reduced-motion: reduce)" ? query : originalMedia(value);
+  const context = { fillRect() { draws++; vertices = 0; }, beginPath() {}, moveTo() { vertices++; }, lineTo() { vertices++; }, stroke() {}, setLineDash() {} };
+  HTMLCanvasElement.prototype.getContext = (() => context) as unknown as typeof originalContext;
+  try {
+    const { owner, view } = await setup();
+    let reads = 0;
+    owner.readOscilloscope = () => { reads++; return 2; };
+    await act(() => owner.play());
+    await waitFor(() => expect(view.getByText("Live oscilloscope")).toBeTruthy());
+    expect(vertices).toBeGreaterThan(2);
+    const before = draws; const readsBefore = reads;
+    reduced = true; // Deliberately no matchMedia event; owner polling must reconcile pixels.
+    await act(() => owner.refresh());
+    expect(view.getByText("Reduced motion · live visual off")).toBeTruthy();
+    expect(vertices).toBe(2); expect(draws).toBe(before + 1);
+    await act(() => owner.refresh()); await act(() => owner.refresh());
+    expect(draws).toBe(before + 1); expect(reads).toBe(readsBefore);
+    expect(owner.getState().phase).toBe("playing");
+    await act(() => owner.close());
+  } finally { HTMLCanvasElement.prototype.getContext = originalContext; globalThis.matchMedia = originalMedia; }
+});

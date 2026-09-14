@@ -1,0 +1,113 @@
+{
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+  "milliseconds": 10062,
+  "draws": 222,
+  "reads": 444,
+  "drawMs": {
+    "mean": 2.2504504478729523,
+    "p95": 5,
+    "max": 5.600000023841858
+  },
+  "start": {
+    "ended": false,
+    "epoch": 1,
+    "failureCode": 0,
+    "invalidBlockCount": 0,
+    "lastFrameCount": 128,
+    "memoryBytes": 16777216,
+    "pcmPosition": 76544,
+    "presentationTime": null,
+    "processCount": 598,
+    "ready": true,
+    "renderFrame": 76544,
+    "slotCount": 4,
+    "sourcePosition": 76544,
+    "staleBlockCount": 0,
+    "starvationCount": 0
+  },
+  "end": {
+    "ended": false,
+    "epoch": 1,
+    "failureCode": 0,
+    "invalidBlockCount": 0,
+    "lastFrameCount": 128,
+    "memoryBytes": 16777216,
+    "pcmPosition": 556544,
+    "presentationTime": null,
+    "processCount": 4348,
+    "ready": true,
+    "renderFrame": 556544,
+    "slotCount": 4,
+    "sourcePosition": 556544,
+    "staleBlockCount": 0,
+    "starvationCount": 0
+  },
+  "starvationDelta": 0,
+  "signals": [
+    {
+      "channels": [
+        {
+          "peak": 0,
+          "reads": 4,
+          "zeroCrossings": 0
+        },
+        {
+          "peak": 0.29998779296875,
+          "reads": 4,
+          "zeroCrossings": 10
+        }
+      ],
+      "name": "right.wav"
+    },
+    {
+      "channels": [
+        {
+          "peak": 0.29998779296875,
+          "reads": 5,
+          "zeroCrossings": 9
+        },
+        {
+          "peak": 0.29998779296875,
+          "reads": 5,
+          "zeroCrossings": 14
+        }
+      ],
+      "name": "distinct.wav"
+    },
+    {
+      "channels": [
+        {
+          "peak": 0,
+          "reads": 5,
+          "zeroCrossings": 0
+        }
+      ],
+      "name": "silence.wav"
+    },
+    {
+      "channels": [
+        {
+          "peak": 0.29999589920043945,
+          "reads": 5,
+          "zeroCrossings": 9
+        }
+      ],
+      "name": "converted.wav"
+    },
+    {
+      "channels": [
+        {
+          "peak": 0.05040719360113144,
+          "reads": 5,
+          "zeroCrossings": 47
+        },
+        {
+          "peak": 0.05501297116279602,
+          "reads": 5,
+          "zeroCrossings": 55
+        }
+      ],
+      "name": "actual.mp3"
+    }
+  ]
+}

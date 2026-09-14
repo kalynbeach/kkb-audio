@@ -6,6 +6,7 @@ import { Input } from "./components/ui/input";
 import { Slider } from "./components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "./components/ui/toggle-group";
 import { PlaybackOwner, sourceFrameAtSeconds, type PlaybackState } from "./playback-owner";
+import { PlayerOscilloscope } from "./player-oscilloscope";
 import { waveformPath } from "./source-waveform";
 import { PlayerCollection, SESSION_LIMIT, type SessionEntry } from "./player-collection";
 import { ArrowLeftIcon, GearSixIcon, PauseIcon, PlayIcon, QueueIcon, SkipBackIcon, SkipForwardIcon, SpeakerHighIcon, SpeakerSlashIcon, XIcon } from "./player-icons";
@@ -26,6 +27,7 @@ export function PlayerApp({ owner: suppliedOwner }: { owner?: PlaybackOwner }) {
   const session = useSyncExternalStore(collection.subscribe, collection.getState);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [visualPaused, setVisualPaused] = useState(false);
   const [mode, setMode] = useState<"system" | "light" | "dark">("system");
   const [narrow, setNarrow] = useState(() => matchMedia("(max-width: 1211px)").matches);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -96,12 +98,15 @@ export function PlayerApp({ owner: suppliedOwner }: { owner?: PlaybackOwner }) {
           <ToggleGroup value={[mode]} onValueChange={values => { const value = values[0]; if (value === "system" || value === "light" || value === "dark") setMode(value); }} aria-labelledby="mode-label">
             <ToggleGroupItem value="system">System</ToggleGroupItem><ToggleGroupItem value="light">Light</ToggleGroupItem><ToggleGroupItem value="dark">Dark</ToggleGroupItem>
           </ToggleGroup>
+          <Button variant="outline" aria-pressed={visualPaused} onClick={() => setVisualPaused(!visualPaused)}>{visualPaused ? "Resume visual" : "Pause visual"}</Button>
+          <p className="player-settings-note">The oscilloscope observes rendered audio before listening volume or mute. Pausing the visual does not pause audio.</p>
           {session.active ? <Button variant="outline" onClick={closeTrack}>{state.phase === "loading" ? "Cancel loading" : "Close track"}</Button> : null}
           <details className="player-limits"><summary>Playback details & limits</summary>
             <p>WAV PCM16/24 or MPEG-1 Layer III MP3, mono/stereo. MP3: 44.1/48 kHz, up to 32 MiB and 10 minutes. Same-rate or 44.1 ↔ 48 kHz conversion. Other encodings and conversions are rejected.</p>
-            <p>Only the active file is prepared. Row Play explicitly starts audio; adding or selecting never does. Previous/next preserve playing or paused intent. No wrap, auto-advance, loops or live visualization. The waveform is source amplitude, independent of listening volume; at most 4096 time bins combine channel extrema, reduced without dropping peaks. It is an overview, not sample-level detail.</p>
+            <p>Only the active file is prepared. Row Play explicitly starts audio; adding or selecting never does. Previous/next preserve playing or paused intent. No wrap, auto-advance or loops. The waveform is source amplitude, independent of listening volume; at most 4096 time bins combine channel extrema, reduced without dropping peaks. It is an overview, not sample-level detail.</p>
             <p>Position follows consumed source media, not measured speaker output. Seeking may briefly output silence; click-free transitions and background playback are not guaranteed. Volume starts at 15%, after fixed 50% engine gain.</p>
-            <p>No preferences are saved. Reduced motion skips disclosure animations.</p>
+            <p>The live oscilloscope shows an approximate trailing 2048-sample browser window, not source-tagged or speaker-synchronized data. Mono has one trace; stereo has solid left and dashed right traces, with three-window persistence. Seeking clears history and waits for fresh rendering. Silence is a flat line.</p>
+            <p>No preferences are saved. Reduced motion disables live visual motion and skips disclosure animations. Visual failure leaves transport available.</p>
           </details>
         </Dialog.Popup></ViewTransition> : null}</Dialog.Portal>
       </Dialog.Root>
@@ -120,7 +125,7 @@ export function PlayerApp({ owner: suppliedOwner }: { owner?: PlaybackOwner }) {
                 <p>{state.phase === "loading" ? "Preparing this track…" : state.phase === "error" ? "This file could not be played." : session.entries.length ? "Play a track from your library." : "Open local WAV or MP3 files."}</p>
                 {state.phase === "loading" ? <Button variant="outline" onClick={closeTrack}>Cancel loading</Button> : state.phase === "empty" ? <Button variant="outline" onClick={() => fileInput.current?.click()}>Open files</Button> : null}
                 {state.phase !== "loading" && session.entries.length ? <Button variant="outline" onClick={openLibrary}>Browse library</Button> : null}
-              </div> : <figure className="player-visual"><div className="player-static-signal"><p>Visual unavailable</p><small>Playback controls remain available.</small></div></figure>}
+              </div> : <PlayerOscilloscope owner={owner} paused={visualPaused} />}
             </div>
           </ViewTransition>
           <div className="player-navigation"><SeekBar key={session.active ?? "empty"} state={state} unavailable={!available} disabled={!available || state.busy}

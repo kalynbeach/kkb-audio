@@ -1,0 +1,101 @@
+{
+  "before": {
+    "animations": [],
+    "canvasRect": {
+      "bottom": 587,
+      "height": 434,
+      "left": 18,
+      "right": 372,
+      "top": 153,
+      "width": 354,
+      "x": 18,
+      "y": 153
+    },
+    "caption": "Live oscilloscopeL solid / R dashed · before volume",
+    "captionRect": {
+      "bottom": 575,
+      "height": 36,
+      "left": 30,
+      "right": 360,
+      "top": 539,
+      "width": 330,
+      "x": 30,
+      "y": 539
+    },
+    "contextState": "running",
+    "draws": 7,
+    "height": 434,
+    "hidden": false,
+    "nonBaseline": 13817,
+    "reads": 8,
+    "reduced": false,
+    "time": 2359.8000000715256,
+    "width": 354
+  },
+  "reduced": {
+    "animations": [],
+    "canvasRect": {
+      "bottom": 587,
+      "height": 434,
+      "left": 18,
+      "right": 372,
+      "top": 153,
+      "width": 354,
+      "x": 18,
+      "y": 153
+    },
+    "caption": "Reduced motion · live visual off",
+    "captionRect": {
+      "bottom": 575,
+      "height": 16,
+      "left": 30,
+      "right": 360,
+      "top": 559,
+      "width": 330,
+      "x": 30,
+      "y": 559
+    },
+    "contextState": "running",
+    "draws": 9,
+    "height": 434,
+    "hidden": false,
+    "nonBaseline": 0,
+    "reads": 10,
+    "reduced": true,
+    "time": 2731.8000000715256,
+    "width": 354
+  },
+  "stable": {
+    "animations": [],
+    "canvasRect": {
+      "bottom": 587,
+      "height": 434,
+      "left": 18,
+      "right": 372,
+      "top": 153,
+      "width": 354,
+      "x": 18,
+      "y": 153
+    },
+    "caption": "Reduced motion · live visual off",
+    "captionRect": {
+      "bottom": 575,
+      "height": 16,
+      "left": 30,
+      "right": 360,
+      "top": 559,
+      "width": 330,
+      "x": 30,
+      "y": 559
+    },
+    "contextState": "running",
+    "draws": 9,
+    "height": 434,
+    "hidden": false,
+    "nonBaseline": 0,
+    "reads": 10,
+    "reduced": true,
+    "time": 3344.899999976158,
+    "width": 354
+  }
+}

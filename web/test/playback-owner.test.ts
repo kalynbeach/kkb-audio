@@ -195,3 +195,29 @@ test("consumed EOS acknowledges suspension; seeking away stays paused until expl
   expect(owner.getState().phase).toBe("paused");
   expect(playback.paused).toBe(true);
 });
+
+test("oscilloscope revisions reject old consumers across held seek, replacement, close and visual-only failure", async () => {
+  let reads = 0; let releases = 0;
+  const playback = Object.assign(new FakePlayback(), {
+    readOscilloscope: () => { reads++; return 2 as const; },
+    releaseOscilloscope: () => { releases++; },
+  });
+  const owner = setup(async () => playback);
+  const buffers = [new Float32Array(2048), new Float32Array(2048)] as const;
+  await owner.load(file); const first = owner.getOscilloscopeRevision();
+  expect(owner.readOscilloscope(first, buffers)).toBe("warming"); expect(reads).toBe(0);
+  await owner.play(); expect(owner.readOscilloscope(first, buffers)).toBe(2);
+  playback.pendingSeek = deferred(); const seek = owner.seek(3); await tick();
+  expect(owner.getOscilloscopeRevision()).not.toBe(first);
+  expect(owner.readOscilloscope(first, buffers)).toBe("warming"); expect(reads).toBe(1);
+  playback.pendingSeek.resolve(); await seek;
+  expect(owner.readOscilloscope(first, buffers)).toBe("warming");
+  const second = owner.getOscilloscopeRevision(); expect(owner.readOscilloscope(second, buffers)).toBe(2);
+  await owner.load(new File([], "first.wav")); await owner.play();
+  expect(owner.readOscilloscope(second, buffers)).toBe("warming");
+  playback.readOscilloscope = () => { throw new Error("visual only"); };
+  expect(owner.readOscilloscope(owner.getOscilloscopeRevision(), buffers)).toBe("unavailable");
+  expect(owner.getState().phase).toBe("playing"); expect(owner.getState().error).toBeNull();
+  expect(releases).toBeGreaterThan(0);
+  await owner.close(); expect(owner.readOscilloscope(owner.getOscilloscopeRevision(), buffers)).toBe("warming");
+});

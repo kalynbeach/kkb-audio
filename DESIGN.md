@@ -18,6 +18,16 @@ colors:
   pi-line-dark: "#292925"
   pi-line-strong: "#a9a9a0"
   pi-line-strong-dark: "#54544e"
+  scope-surface: "#edf1e8"
+  scope-surface-dark: "#0b140e"
+  scope-left: "#27633d"
+  scope-left-dark: "#97d979"
+  scope-right: "#466c28"
+  scope-right-dark: "#cee9a0"
+  scope-baseline: "#b5c3ad"
+  scope-baseline-dark: "#33452e"
+  scope-caption: "#36533d"
+  scope-caption-dark: "#b5c6ae"
 typography:
   body:
     fontFamily: '"InterVariable", Inter, ui-sans-serif, system-ui, sans-serif'
@@ -226,13 +236,33 @@ Playback-only rows keep their frontmatter height and a reserved leading 44px Pla
 
 ### Navigation and volume inputs
 
-The seek range retains its 40px target, elapsed/duration and textual phase. #18 replaces the thin rail with an actual source-amplitude min/max envelope: at most 160 columns combine every overlapping source bin, with fixed full-scale height (no per-file normalization). Remaining amplitude uses muted foreground; consumed amplitude and the straight, dotted-head cursor use foreground. A separate dashed preview cursor never recolors consumed progress. Silence has only a half-pixel baseline mark; MP3 overshoot clips visually at full scale but remains intact in the summary. Preparing/unavailable waveform text keeps a functional rail, never a synthetic signal. The visual/artwork region remains honestly unavailable for #23. Pointer preview commits once on release; Escape, blur, window blur, pointer cancel and lost capture abandon drafts. Keyboard steps are ±5 seconds, Page keys ±30 seconds, Home/End exact endpoints. Entry identity cancels stale drafts, including same-named files. Busy seeks remain focusable and guarded. Time is not live-announced; phase text is.
+The seek range retains its 40px target, elapsed/duration and textual phase. #18 replaces the thin rail with an actual source-amplitude min/max envelope: at most 160 columns combine every overlapping source bin, with fixed full-scale height (no per-file normalization). Remaining amplitude uses muted foreground; consumed amplitude and the straight, dotted-head cursor use foreground. A separate dashed preview cursor never recolors consumed progress. Silence has only a half-pixel baseline mark; MP3 overshoot clips visually at full scale but remains intact in the summary. Preparing/unavailable waveform text keeps a functional rail, never a synthetic signal. The independent #23 oscilloscope occupies the existing visual region without navigation semantics. Pointer preview commits once on release; Escape, blur, window blur, pointer cancel and lost capture abandon drafts. Keyboard steps are ±5 seconds, Page keys ±30 seconds, Home/End exact endpoints. Entry identity cancels stale drafts, including same-named files. Busy seeks remain focusable and guarded. Time is not live-announced; phase text is.
 
 Volume opens left-aligned above navigation as a slim opaque strip with Mute, slider and tabular percentage. Its controls retain a 44px interaction height. Muting preserves the level. Appearance is an explicit System/Light/Dark toggle group in Settings, with tonal pressed state and keyboard focus; no preferences are saved.
 
+### Live oscilloscope
+
+The phosphor fine-signal/persistence reference stays inside the existing visual field. Canvas2D paints
+paired surfaces and traces, not a neon shell or a new scene system. The `scope-*` palette above is
+local to the player: light uses green ink on pale sage; dark uses pale phosphor on deep green-black.
+Both independently painted signal and surface change with appearance. The caption uses its own
+readable mode pair. Left/mono is solid and right is dashed with a visible channel legend; meaning
+never relies only on their green shades. Fixed full-scale amplitude preserves quiet/silent signals,
+rather than normalizing every track to fill the field. Three actual observation windows fade by
+age (1 / 0.24 / 0.10), not fabricated animation or a decorative glow.
+
+The lower inset caption names live, waiting, paused, ended, reduced or unavailable state, separately
+from transport state. Audio pause freezes the last eligible observation. A paused seek/remount says
+Play to observe rather than showing old samples. Ended, reduced motion and Settings Pause visual
+use a stable surface/baseline and explanation; unavailable Canvas2D uses the CSS surface and text.
+Reduced motion and visual pause never pause audio. Empty/loading/file errors retain existing actions.
+Read [the timing/storage contract and evidence](docs/2026-09-13-live-oscilloscope.md); these are
+approximate untagged rendered histories, not a source/speaker clock. No geometry, font, library,
+Volume or disclosure animation owner changes are part of #23.
+
 ### Honest states and Settings
 
-Unavailable metadata, artwork and duration are stated, never invented. Unknown time uses an em dash; a genuinely prepared sub-second duration may read `0:00`. Prepared playback uses “Visual unavailable,” not the prototype study image or synthetic signal. Empty state gives instructions and Open files without a decorative eyebrow. PREPARING/UNAVAILABLE are meaningful feedback, not a reusable kicker style.
+Unavailable metadata, artwork and duration are stated, never invented. Unknown time uses an em dash; a genuinely prepared sub-second duration may read `0:00`. Prepared playback uses the actual #23 oscilloscope, never the prototype study image or synthetic signal; unsupported/failed rendering retains “Visual unavailable” with independent playback controls. Empty state gives instructions and Open files without a decorative eyebrow. PREPARING/UNAVAILABLE are meaningful feedback, not a reusable kicker style.
 
 Errors stay visible outside the visual/library swap and keep alert semantics. Settings holds Add files, Remove selected, Clear session and Close track/Cancel loading; the loading visual also offers Cancel. Original files remain untouched. Keep codec limits and session policy in [PRODUCT.md](PRODUCT.md) and the dated evidence, not in visual tokens.
 

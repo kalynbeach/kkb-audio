@@ -514,3 +514,15 @@ expanded merely to make future features appear accommodated.
 - [Rust panic handling](https://doc.rust-lang.org/std/panic/fn.catch_unwind.html)
 - [SharedArrayBuffer security requirements](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer#security_requirements)
 - [RFC 9110: HTTP semantics](https://www.rfc-editor.org/rfc/rfc9110.html)
+
+Implementation status, 2026-09-13 (#23): the approved separate visual now uses Canvas2D and a
+private pre-listening-gain browser analyser tap of actual worklet output. Independent mono/stereo
+traces, three-window persistence, generation/seek invalidation, reduced-motion and visual-only
+fallback are implemented and parent-accepted for stacked PR publication. These are approximate untagged histories, not the canonical
+sample-tagged observation API or a speaker clock. The source waveform, worklet/Rust callback and
+library ownership remain unchanged. [Dated live-oscilloscope evidence](2026-09-13-live-oscilloscope.md)
+records the final parent isolated 147-test check, 39-assertion pre-final-fix browser batch, corrected
+reduced-motion pixel confirmation, bounded real foreground workload and preserved failures.
+Independent reviews passed after the parent corrected their shared failure-caption P2 and obtained
+a focused recheck. Browser evidence predates that caption-only repair. No merge or deployment;
+#19/#20 remain separate and unimplemented.

@@ -1,0 +1,142 @@
+bun test v1.4.0 (34cbb9a40)
+
+tools/check-player-ui.test.tsx:
+32 |   // throw errors w/ suggestions for better queries. Opt in so off by default.
+33 |   throwSuggestions: false,
+34 |   // called when getBy* queries fail. (message, container) => Error
+35 |   getElementError(message, container) {
+36 |     const prettifiedDOM = (0, _prettyDom.prettyDOM)(container);
+37 |     const error = new Error([message, `Ignored nodes: comments, ${config.defaultIgnore}\n${prettifiedDOM}`].filter(Boolean).join('\n\n'));
+                           ^
+TestingLibraryElementError: Unable to find an element with the text: Visual unavailable · playback controls remain available. This could be because the text is broken up by multiple elements. In this case, you can provide a function for your text matcher to make your matcher more flexible.
+
+Ignored nodes: comments, script, style
+[36m<body>[39m
+  [36m<div>[39m
+    [36m<input[39m
+      [33maccept[39m=[32m".wav,.mp3,audio/wav,audio/x-wav,audio/mpeg"[39m
+      [33maria-label[39m=[32m"Add local WAV or MP3 files"[39m
+      [33mhidden[39m=[32m""[39m
+      [33mid[39m=[32m"session-files"[39m
+      [33mmultiple[39m=[32m""[39m
+      [33mtype[39m=[32m"file"[39m
+    [36m/>[39m
+    [36m<header[39m
+      [33mclass[39m=[32m"player-app-header"[39m
+    [36m>[39m
+      [36m<span>[39m
+        [0mWave Player [0m
+        [36m<span[39m
+          [33mclass[39m=[32m"player-pixel"[39m
+        [36m>[39m
+          [0m/ LOCAL[0m
+        [36m</span>[39m
+      [36m</span>[39m
+      [36m<button[39m
+        [33maria-expanded[39m=[32m"false"[39m
+        [33maria-haspopup[39m=[32m"dialog"[39m
+        [33maria-label[39m=[32m"Settings"[39m
+        [33mclass[39m=[32m"group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50 size-8"[39m
+        [33mdata-base-ui-click-trigger[39m=[32m""[39m
+        [33mdata-slot[39m=[32m"button"[39m
+        [33mid[39m=[32m"base-ui-_r_1_"[39m
+        [33mtabindex[39m=[32m"0"[39m
+        [33mtitle[39m=[32m"Settings"[39m
+        [33mtype[39m=[32m"button"[39m
+      [36m>[39m
+        [36m<svg[39m
+          [33maria-hidden[39m=[32m"true"[39m
+          [33mfill[39m=[32m"currentColor"[39m
+          [33mfocusable[39m=[32m"false"[39m
+          [33mviewBox[39m=[32m"0 0 256 256"[39m
+        [36m>[39m
+          [36m<path[39m
+            [33md[39m=[32m"M128,80a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Zm109.94-52.79a8,8,0,0,0-3.89-5.4l-29.83-17-.12-33.62a8,8,0,0,0-2.83-6.08,111.91,111.91,0,0,0-36.72-20.67,8,8,0,0,0-6.46.59L128,41.85,97.88,25a8,8,0,0,0-6.47-.6A112.1,112.1,0,0,0,54.73,45.15a8,8,0,0,0-2.83,6.07l-.15,33.65-29.83,17a8,8,0,0,0-3.89,5.4,106.47,106.47,0,0,0,0,41.56,8,8,0,0,0,3.89,5.4l29.83,17,.12,33.62a8,8,0,0,0,2.83,6.08,111.91,111.91,0,0,0,36.72,20.67,8,8,0,0,0,6.46-.59L128,214.15,158.12,231a7.91,7.91,0,0,0,3.9,1,8.09,8.09,0,0,0,2.57-.42,112.1,112.1,0,0,0,36.68-20.73,8,8,0,0,0,2.83-6.07l.15-33.65,29.83-17a8,8,0,0,0,3.89-5.4A106.47,106.47,0,0,0,237.94,107.21Zm-15,34.91-28.57,16.25a8,8,0,0,0-3,3c-.58,1-1.19,2.06-1.81,3.06a7.94,7.94,0,0,0-1.22,4.21l-.15,32.25a95.89,95.89,0,0,1-25.37,14.3L134,199.13a8,8,0,0,0-3.91-1h-.19c-1.21,0-2.43,0-3.64,0a8.08,8.08,0,0,0-4.1,1l-28.84,16.1A96,96,0,0,1,67.88,201l-.11-32.2a8,8,0,0,0-1.22-4.22c-.62-1-1.23-2-1.8-3.06a8.09,8.09,0,0,0-3-3.06l-28.6-16.29a90.49,90.49,0,0,1,0-28.26L61.67,97.63a8,8,0,0,0,3-3c.58-1,1.19-2.06,1.81-3.06a7.94,7.94,0,0,0,1.22-4.21l.15-32.25a95.89,95.89,0,0,1,25.37-14.3L122,56.87a8,8,0,0,0,4.1,1c1.21,0,2.43,0,3.64,0a8.08,8.08,0,0,0,4.1-1l28.84-16.1A96,96,0,0,1,188.12,55l.11,32.2a8,8,0,0,0,1.22,4.22c.62,1,1.23,2,1.8,3.06a8.09,8.09,0,0,0,3,3.06l28.6,16.29A90.49,90.49,0,0,1,222.9,142.12Z"[39m
+          [36m/>[39m
+        [36m</svg>[39m
+      [36m</button>[39m
+    [36m</header>[39m
+    [36m<main[39m
+      [33mclass[39m=[32m"player-stage"[39m
+    [36m>[39m
+      [36m<div[39m
+        [33mclass[39m=[32m"player-composition"[39m
+      [36m>[39m
+        [36m<section[39m
+          [33maria-label[39m=[32m"Wave Player"[39m
+          [33mclass[39m=[32m"player-card"[39m
+        [36m>[39m
+          [36m<header[39m
+            [33mclass[39m=[32m"player-track-header"[39m
+          [36m>[39m
+            [36m<h1>[39m
+              [0mChoose your music[0m
+            [36m</h1>[39m
+            [36m<p>[39m
+              [0mLocal files. This session only.[0m
+            [36m</p>[39m
+          [36m</header>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"player-main-field"[39m
+          [36m>[39m
+            [36m<figure[39m
+              [33maria-label[39m=[32m"Live oscilloscope, rendered signal before listening volume"[39m
+              [33mclass[39m=[32m"player-visual player-oscilloscope"[39m
+            [36m>[39m
+              [36m<canvas[39m
+                [33maria-hidden[39m=[32m"true"[39m
+                [33mhidden[39m=[32m""[39m
+              [36m/>[39m
+              [36m<figcaption>[39m
+                [36m<span[39m
+                  [33mrole[39m=[32m"status"[39m
+                [36m>[39m
+                  [0mReduced motion · live visual off[0m
+                [36m</span>[39m
+              [36m</figcaption>[39m
+            [36m</figure>[39m
+          [36m</div>[39m
+          [36m<div[39m
+            [33mclass[39m=[32m"player-navigation"[39m
+          [36m>[39m
+            [36m<div[39m
+              [33mclass[39m=[32m"player-seek"[39m
+            [36m>[39m
+              [36m<label[39m
+                [33mclass[39m=[32m"sr-only"[39m
+                [33mfor[39m=[32m"seek-position"[39m
+              [36m>[39m
+                [0mPosition[0m
+              [36m</label>[39m
+              [36m<div[39m
+                [33mclass[39m=[32m"player-waveform"[39m
+                [33mdata-complete[39m=[32m"false"[39m
+              [36m>[39m
+                [36m<span[39m
+                  [33mclass[39m=[32m"player-wave-status"[39m
+                  [33mrole[39m=[32m"status"[39m
+                [36m>[39m
+                  [0mWaveform unavailable[0m
+                [36m</span>[39m
+                [36m<span[39m
+                  [33maria-hidden[39m=[32m"true"[39m
+                  [33mclass[39m=[32m"player-consumed-cursor"[39m
+                  [33mstyle[39m=[32m"left: 0%;"[39m
+                [36m/>[39m
+                [36m<input[39m
+                  [33maria-describedby[39m=[32m"seek-help"[39m
+                  [33maria-disabled[39m=[32m"false"[39m
+                  [33maria-valuetext[39m=[32m"Position 0:00 of 0:10"[39m
+                  [33mclass[39m=[32m"h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-base transition-colors outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/5...
+      at getElementError (/Users/kalynbeach/dev/kb/kkb-audio/node_modules/@testing-library/dom/dist/config.js:37:23)
+      at <anonymous> (/Users/kalynbeach/dev/kb/kkb-audio/node_modules/@testing-library/dom/dist/query-helpers.js:76:38)
+      at <anonymous> (/Users/kalynbeach/dev/kb/kkb-audio/node_modules/@testing-library/dom/dist/query-helpers.js:52:17)
+      at <anonymous> (/Users/kalynbeach/dev/kb/kkb-audio/node_modules/@testing-library/dom/dist/query-helpers.js:95:19)
+      at <anonymous> (/private/tmp/kkb-audio-23-validation-WiYfgc/tools/check-player-ui.test.tsx:308:17)
+(fail) visual failure keeps its explanation after reduced motion is toggled without remounting [51.33ms]
+
+ 0 pass
+ 18 filtered out
+ 1 fail
+ 1 expect() calls
+Ran 1 test across 1 file. [208.00ms]

@@ -1,3 +1,4 @@
+import { OscilloscopeTap, type OscilloscopeBuffers, type OscilloscopeRead } from "./oscilloscope-tap";
 import { LOCAL_PCM_SLOT_FRAMES } from "./pcm-protocol";
 import {
   InitializationFailure,
@@ -57,6 +58,9 @@ export class PreparedProof {
   readonly sourceRate: number | undefined;
   readonly anchorAndDiscard: boolean;
   #listeningGain: GainNode | undefined;
+  #oscilloscope: OscilloscopeTap | undefined;
+  #oscilloscopeFailed = false;
+  #visualReady = false;
   #activated = false;
   #closed = false;
   #workerTerminated = false;
@@ -109,6 +113,7 @@ export class PreparedProof {
         return;
       }
       this.#observedEpoch = value.snapshot.epoch;
+      this.#visualReady = value.snapshot.epoch === this.#epoch && value.snapshot.ready && !value.snapshot.ended;
       if (value.snapshot.failureCode !== 0) { this.failRuntime(value.snapshot.failureCode); return; }
       this.#snapshotResolve?.(value.snapshot);
       return;
@@ -145,6 +150,7 @@ export class PreparedProof {
   }
 
   failRuntime(code: number): void {
+    this.releaseOscilloscope();
     if (this.#runtimeFailure === 0) {
       this.#runtimeFailure = code;
     }
@@ -220,8 +226,8 @@ export class PreparedProof {
     if (!this.#listeningGain) {
       this.#listeningGain = new GainNode(this.#context, { gain: value });
       this.#listeningGain.connect(this.#context.destination);
-      if (this.#activated) {
-        this.#node.disconnect();
+      if (this.#activated && this.totalFrames !== undefined) {
+        this.#node.disconnect(this.#context.destination);
         this.#node.connect(this.#listeningGain);
       }
     }
@@ -235,7 +241,9 @@ export class PreparedProof {
     const snapshot = await this.status();
     if (!snapshot.ended || this.#seekResolve !== undefined) {
       this.#worker?.postMessage({ type: "activate" });
+      const wasPaused = this.paused;
       await this.#context.resume();
+      if (wasPaused) this.#oscilloscope?.restartWarmup();
       this.#throwIfUnavailable();
     }
     return this.status();
@@ -250,6 +258,8 @@ export class PreparedProof {
   seek(target: number): Promise<SeekResult> {
     this.#throwIfUnavailable();
     if (this.totalFrames === undefined || !Number.isSafeInteger(target) || target < 0 || target > this.totalFrames || this.#epoch === Number.MAX_SAFE_INTEGER) throw new Error("Seek requires a source frame in [0, totalFrames]");
+    this.releaseOscilloscope();
+    this.#visualReady = false;
     this.#seekReject?.(new Error("Seek superseded"));
     this.#epoch += 1;
     this.producerObservation = undefined;
@@ -280,11 +290,28 @@ export class PreparedProof {
 
   stall(value: boolean): void { this.#throwIfUnavailable(); this.#worker?.postMessage({ type: "stall", value }); }
 
+  readOscilloscope(buffers: OscilloscopeBuffers): OscilloscopeRead {
+    if (this.#closed || this.#runtimeFailure || this.#oscilloscopeFailed || this.totalFrames === undefined) return "unavailable";
+    if (!this.#visualReady || this.#seekResolve || this.paused) return "warming";
+    try {
+      this.#oscilloscope ??= new OscilloscopeTap(this.#context, this.#node, this.#node.channelCount as 1 | 2);
+      const result = this.#oscilloscope.read(buffers);
+      if (result === "unavailable") this.#oscilloscopeFailed = true;
+      return result;
+    } catch { this.#oscilloscopeFailed = true; this.releaseOscilloscope(); return "unavailable"; }
+  }
+
+  releaseOscilloscope(): void {
+    this.#oscilloscope?.dispose();
+    this.#oscilloscope = undefined;
+  }
+
   async close(): Promise<void> {
     if (this.#closed) {
       return;
     }
     this.#closed = true;
+    this.releaseOscilloscope();
     this.#seekReject?.(new Error("Playback closed"));
     this.#snapshotReject?.(InitializationFailure.ContextState);
     this.#node.disconnect();
