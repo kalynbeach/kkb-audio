@@ -19,14 +19,14 @@ async function setup() {
   return { playback, owner, view, seek: view.getByRole("slider", { name: "Position" }) };
 }
 
-test("labelled empty player never starts audio, supports file selection and close focus", async () => {
+test.each(["wav", "mp3"])("labelled empty player selects %s without starting audio and restores close focus", async extension => {
   const playback = new FakePlayback();
   const owner = new PlaybackOwner(async () => playback);
   const view = render(<PlayerApp owner={owner} />);
   expect(view.getByRole("button", { name: "Play" }).hasAttribute("disabled")).toBe(true);
   expect(view.getByText("No file selected")).toBeTruthy();
-  const fileInput = view.getByLabelText("Choose local WAV");
-  await userEvent.setup().upload(fileInput, new File(["fixture"], "quiet.wav", { type: "audio/wav" }));
+  const fileInput = view.getByLabelText("Choose local WAV or MP3");
+  await userEvent.setup().upload(fileInput, new File(["fixture"], `quiet.${extension}`, { type: extension === "mp3" ? "audio/mpeg" : "audio/wav" }));
   await waitFor(() => expect(view.getByText("Ready · Paused")).toBeTruthy());
   expect(playback.calls).toEqual(["status"]);
   await userEvent.setup().click(view.getByRole("button", { name: "Close file" }));
@@ -128,7 +128,7 @@ test("cancel while loading and malformed recovery leave replacement controls usa
   expect(late.closeCount).toBe(1);
   await act(() => owner.load(new File([], "bad.wav")));
   expect(view.getByRole("alert").textContent).toContain("Unsupported WAV encoding");
-  expect(view.getByLabelText("Replace local WAV").hasAttribute("disabled")).toBe(false);
+  expect(view.getByLabelText("Replace local audio").hasAttribute("disabled")).toBe(false);
   await act(() => owner.load(new File([], "good.wav")));
   expect(view.queryByRole("alert")).toBeNull();
   expect(view.getByText("Ready · Paused")).toBeTruthy();

@@ -367,14 +367,18 @@ Playback proceeds through small, ordered increments:
    play/pause, seeking, time/duration, volume, and clear loading/error states. Playback—not UI—owns
    worker coordination, converter state, and epochs. Let this integration establish the smallest
    useful playback interface; do not freeze a generic public session API first.
-5. **MP3 trim and seek fixtures, when needed.** Test valid, missing, and malformed trim metadata,
-   decoder anchors, and `Exact`, `AnchorAndDiscard`, or `Adjusted` results.
-6. **FLAC fixtures, when needed.** Test lossless reference output and seeking with and without metadata.
-7. **WAV loops.** Settle nominal-period-preserving seam geometry, short-loop limits, smoothing
-   bounds, UI coordinate, automation, provenance, readiness, and underrun behavior.
-8. **Compressed loops.** Add only where codec, trim, and seek evidence supports the declared result.
+5. **Local MP3 playback (#17).** Deliver the shared bounded Rust reader, reliable decoded/trimmed
+   timeline, native/browser worker integration, picker/recovery and fixture-proven history-restoring
+   seeks. This is a playback capability, not another research-only prerequisite.
+6. **Product design (#21) and player frontend (#22).** Design proceeds independently of MP3.
+   #22 consumes the approved compact player/session-library design and existing WAV, using MP3
+   when available. The research player and silent prototype are not substitutes for design approval.
+7. **Waveform (#18).** Depends on both MP3 (#17) and the player frontend (#22).
+8. **WAV loops (#19), then MP3 loops (#20).** Establish seam/period geometry on WAV before
+   adding codec history/trim. No loop behavior is implied by linear MP3 seek reconstruction.
+9. **Live visualization (#23).** Follows #22 independently of the waveform/loop chain.
 
-Remaining codecs, loops, HTTP delivery, and catalog work do not block the initial local-WAV player.
+FLAC, HTTP delivery and catalog work are not prerequisites for this sequence.
 
 Implementation status, 2026-09-08: the private same-rate local WAV slice accepts PCM16/24 RIFF PCM
 mono/stereo through the existing browser/native transports. Pause acknowledgment freezes consumption
@@ -415,6 +419,14 @@ Focused owner/UI tests, the full device-free Rust/Bun gates and targeted muted b
 pass within the [local-player evidence](2026-09-10-local-wav-player-evidence.md). Independent Standards
 and Spec reviews returned zero findings; parent diff inspection and targeted checks also pass. These
 observations do not certify broad browser/device or audible behavior.
+
+Implementation status, 2026-09-13: #17 adds the private strict MPEG-1 Layer III reader with
+pinned Symphonia 0.6.1 packet decoding, bounded full inspection/counting, validated Xing/Info/LAME
+and VBRI policies, and codec reset/decode/discard through the existing converter read anchor.
+The same native worker/rings and browser worker/Wasm transport now prepare WAV or MP3; React
+remains codec-unaware. Fixture, worker/compiled-callback, memory and muted browser evidence is
+recorded in the [dated MP3 document](2026-09-13-mp3-preparation.md). Independent final review and
+parent acceptance checks passed; #21/#22 and all waveform/loop/visualization features are unchanged.
 
 `PlaybackSession` remains provisional. This player establishes a private consumer, not the eventual
 application migration or another speculative foundation/API layer. “Foundation ready” means this

@@ -55,6 +55,7 @@ export class PreparedProof {
   readonly #workerInitialAdmittedBlocks: number;
   readonly totalFrames: number | undefined;
   readonly sourceRate: number | undefined;
+  readonly anchorAndDiscard: boolean;
   #listeningGain: GainNode | undefined;
   #activated = false;
   #closed = false;
@@ -79,9 +80,11 @@ export class PreparedProof {
     workerInitialAdmittedBlocks = 0,
     totalFrames?: number,
     sourceRate?: number,
+    anchorAndDiscard = false,
   ) {
     this.totalFrames = totalFrames;
     this.sourceRate = sourceRate;
+    this.anchorAndDiscard = anchorAndDiscard;
     this.#context = context;
     this.#node = node;
     this.#gate = gate;
@@ -123,19 +126,19 @@ export class PreparedProof {
 
   acceptWorkerMessage(value: unknown): void {
     if (this.#closed || this.#runtimeFailure !== 0) return;
-    const message = value as { type?: string; epoch?: number; requestedFrame?: number; pcmFrame?: number } | null;
+    const message = value as { type?: string; epoch?: number; requestedFrame?: number; pcmFrame?: number; result?: SeekResult["result"] } | null;
     if (message?.type === "seek-accepted" && message.epoch === this.#postedSeek) {
       this.#postedSeek = undefined;
       this.#dispatchSeek();
       return;
     }
     if (message?.type === "producer-status" && message.epoch === this.#epoch) this.producerObservation = value;
-    if (message?.type === "seek-complete" && message.epoch === this.#epoch && Number.isSafeInteger(message.pcmFrame) && Number.isSafeInteger(message.requestedFrame)) {
+    if (message?.type === "seek-complete" && message.epoch === this.#epoch && Number.isSafeInteger(message.pcmFrame) && Number.isSafeInteger(message.requestedFrame) && (message.result === "Exact" || message.result === "AnchorAndDiscard" || message.result === "Adjusted")) {
       this.#observedEpoch = this.#epoch;
       const pcmFrame = message.pcmFrame!;
       const actualMediaFrame = Math.min(this.totalFrames!, Math.floor(pcmFrame * this.sourceRate! / this.#context.sampleRate));
       this.#seekResolve?.({ epoch: this.#epoch, requestedFrame: message.requestedFrame!, pcmFrame, actualMediaFrame,
-        result: this.sourceRate === this.#context.sampleRate ? "Exact" : actualMediaFrame === message.requestedFrame ? "AnchorAndDiscard" : "Adjusted" });
+        result: message.result });
     }
     const code = workerFailureCode(value);
     if (code !== undefined) this.failRuntime(code);
@@ -227,7 +230,7 @@ export class PreparedProof {
 
   async play(): Promise<RenderSnapshot> {
     this.#throwIfUnavailable();
-    if (this.totalFrames === undefined) throw new Error("Load a WAV first");
+    if (this.totalFrames === undefined) throw new Error("Load local audio first");
     if (!this.#activated) { this.#node.connect(this.#listeningGain ?? this.#context.destination); this.#activated = true; }
     const snapshot = await this.status();
     if (!snapshot.ended || this.#seekResolve !== undefined) {
@@ -252,7 +255,7 @@ export class PreparedProof {
     this.producerObservation = undefined;
     return new Promise((resolve, reject) => {
       const clear = () => { clearTimeout(timeout); this.#seekResolve = undefined; this.#seekReject = undefined; };
-      const timeout = setTimeout(() => { this.#seekReject?.(new Error("Seek preparation timed out")); this.failRuntime(InitializationFailure.Timeout); }, 5000);
+      const timeout = setTimeout(() => { this.#seekReject?.(new Error("Seek preparation timed out")); this.failRuntime(InitializationFailure.Timeout); }, this.anchorAndDiscard ? 35000 : 5000);
       this.#seekResolve = result => { clear(); resolve(result); };
       this.#seekReject = error => { clear(); reject(error); };
       this.#queuedSeek = { epoch: this.#epoch, target };
@@ -361,15 +364,28 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
     let totalFrames: number | undefined;
     let totalPcmFrames: number | undefined;
     let sourceRate: number | undefined;
+    let anchorAndDiscard = false;
     let channelCount = options.channelCount;
     if (options.file) {
-      const metadata = await wait(new Promise<{ channelCount: 1 | 2; totalFrames: number; totalPcmFrames: number; sampleRate: number }>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error("WAV inspection timed out")), timeoutMilliseconds);
-        worker!.onerror = () => { clearTimeout(timeout); reject(new Error("WAV worker failed")); };
+      const metadata = await wait(new Promise<{ channelCount: 1 | 2; totalFrames: number; totalPcmFrames: number; sampleRate: number; anchorAndDiscard: boolean }>((resolve, reject) => {
+        const cleanup = () => { clearTimeout(timeout); options.signal?.removeEventListener("abort", cancelled); };
+        const cancelled = () => { cleanup(); reject(new Error("Preparation cancelled")); };
+        const timedOut = () => { cleanup(); reject(new Error("Media inspection timed out")); };
+        let timeout = setTimeout(timedOut, timeoutMilliseconds);
+        let inspectionBudgetReceived = false;
+        options.signal?.addEventListener("abort", cancelled, { once: true });
+        if (options.signal?.aborted) { cancelled(); return; }
+        worker!.onerror = () => { cleanup(); reject(new Error("Media worker failed")); };
         worker!.onmessage = event => {
           clearTimeout(timeout);
+          if (event.data?.type === "inspection-started" && event.data.timeoutMilliseconds === 35000 && !inspectionBudgetReceived) {
+            inspectionBudgetReceived = true;
+            timeout = setTimeout(timedOut, options.timeoutMilliseconds ?? event.data.timeoutMilliseconds);
+            return;
+          }
+          cleanup();
           if (event.data?.type === "metadata") resolve(event.data);
-          else reject(new Error(event.data?.detail ?? "Unsupported or malformed WAV"));
+          else reject(new Error(event.data?.detail ?? "Unsupported or malformed local audio"));
         };
         worker!.postMessage({ type: "inspect", file: options.file, module, sampleRate: context.sampleRate });
       }));
@@ -377,6 +393,7 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
       totalFrames = metadata.totalFrames;
       totalPcmFrames = metadata.totalPcmFrames;
       sourceRate = metadata.sampleRate;
+      anchorAndDiscard = metadata.anchorAndDiscard;
     }
     const config = {
       channelCount,
@@ -464,7 +481,7 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
     if (context.state !== "suspended" || gate.result.type !== "ready") {
       throw new InitializationError(InitializationFailure.ContextState);
     }
-    prepared = new PreparedProof(context, node, gate, ready, worker, workerInitialAdmittedBlocks, totalFrames, sourceRate);
+    prepared = new PreparedProof(context, node, gate, ready, worker, workerInitialAdmittedBlocks, totalFrames, sourceRate, anchorAndDiscard);
     return prepared;
   } catch (error) {
     worker?.terminate();

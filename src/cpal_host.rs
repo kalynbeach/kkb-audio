@@ -232,6 +232,7 @@ impl PreparedBlockSource for NativeSource {
 }
 
 struct WorkerControl {
+    decoded_packets: Arc<AtomicU64>,
     stop: Arc<AtomicBool>,
     ready: Arc<AtomicBool>,
     backpressure: Arc<AtomicU64>,
@@ -265,7 +266,7 @@ fn spawn_pcm_worker(layout: ChannelLayout) -> (NativeSource, WorkerControl) {
 
 fn spawn_worker(
     layout: ChannelLayout,
-    mut wav_file: Option<(std::fs::File, crate::local_wav::LocalWav)>,
+    mut wav_file: Option<(std::fs::File, crate::local_media::LocalMedia)>,
     output_rate: u32,
 ) -> (NativeSource, WorkerControl) {
     use std::io::{Read, Seek, SeekFrom};
@@ -278,6 +279,8 @@ fn spawn_worker(
     let failed = Arc::new(AtomicBool::new(false));
     let seek = Arc::new(AtomicU64::new(PROOF_EPOCH << 32));
     let ready_epoch = Arc::new(AtomicU64::new(0));
+    let decoded_packets = Arc::new(AtomicU64::new(0));
+    let worker_decoded_packets = Arc::clone(&decoded_packets);
     let worker_seek = Arc::clone(&seek);
     let worker_ready_epoch = Arc::clone(&ready_epoch);
     let worker_stalled = Arc::clone(&stalled);
@@ -320,7 +323,15 @@ fn spawn_worker(
                 worker_ready.store(false, Ordering::Release);
                 if let Some(converter) = &mut converter {
                     match converter.seek(u64::from(requested as u32)) {
-                        Ok(pcm) => next_frame = pcm,
+                        Ok(pcm) => {
+                            next_frame = pcm;
+                            if let Some((_, media)) = &mut wav_file
+                                && media.seek(converter.source_frames_read()).is_err()
+                            {
+                                worker_failed.store(true, Ordering::Release);
+                                return;
+                            }
+                        }
                         Err(_) => {
                             worker_failed.store(true, Ordering::Release);
                             return;
@@ -354,17 +365,48 @@ fn spawn_worker(
                         }
                         let needed = converter.input_frames_needed().min(PCM_SLOT_FRAMES);
                         if needed > 0 {
-                            let length = needed * wav.block_align() as usize;
-                            let offset = wav.data_offset()
-                                + converter.source_frames_read() * u64::from(wav.block_align());
-                            let decoded = file
-                                .seek(SeekFrom::Start(offset))
-                                .and_then(|_| file.read_exact(&mut bytes[..length]))
-                                .ok()
-                                .and_then(|_| wav.decode(&bytes[..length]).ok());
-                            if decoded
-                                .as_ref()
-                                .is_none_or(|data| converter.push(data).is_err())
+                            let reconstruction_started = std::time::Instant::now();
+                            if wav.request(needed).is_err() {
+                                worker_failed.store(true, Ordering::Release);
+                                return;
+                            }
+                            while wav.available_frames() == 0 {
+                                if worker_seek.load(Ordering::Acquire) != active_seek
+                                    || worker_stop.load(Ordering::Acquire)
+                                {
+                                    break;
+                                }
+                                if wav.anchor_and_discard()
+                                    && reconstruction_started.elapsed().as_secs() >= 30
+                                {
+                                    worker_failed.store(true, Ordering::Release);
+                                    return;
+                                }
+                                let length = wav.length();
+                                if length == 0
+                                    || file
+                                        .seek(SeekFrom::Start(wav.offset()))
+                                        .and_then(|_| file.read_exact(&mut bytes[..length]))
+                                        .is_err()
+                                    || wav.accept(&bytes[..length]).is_err()
+                                {
+                                    worker_failed.store(true, Ordering::Release);
+                                    return;
+                                }
+                                if wav.anchor_and_discard() && length > 4 {
+                                    worker_decoded_packets.fetch_add(1, Ordering::Release);
+                                }
+                            }
+                            if worker_seek.load(Ordering::Acquire) != active_seek
+                                || worker_stop.load(Ordering::Acquire)
+                            {
+                                break;
+                            }
+                            let decoded = wav.take(needed);
+                            if decoded.as_ref().is_err()
+                                || decoded
+                                    .as_ref()
+                                    .is_ok_and(|data| converter.push(data).is_err())
                             {
                                 worker_failed.store(true, Ordering::Release);
                                 return;
@@ -437,6 +479,7 @@ fn spawn_worker(
             retired: retired_producer,
         },
         WorkerControl {
+            decoded_packets,
             stop,
             ready,
             backpressure,
@@ -744,7 +787,7 @@ impl CallbackProcessor {
 }
 
 fn validate_wav_host(
-    wav: &crate::local_wav::LocalWav,
+    wav: &crate::local_media::LocalMedia,
     rate: u32,
     channels: u16,
 ) -> Result<(), String> {
@@ -1189,7 +1232,7 @@ mod tests {
             frames,
         ))
         .unwrap();
-        let wav = crate::local_wav::read_header(&mut file).unwrap();
+        let wav = crate::local_media::read_header(&mut file).unwrap();
         let result = spawn_worker(
             if channels == 1 {
                 ChannelLayout::Mono
@@ -1213,7 +1256,12 @@ mod tests {
         for channels in [1, 2] {
             for rate in [44_100, 48_000] {
                 let bytes = crate::local_wav::tests::fixture(24, channels, rate, 17);
-                let wav = crate::local_wav::tests::parse(&bytes).unwrap();
+                let mut wav =
+                    crate::local_media::LocalMedia::new(bytes.len() as u64, false).unwrap();
+                while wav.length() != 0 {
+                    let offset = wav.offset() as usize;
+                    wav.accept(&bytes[offset..offset + wav.length()]).unwrap();
+                }
                 assert!(validate_wav_host(&wav, rate, channels).is_ok());
                 assert!(
                     validate_wav_host(&wav, if rate == 48_000 { 44_100 } else { 48_000 }, channels)
@@ -1505,6 +1553,171 @@ mod tests {
     }
 
     #[test]
+    fn mp3_native_worker_rings_callback_seek_eos_replay_and_stop() {
+        for name in [
+            "cbr-44100-1",
+            "vbr-44100-2",
+            "cbr-48000-2",
+            "vbr-48000-1",
+            "crc",
+            "vbri",
+            "short",
+        ] {
+            let (rate, input) = crate::local_mp3::tests::planar_fixture(name);
+            for output_rate in [44100, 48000] {
+                let channels = input.len();
+                let total = input[0].len() as u64;
+                let reference =
+                    crate::sample_rate::tests::convert(rate, output_rate, &input, &[17, 239]);
+                let timeline = PcmTimeline::new(rate, output_rate, total).unwrap();
+                let mut file =
+                    std::fs::File::open(format!("tools/fixtures/mp3/{name}.mp3")).unwrap();
+                let media = crate::local_media::read_header(&mut file).unwrap();
+                assert!(media.anchor_and_discard());
+                let (source, worker) = spawn_worker(
+                    if channels == 1 {
+                        ChannelLayout::Mono
+                    } else {
+                        ChannelLayout::Stereo
+                    },
+                    Some((file, media)),
+                    output_rate,
+                );
+                let shared = Arc::new(SharedObservation::new());
+                let mut processor = CallbackProcessor::prepare(
+                    output_rate,
+                    channels,
+                    PROOF_MAXIMUM_FRAMES,
+                    source,
+                    Arc::clone(&shared),
+                )
+                .unwrap();
+                processor.timeline = Some(timeline);
+                let mut small = vec![0f32; 17 * channels];
+                for target in [0, total / 2, 1152.min(total), total - 1, total, 1, 0] {
+                    shared.playback_command.store(1, Ordering::Release);
+                    shared.request_seek(total, timeline).unwrap();
+                    let epoch = shared.request_seek(target, timeline).unwrap();
+                    let start = timeline.seek_pcm_frame(target).unwrap();
+                    let clock = processor.instance.next_frame();
+                    let deadline = Instant::now() + Duration::from_secs(3);
+                    loop {
+                        processor.process(&mut small);
+                        assert_positive_zero(&small);
+                        let snapshot = shared.playback_snapshot();
+                        assert_eq!(snapshot.epoch, epoch);
+                        assert_eq!(snapshot.render_frame, clock);
+                        if snapshot.ready {
+                            break;
+                        }
+                        assert!(!worker.failed.load(Ordering::Acquire));
+                        assert!(Instant::now() < deadline);
+                        std::thread::sleep(Duration::from_millis(1));
+                    }
+                    shared.playback_command.store(2, Ordering::Release);
+                    let mut position = start as usize;
+                    while !processor.input.ended() {
+                        let mut output = vec![0f32; 257 * channels];
+                        processor.process(&mut output);
+                        let next = processor.input.pcm_position() as usize;
+                        for f in 0..257 {
+                            for c in 0..channels {
+                                assert_eq!(
+                                    output[f * channels + c],
+                                    if f < next - position {
+                                        reference[c][position + f] * 0.5
+                                    } else {
+                                        0.0
+                                    },
+                                    "{name} target {target} position {position}"
+                                );
+                            }
+                        }
+                        if next == position {
+                            std::thread::sleep(Duration::from_millis(1));
+                        }
+                        position = next;
+                        assert!(Instant::now() < deadline);
+                    }
+                    assert_eq!(position, reference[0].len());
+                    assert_eq!(shared.playback_snapshot().source_position, total);
+                }
+                shared.request_seek(total / 2, timeline).unwrap();
+                processor.process(&mut small);
+                worker.stop();
+            }
+        }
+        let mut file = std::fs::File::open("tools/fixtures/mp3/crc.mp3").unwrap();
+        let calls = std::cell::Cell::new(0);
+        let error = crate::local_media::read_header_cancellable(&mut file, || {
+            calls.set(calls.get() + 1);
+            calls.get() > 8
+        })
+        .err()
+        .unwrap();
+        assert!(error.contains("cancelled"));
+        assert_eq!(calls.get(), 9);
+    }
+
+    #[test]
+    fn mp3_native_reconstruction_observes_supersession_and_stop_between_packets() {
+        let fixture = std::fs::read("tools/fixtures/mp3/cbr-48000-2.mp3").unwrap();
+        let mut bytes = Vec::with_capacity(384 * 10000);
+        for _ in 0..10000 {
+            bytes.extend_from_slice(&fixture[384..768]);
+        }
+        let path = std::env::temp_dir().join(format!("kkb-mp3-cancel-{}.mp3", std::process::id()));
+        std::fs::write(&path, &bytes).unwrap();
+        let mut file = std::fs::File::open(&path).unwrap();
+        std::fs::remove_file(path).unwrap();
+        let media = crate::local_media::read_header(&mut file).unwrap();
+        let total = media.total_frames();
+        let timeline = PcmTimeline::new(48000, 48000, total).unwrap();
+        let (source, worker) = spawn_worker(ChannelLayout::Stereo, Some((file, media)), 48000);
+        let shared = Arc::new(SharedObservation::new());
+        shared.playback_command.store(1, Ordering::Release);
+        let mut processor =
+            CallbackProcessor::prepare(48000, 2, PROOF_MAXIMUM_FRAMES, source, Arc::clone(&shared))
+                .unwrap();
+        processor.timeline = Some(timeline);
+        let mut output = [0f32; 34];
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while !worker.ready.load(Ordering::Acquire) {
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        for stop in [false, true] {
+            let before = worker.decoded_packets.load(Ordering::Acquire);
+            shared.request_seek(total - 1000, timeline).unwrap();
+            while worker.decoded_packets.load(Ordering::Acquire) < before + 64 {
+                processor.process(&mut output);
+                assert_positive_zero(&output);
+                assert!(Instant::now() < deadline);
+                assert!(!worker.failed.load(Ordering::Acquire));
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            // Actual reconstruction has decoded at least 64 packets, not just queued a command.
+            if stop {
+                break;
+            }
+            let epoch = shared.request_seek(0, timeline).unwrap();
+            loop {
+                processor.process(&mut output);
+                assert_positive_zero(&output);
+                if shared.playback_snapshot().ready && shared.playback_snapshot().epoch == epoch {
+                    break;
+                }
+                assert!(Instant::now() < deadline);
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            assert_eq!(shared.playback_snapshot().source_position, 0);
+        }
+        let stopped = Instant::now();
+        worker.stop();
+        assert!(stopped.elapsed() < Duration::from_secs(1));
+    }
+
+    #[test]
     fn local_wav_worker_starvation_freezes_media_not_render_clock_and_recovers() {
         let (source, worker) = wav_source(24, 2, 5000);
         worker.stalled.store(true, Ordering::Release);
@@ -1547,7 +1760,7 @@ mod tests {
         use std::io::BufRead;
         let path = std::env::var("KKB_WAV").map_err(|_| "set KKB_WAV to a local WAV path")?;
         let mut file = std::fs::File::open(path).map_err(|e| e.to_string())?;
-        let wav = crate::local_wav::read_header(&mut file)?;
+        let wav = crate::local_media::read_header(&mut file)?;
         let device = cpal::default_host()
             .default_output_device()
             .ok_or("no default output device")?;
@@ -1571,6 +1784,7 @@ mod tests {
         validate_wav_host(&wav, supported.sample_rate(), supported.channels())?;
         let total = wav.total_frames();
         let source_rate = wav.sample_rate();
+        let anchor_and_discard = wav.anchor_and_discard();
         let layout = if wav.channels() == 1 {
             ChannelLayout::Mono
         } else {
@@ -1638,13 +1852,14 @@ mod tests {
                             .seek_pcm_frame(target)
                             .map_err(|_| "invalid seek")?;
                         let actual = timeline.source_position(pcm);
-                        let result = if source_rate == supported.sample_rate() {
-                            "Exact"
-                        } else if actual == target {
-                            "AnchorAndDiscard"
-                        } else {
-                            "Adjusted"
-                        };
+                        let result =
+                            if !anchor_and_discard && source_rate == supported.sample_rate() {
+                                "Exact"
+                            } else if actual == target {
+                                "AnchorAndDiscard"
+                            } else {
+                                "Adjusted"
+                            };
                         println!(
                             "seek requested epoch={epoch} target={target} pcmFrame={pcm} actualMediaFrame={actual} result={result}; completion is snapshot ready=true for this epoch"
                         );

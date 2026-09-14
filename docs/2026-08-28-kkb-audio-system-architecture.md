@@ -1345,7 +1345,11 @@ it makes the native runtime portable unchanged.
 
 ### Symphonia
 
-Role: pure-Rust demuxing and decoding candidate.
+Role: pure-Rust demuxing and decoding candidate; the private local-MP3 slice now pins
+Symphonia 0.6.1 with MP3-only features. Its strict incremental inspector feeds the packet decoder,
+not the tolerant demuxer, and reconstructs seek history by reset/decode/discard. WAV retains its
+existing private PCM parser. See [MP3 policies/evidence](2026-09-13-mp3-preparation.md); other
+codec/container roles below remain future candidates, not current support.
 
 Enable only required format and codec features. Keep all parsing, decoding, I/O, construction, and
 allocation outside the render thread. Validate browser worker compilation and performance for the

@@ -71,9 +71,9 @@ Run the local proof after `bun run build:worklet`:
 bun run serve:proof
 ```
 
-Open `/player.html` for the usable local-WAV player, `/` for the PCM transport and local WAV proof
+Open `/player.html` for the usable local WAV/MP3 player, `/` for the PCM transport and local WAV proof
 controls, or `/plan.html` for the oscillator plan.
-The deterministic and oscillator proof activations remain muted. **WAV Play emits sound** at compiled
+The deterministic and oscillator proof activations remain muted. **Local-file Play emits sound** at compiled
 gain 0.5; lower system volume first. Load prepares a suspended, disconnected node; Pause freezes media
 and render time without discarding PCM or converter history. WAV status distinguishes source-media
 position, absolute next-consumed PCM position, render frames, epoch readiness, starvation and EOS.
@@ -85,15 +85,37 @@ A private native interactive entry and a safe low-amplitude fixture generator ar
 [WAV reproduction guide](docs/2026-09-08-local-wav-playback-evidence.md#safe-reproduction).
 Normal checks never open audio devices; device-opening tests must be explicitly selected.
 
-## Local WAV player
+## Local WAV/MP3 player
 
 Build with `bun run build:worklet` and serve with `bun run serve:proof`, then open `/player.html`.
 `bun run dev` also serves the player with React hot reload alongside the lab. When the global Bun
 version differs, first run `export PATH="$PWD/node_modules/.bin:$PATH"` to use the pinned Bun 1.4.0.
 
-Choose a nonempty little-endian RIFF PCM16/24 mono/stereo WAV. Playback supports the active context's
+Choose a nonempty little-endian RIFF PCM16/24 mono/stereo WAV or a supported local MP3. Playback supports the active context's
 rate and prepared 44100 ↔ 48000 Hz conversion only. Files stay local; unsupported files show an error
 and can be replaced. Loading/replacing never starts audio. Press **Play** explicitly.
+
+MP3 support (#17) uses pinned Symphonia 0.6.1 in the shared Rust preparation path,
+not browser decoding. Accepted: MPEG-1 Layer III, 44.1/48 kHz mono/stereo, CBR/VBR
+32–320 kbit/s including CRC-protected frames, validated Xing/Info/LAME, structurally
+bounded VBRI v1, or missing optional metadata. Missing trim means untrimmed decoder
+output, **not** recovered encoder input. **VBRI fallback:** byte/frame counts and
+seek-table values are untrusted advisory data, including inconsistent values;
+full scan/decode alone establishes duration and seeking. VBRI does not recover trim.
+Malformed metadata structure, inconsistent Xing/LAME metadata, truncated/corrupt
+frames, unsupported variants and changing rates/layouts reject. Bounds: 32 MiB encoded,
+1 MiB leading ID3, at most 25,000 packets / 600 seconds **including codec padding**.
+
+Inspection decodes/counts the whole bounded stream before publishing duration, with
+constant PCM storage. MP3 seeks reset/decode/discard to reconstruct codec history
+before converter pre-roll; even equal-rate seeks report `AnchorAndDiscard` (or
+`Adjusted` for output-grid rounding), not guessed `Exact`. Preparation/seeking
+can take time and are cancellable; a 30-second worker deadline rejects excessively
+slow work. See [MP3 policy and evidence](docs/2026-09-13-mp3-preparation.md),
+[fixture provenance](tools/fixtures/mp3/README.md) and [decoder notices](THIRD_PARTY_NOTICES.md).
+The native device-free worker/rings use the same reader; the existing opt-in native
+file proof also accepts MP3 without changing its historical test/environment names.
+No physical output was used to validate MP3.
 
 Drag Position to preview; release commits one seek. Escape, pointer cancellation or leaving focus
 cancels the preview. Arrow keys seek five seconds, Page Up/Down thirty seconds, Home/End to the exact

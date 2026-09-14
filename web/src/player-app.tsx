@@ -9,7 +9,7 @@ export function mediaTime(seconds: number): string {
 }
 
 const phaseLabels: Record<PlaybackState["phase"], string> = {
-  empty: "No file selected", loading: "Preparing your WAV…", paused: "Ready · Paused",
+  empty: "No file selected", loading: "Preparing local audio…", paused: "Ready · Paused",
   playing: "Playing", seeking: "Seeking…", ended: "Ended", error: "Unable to play this file",
 };
 
@@ -26,24 +26,24 @@ export function PlayerApp({ owner: suppliedOwner }: { owner?: PlaybackOwner }) {
       <span className="player-caption">Local playback · Experimental</span>
     </header>
     <section className="player-intro" aria-labelledby="player-title">
-      <h1 id="player-title">Your WAV. Just play.</h1>
+      <h1 id="player-title">Your music. Just play.</h1>
       <p>One local file, played through the Rust/Wasm engine. Nothing uploaded.</p>
     </section>
-    <section className="player-deck" aria-label="Local WAV player">
+    <section className="player-deck" aria-label="Local audio player">
       <div className="player-file">
-        <label htmlFor="wav-file">{state.fileName ? "Replace local WAV" : "Choose local WAV"}</label>
-        <Input ref={fileInput} id="wav-file" type="file" accept=".wav,audio/wav,audio/x-wav"
+        <label htmlFor="wav-file">{state.fileName ? "Replace local audio" : "Choose local WAV or MP3"}</label>
+        <Input ref={fileInput} id="wav-file" type="file" accept=".wav,.mp3,audio/wav,audio/x-wav,audio/mpeg"
           aria-describedby="supported-files" onChange={event => {
             const file = event.currentTarget.files?.[0];
             event.currentTarget.value = "";
             if (file) void owner.load(file);
           }} />
-        <p id="supported-files" className="player-caption">PCM16/24 · Mono or stereo · Same-rate or 44.1 ↔ 48 kHz conversion</p>
+        <p id="supported-files" className="player-caption">WAV PCM16/24 or MP3 · Mono or stereo · Same-rate or 44.1 ↔ 48 kHz conversion</p>
       </div>
       <div className="player-track">
-        <h2>{state.fileName || "Choose a WAV to begin"}</h2>
+        <h2>{state.fileName || "Choose a WAV or MP3 to begin"}</h2>
         <p role="status" aria-live="polite">{phaseLabels[state.phase]}</p>
-        {state.error ? <p role="alert" className="player-error">{state.error}. Choose another supported WAV to try again.</p> : null}
+        {state.error ? <p role="alert" className="player-error">{state.error}. Choose another supported WAV or MP3 to try again.</p> : null}
         {state.phase === "empty" ? <p className="player-caption">Loading never starts audio. Press Play when you’re ready.</p> : null}
       </div>
       <SeekBar key={state.fileName + ":" + state.sourceRate + ":" + state.totalFrames}
@@ -72,7 +72,7 @@ export function PlayerApp({ owner: suppliedOwner }: { owner?: PlaybackOwner }) {
     <details className="player-details">
       <summary>Playback details & limits</summary>
       <p>Elapsed time follows consumed source media, not measured sound at your speakers. Seeking may briefly output silence; click-free transitions are not guaranteed. The end pauses playback; seeking back stays paused until Play.</p>
-      <p>Nonempty little-endian RIFF WAV only. Other encodings, layouts and rate conversions are rejected. No waveform, playlists or background-playback guarantee.</p>
+      <p>Nonempty little-endian RIFF PCM16/24 WAV or MPEG-1 Layer III MP3, mono/stereo. MP3: 44100/48000 Hz, up to 32 MiB and 10 minutes; inspection and seeks decode bounded packets and may take time. Other encodings, layouts and rate conversions are rejected. No waveform, playlists or background-playback guarantee.</p>
       {state.snapshot ? <dl>
         <div><dt>Source / output rate</dt><dd>{state.sourceRate} / {state.outputRate} Hz</dd></div>
         <div><dt>Consumed source frame</dt><dd>{state.snapshot.sourcePosition} / {state.totalFrames}</dd></div>
@@ -82,7 +82,7 @@ export function PlayerApp({ owner: suppliedOwner }: { owner?: PlaybackOwner }) {
         {state.seekResult ? <div><dt>Last seek</dt><dd>{state.seekResult.requestedFrame} → {state.seekResult.actualMediaFrame} ({state.seekResult.result})</dd></div> : null}
       </dl> : null}
     </details>
-    <footer className="player-caption">Local WAV player / <a href="/lab.html">Learning lab</a> / <a href="/index.html">Engine proof</a></footer>
+    <footer className="player-caption">Local audio player / <a href="/lab.html">Learning lab</a> / <a href="/index.html">Engine proof</a></footer>
   </main>;
 }
 

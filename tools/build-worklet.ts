@@ -60,6 +60,8 @@ copyFileSync(
   "node_modules/inter-ui/LICENSE.txt",
   join(outputDirectory, "Inter-LICENSE.txt"),
 );
+copyFileSync("THIRD_PARTY_NOTICES.md", join(outputDirectory, "THIRD_PARTY_NOTICES.md"));
+copyFileSync("licenses/MPL-2.0.txt", join(outputDirectory, "MPL-2.0.txt"));
 copyFileSync("web/proof.html", join(outputDirectory, "index.html"));
 copyFileSync("web/plan-proof.html", join(outputDirectory, "plan.html"));
 copyFileSync(

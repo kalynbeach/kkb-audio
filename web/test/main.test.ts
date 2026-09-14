@@ -459,16 +459,16 @@ test("WAV seeks reject stale completion/observations, preserve pause and cancel 
   expect(worker.messages.filter(message => (message as { type: string }).type === "seek")).toHaveLength(1);
   proof.acceptWorkerMessage({ type: "seek-accepted", epoch: 2 });
   expect(worker.messages.filter(message => (message as { type: string }).type === "seek")).toHaveLength(2);
-  proof.acceptWorkerMessage({ type: "seek-complete", epoch: 2, requestedFrame: 7001, pcmFrame: 7621 });
+  proof.acceptWorkerMessage({ type: "seek-complete", result: "AnchorAndDiscard", epoch: 2, requestedFrame: 7001, pcmFrame: 7621 });
   proof.acceptWorkerMessage({ type: "producer-status", epoch: 2 });
   expect(proof.producerObservation).toBeUndefined();
-  proof.acceptWorkerMessage({ type: "seek-complete", epoch: 3, requestedFrame: 1176, pcmFrame: 1280 });
+  proof.acceptWorkerMessage({ type: "seek-complete", result: "AnchorAndDiscard", epoch: 3, requestedFrame: 1176, pcmFrame: 1280 });
   expect(await second).toEqual({ epoch: 3, requestedFrame: 1176, pcmFrame: 1280, actualMediaFrame: 1176, result: "AnchorAndDiscard" });
   expect(context.state).toBe("suspended");
   const pending = proof.seek(0).catch(error => error.message);
   await proof.close();
   expect(await pending).toBe("Playback closed");
-  proof.acceptWorkerMessage({ type: "seek-complete", epoch: 4, requestedFrame: 0, pcmFrame: 0 });
+  proof.acceptWorkerMessage({ type: "seek-complete", result: "AnchorAndDiscard", epoch: 4, requestedFrame: 0, pcmFrame: 0 });
   expect(context.state).toBe("closed"); expect(worker.terminationCount).toBe(1);
 });
 
@@ -476,7 +476,7 @@ test("a delayed prior-epoch snapshot requests a fresh reply rather than timing o
   const { proof, node } = preparedProof(10003);
   const status = proof.status();
   const seek = proof.seek(17);
-  proof.acceptWorkerMessage({ type: "seek-complete", epoch: 2, requestedFrame: 17, pcmFrame: 19 });
+  proof.acceptWorkerMessage({ type: "seek-complete", result: "AnchorAndDiscard", epoch: 2, requestedFrame: 17, pcmFrame: 19 });
   await seek;
   const snapshot = { epoch: 1, presentationTime: null, ready: true, sourcePosition: 0, pcmPosition: 0, renderFrame: 128, ended: false, failureCode: 0, invalidBlockCount: 0, lastFrameCount: 128, memoryBytes: 16777216, processCount: 1, slotCount: 4, staleBlockCount: 0, starvationCount: 0 };
   let replacements = 0;
