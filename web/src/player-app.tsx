@@ -1,4 +1,4 @@
-import { startTransition, ViewTransition, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { startTransition, ViewTransition, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Dialog } from "@base-ui/react/dialog";
 import { Button } from "./components/ui/button";
@@ -6,6 +6,7 @@ import { Input } from "./components/ui/input";
 import { Slider } from "./components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "./components/ui/toggle-group";
 import { PlaybackOwner, sourceFrameAtSeconds, type PlaybackState } from "./playback-owner";
+import { waveformPath } from "./source-waveform";
 import { PlayerCollection, SESSION_LIMIT, type SessionEntry } from "./player-collection";
 import { ArrowLeftIcon, GearSixIcon, PauseIcon, PlayIcon, QueueIcon, SkipBackIcon, SkipForwardIcon, SpeakerHighIcon, SpeakerSlashIcon, XIcon } from "./player-icons";
 
@@ -98,7 +99,7 @@ export function PlayerApp({ owner: suppliedOwner }: { owner?: PlaybackOwner }) {
           {session.active ? <Button variant="outline" onClick={closeTrack}>{state.phase === "loading" ? "Cancel loading" : "Close track"}</Button> : null}
           <details className="player-limits"><summary>Playback details & limits</summary>
             <p>WAV PCM16/24 or MPEG-1 Layer III MP3, mono/stereo. MP3: 44.1/48 kHz, up to 32 MiB and 10 minutes. Same-rate or 44.1 ↔ 48 kHz conversion. Other encodings and conversions are rejected.</p>
-            <p>Only the active file is prepared. Row Play explicitly starts audio; adding or selecting never does. Previous/next preserve playing or paused intent. No wrap, auto-advance, waveform, loops or live visualization.</p>
+            <p>Only the active file is prepared. Row Play explicitly starts audio; adding or selecting never does. Previous/next preserve playing or paused intent. No wrap, auto-advance, loops or live visualization. The waveform is source amplitude, independent of listening volume; at most 4096 time bins combine channel extrema, reduced without dropping peaks. It is an overview, not sample-level detail.</p>
             <p>Position follows consumed source media, not measured speaker output. Seeking may briefly output silence; click-free transitions and background playback are not guaranteed. Volume starts at 15%, after fixed 50% engine gain.</p>
             <p>No preferences are saved. Reduced motion skips disclosure animations.</p>
           </details>
@@ -173,6 +174,7 @@ function SeekBar({ state, unavailable, disabled, onSeek }: {
 }) {
   const [preview, setPreview] = useState<number | null>(null);
   const drag = useRef<{ target: number; cancelled: boolean } | null>(null);
+  const path = useMemo(() => state.waveform ? waveformPath(state.waveform) : "", [state.waveform]);
   const duration = state.sourceRate ? state.totalFrames / state.sourceRate : 0;
   const elapsed = state.sourceRate ? (state.snapshot?.sourcePosition ?? 0) / state.sourceRate : 0;
   const cancel = () => {
@@ -190,6 +192,13 @@ function SeekBar({ state, unavailable, disabled, onSeek }: {
     ? sourceFrameAtSeconds(seconds, state.sourceRate, state.totalFrames) / state.sourceRate : 0;
   return <div className="player-seek">
     <label className="sr-only" htmlFor="seek-position">Position</label>
+    <div className="player-waveform" data-complete={!!path}>
+      {path ? <div className="player-wave-envelope" aria-hidden="true">
+        <svg viewBox="0 0 320 40" preserveAspectRatio="none"><path d={path} /></svg>
+        <svg className="player-wave-consumed" viewBox="0 0 320 40" preserveAspectRatio="none" style={{ clipPath: `inset(0 ${100 - elapsed / duration * 100}% 0 0)` }}><path d={path} /></svg>
+      </div> : <span className="player-wave-status" role="status">{state.waveformPhase === "pending" ? "Preparing waveform…" : state.waveformPhase === "failed" ? "Waveform unavailable" : ""}</span>}
+      {!unavailable ? <span className="player-consumed-cursor" aria-hidden="true" style={{ left: `${elapsed / duration * 100}%` }} /> : null}
+      {preview !== null ? <span className="player-preview-cursor" aria-hidden="true" style={{ left: `${preview / duration * 100}%` }} /> : null}
     <Input id="seek-position" className="player-range" type="range" min={0} max={duration || 1}
       step={state.sourceRate ? 1 / state.sourceRate : 1} value={preview ?? elapsed} disabled={unavailable} aria-disabled={disabled}
       aria-describedby="seek-help" aria-valuetext={`${preview === null ? "Position" : "Preview"} ${mediaTime(preview ?? elapsed)} of ${mediaTime(duration)}`}
@@ -227,9 +236,10 @@ function SeekBar({ state, unavailable, disabled, onSeek }: {
           if (!disabled && !drag.current) onSeek(targetTime(target));
         }
       }} />
+    </div>
     <div className="player-time"><output aria-label="Elapsed media time" aria-live="off">{unavailable ? "—" : mediaTime(elapsed)}</output><span className="player-pixel" role="status">{phaseLabels[state.phase]}</span><output aria-label="Duration" aria-live="off">{unavailable ? "—" : mediaTime(duration)}</output></div>
     <p id="seek-help" className="sr-only">{preview !== null
       ? `Preview ${mediaTime(preview)} · Release to seek. Escape cancels.`
-      : "Drag to preview, release to seek. Arrow keys: 5 seconds. Home / End: start / end."}</p>
+      : "Source amplitude overview; not sample-level detail. Drag to preview, release to seek. Escape or blur cancels. Arrow keys: 5 seconds. Home / End: start / end."}</p>
   </div>;
 }

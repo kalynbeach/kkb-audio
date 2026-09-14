@@ -31,7 +31,7 @@ successor. Removed selection moves to the next remaining row, or previous at the
 are never modified. Failed files remain browsable and retryable.
 
 The centered 380 × 532 desktop player contains identity, an honest unavailable visual, a functional
-40px seek target with consumed time, and independent centered transport. At ≥1212px the library is
+40px source-waveform seek target with consumed time, and independent centered transport. At ≥1212px the library is
 a right companion; below it replaces only the visual region. Viewport, library and Light/Dark/System
 changes preserve the owner and playback. Volume is a slim anchored disclosure; mute retains the level,
 initially 15% after compiled gain 0.5. Seeking previews before a single commit; cancellation abandons
@@ -40,8 +40,14 @@ the draft. Ended is terminal and paused; seeking back stays paused until Play, R
 Supported: nonempty little-endian RIFF PCM16/24 WAV or MPEG-1 Layer III MP3, mono/stereo, same-rate or
 44.1 ↔ 48 kHz conversion. MP3 is bounded to 32 MiB and ten minutes including codec padding; full policy
 is in [MP3 evidence](docs/2026-09-13-mp3-preparation.md). Errors recover through another row or retry.
-Waveform (#18), live visualization (#23), loops (#19/#20), persistence/catalog, queues, HTTP, broader
-codecs and deployment remain pending/out of scope. No fake signal, clock or dead loop controls ship.
+The full-track source waveform (#18) scans only the active file in an independent cancellable Rust/Wasm
+worker after playback readiness. Playback/seek remain functional during preparation or analysis failure.
+At most 4096 time bins (32 KiB) retain channel min/max extrema, not signed averages; display columns
+combine all overlapping bins. Fixed full-scale amplitude is not listening volume or measured output.
+Seeks, mute and conversion do not rebuild it; replacement/close discard it and reject late jobs. There
+is no retained collection cache. See [waveform evidence](docs/2026-09-13-source-waveform.md) for source-frame
+mapping and bounded extra decoding costs. Live visualization (#23), loops (#19/#20), persistence/catalog,
+queues, HTTP, broader codecs and deployment remain pending/out of scope, with review order #18 → #23 → #19 → #20. No fake signal, clock or dead loop controls ship.
 Muted/device-free checks are not listening, broad browser, device or background certification; see
 [implementation evidence](docs/2026-09-13-compact-player.md).
 

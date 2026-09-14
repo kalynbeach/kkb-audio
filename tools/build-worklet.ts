@@ -40,6 +40,7 @@ removeWorkletUnsafeErrorFormatting(join(generatedDirectory, "kkb_audio.js"));
 
 await build("web/src/worklet-processor.ts");
 await build("web/src/pcm-worker.ts");
+await build("web/src/waveform-worker.ts");
 await build("web/src/main.ts");
 await build("web/src/plan-processor.ts");
 await build("web/src/plan-worker.ts");

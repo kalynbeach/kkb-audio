@@ -5,6 +5,8 @@ import { FakePlayback, deferred } from "../web/test/playback-fixture";
 
 GlobalRegistrator.register({ url: "http://localhost/player.html" });
 HTMLElement.prototype.setPointerCapture = () => {};
+// UI fixtures do not fetch/build real Wasm; compiled-worker coverage lives separately.
+const unavailableWaveform = async () => { throw new Error("Fixture waveform unavailable"); };
 const measure = HTMLElement.prototype.getBoundingClientRect;
 // Happy DOM has no layout; Base UI's edge-aligned slider needs nonzero measurement.
 HTMLElement.prototype.getBoundingClientRect = function () {
@@ -20,7 +22,7 @@ afterAll(() => GlobalRegistrator.unregister());
 
 async function setup() {
   const playback = new FakePlayback();
-  const owner = new PlaybackOwner(async () => playback);
+  const owner = new PlaybackOwner(async () => playback, unavailableWaveform);
   const view = render(<PlayerApp owner={owner} />);
   await act(() => owner.load(new File([], "quiet.wav")));
   return { playback, owner, view, seek: view.getByRole("slider", { name: "Position" }) };
@@ -28,7 +30,7 @@ async function setup() {
 
 test.each(["wav", "mp3"])("multi-file %s admission never prepares; row selection is independent from explicit play", async extension => {
   const playback = new FakePlayback(); let preparations = 0;
-  const owner = new PlaybackOwner(async () => { preparations++; return playback; });
+  const owner = new PlaybackOwner(async () => { preparations++; return playback; }, unavailableWaveform);
   const view = render(<PlayerApp owner={owner} />);
   expect(view.getByRole("button", { name: "Play" }).hasAttribute("disabled")).toBe(true);
   expect(view.getByText("No track loaded")).toBeTruthy();
@@ -159,7 +161,7 @@ test("playing drag preview survives periodic consumed updates and resumes acknow
 
 test("library/Settings/theme/responsive disclosures preserve owner and seek identity, and return focus", async () => {
   let preparations = 0; const playback = new FakePlayback();
-  const owner = new PlaybackOwner(async () => { preparations++; return playback; });
+  const owner = new PlaybackOwner(async () => { preparations++; return playback; }, unavailableWaveform);
   const view = render(<PlayerApp owner={owner} />); const user = userEvent.setup();
   await user.upload(view.getByLabelText("Add local WAV or MP3 files"), new File(["fixture"], "quiet.wav"));
   await user.click(view.getByRole("button", { name: "Play quiet.wav" }));
@@ -187,7 +189,7 @@ test("library/Settings/theme/responsive disclosures preserve owner and seek iden
 
 test("same-named entry replacement cancels an uncommitted seek, and session removal/Clear stays recoverable", async () => {
   const prepared: FakePlayback[] = [];
-  const owner = new PlaybackOwner(async () => { const p = new FakePlayback(); prepared.push(p); return p; });
+  const owner = new PlaybackOwner(async () => { const p = new FakePlayback(); prepared.push(p); return p; }, unavailableWaveform);
   const view = render(<PlayerApp owner={owner} />); const user = userEvent.setup();
   await user.upload(view.getByLabelText("Add local WAV or MP3 files"), [new File(["a"], "same.wav"), new File(["b"], "same.wav")]);
   await user.click(view.getAllByRole("button", { name: "Play same.wav" })[0]!);
@@ -210,7 +212,7 @@ test("same-named entry replacement cancels an uncommitted seek, and session remo
 
 test("loading is cancellable from internal library Settings; malformed files remain browsable and retryable", async () => {
   const held = deferred<FakePlayback>(); let count = 0;
-  const owner = new PlaybackOwner(async () => { if (++count === 1) return held.promise; if (count === 2) throw new Error("Unsupported WAV encoding"); return new FakePlayback(); });
+  const owner = new PlaybackOwner(async () => { if (++count === 1) return held.promise; if (count === 2) throw new Error("Unsupported WAV encoding"); return new FakePlayback(); }, unavailableWaveform);
   const view = render(<PlayerApp owner={owner} />); const user = userEvent.setup();
   await user.upload(view.getByLabelText("Add local WAV or MP3 files"), [new File(["a"], "late.wav"), new File(["b"], "bad.wav")]);
   await user.click(view.getByRole("button", { name: "Play late.wav" }));
@@ -227,4 +229,35 @@ test("loading is cancellable from internal library Settings; malformed files rem
   await waitFor(() => expect(owner.getState().phase).toBe("playing"));
   expect(view.queryByRole("alert")).toBeNull();
   expect(view.getByRole("button", { name: "Select late.wav" }).getAttribute("aria-pressed")).toBe("true");
+});
+
+test("completed source waveform keeps consumed progress separate and reconciles an adjusted seek", async () => {
+  class AdjustedPlayback extends FakePlayback {
+    override async seek(target: number) {
+      const result = await super.seek(target);
+      this.snapshot.sourcePosition = Math.max(0, target - 1);
+      return { ...result, actualMediaFrame: this.snapshot.sourcePosition, result: "Adjusted" as const };
+    }
+  }
+  const playback = new AdjustedPlayback();
+  const job = deferred<import("../web/src/source-waveform").SourceWaveform>();
+  const owner = new PlaybackOwner(async () => playback, () => job.promise);
+  const view = render(<PlayerApp owner={owner} />);
+  await act(() => owner.load(new File([], "source.wav")));
+  expect(view.getByText("Preparing waveform…")).toBeTruthy();
+  expect(view.getByRole("button", { name: "Play" }).hasAttribute("disabled")).toBe(false);
+  await act(async () => { job.resolve({ totalFrames: 480000, sourceRate: 48000, framesPerBin: 480000, extrema: new Float32Array([-0.5, 0.5]) }); });
+  const path = view.container.querySelector(".player-wave-envelope path")!.getAttribute("d");
+  const seek = view.getByRole("slider", { name: "Position" });
+  fireEvent.pointerDown(seek, { pointerId: 1, button: 0 });
+  fireEvent.change(seek, { target: { value: "4" } });
+  expect((view.container.querySelector(".player-consumed-cursor") as HTMLElement).style.left).toBe("0%");
+  expect((view.container.querySelector(".player-preview-cursor") as HTMLElement).style.left).toBe("40%");
+  fireEvent.pointerUp(seek, { pointerId: 1 });
+  await waitFor(() => expect(owner.getState().seekResult?.result).toBe("Adjusted"));
+  expect((seek as HTMLInputElement).valueAsNumber).toBe(191999 / 48000);
+  expect(view.container.querySelector(".player-preview-cursor")).toBeNull();
+  expect(parseFloat((view.container.querySelector(".player-consumed-cursor") as HTMLElement).style.left)).toBeCloseTo(191999 / 480000 * 100);
+  await act(() => { owner.setVolume(0.8); owner.setMuted(true); });
+  expect(view.container.querySelector(".player-wave-envelope path")!.getAttribute("d")).toBe(path);
 });

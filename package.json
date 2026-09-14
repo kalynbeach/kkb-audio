@@ -12,6 +12,7 @@
     "check:wasm": "bun tools/check-wasm-memory.ts web/dist/kkb_audio_bg.wasm",
     "check:wav": "bun test tools/check-local-wav.test.ts tools/check-sample-rate.test.ts tools/check-local-pcm-scheduling.test.ts tools/check-wav-seek.test.ts",
     "check:mp3": "bun test tools/check-local-mp3.test.ts",
+    "check:waveform": "bun test tools/check-source-waveform.test.ts",
     "check:kernel": "bun tools/check-worklet-kernel.ts",
     "check:plan": "bun tools/check-worklet-plan.ts",
     "audit:plan": "bun tools/audit-plan-worklet.ts web/dist/plan-processor.js",
@@ -19,7 +20,7 @@
     "check:lab": "bun test tools/check-lab.test.ts tools/check-lab-canvas.test.ts",
     "check:player-ui": "bun test tools/check-player-ui.test.tsx",
     "check:lab-ui": "bun test tools/check-lab-ui.test.tsx",
-    "check": "bun run build:worklet && bun run typecheck && bun test web/test && bun run check:wasm && bun run check:kernel && bun run check:wav && bun run check:mp3 && bun run check:plan && bun run check:lab && bun run check:lab-ui && bun run check:player-ui && bun run audit:worklet && bun run audit:plan",
+    "check": "bun run build:worklet && bun run typecheck && bun test web/test && bun run check:wasm && bun run check:kernel && bun run check:wav && bun run check:mp3 && bun run check:waveform && bun run check:plan && bun run check:lab && bun run check:lab-ui && bun run check:player-ui && bun run audit:worklet && bun run audit:plan",
     "serve:proof": "bun tools/serve-proof.ts"
   },
   "imports": {

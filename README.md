@@ -112,8 +112,14 @@ Choose nonempty little-endian RIFF PCM16/24 mono/stereo WAV or supported MP3. Pl
 active context's rate and prepared 44100 ↔ 48000 Hz conversion only. Library/theme/responsive
 changes do not replace the active owner or session. Desktop keeps a centered compact player and
 right companion library at ≥1212px; narrower browsing replaces only the visual region. Settings
-provides Light/Dark/System. The visual is honestly unavailable; the seek timeline is functional,
-not a simulated waveform. Waveform (#18), live visualization (#23) and loops (#19/#20) remain separate.
+provides Light/Dark/System. The visual is honestly unavailable; the 40px seek timeline now shows
+an actual full-track source waveform (#18). A separate cancellable worker scans Rust decoded/trimmed
+PCM after playback is ready; Play and seeking remain available while the overview prepares or fails.
+At most 4096 min/max bins (32 KiB) preserve extrema across channels, including opposite-phase stereo;
+display reduction includes every covered bin. The fixed full-scale overview is unaffected by volume,
+mute, conversion or seeks. No summaries are cached across tracks. See [waveform evidence](docs/2026-09-13-source-waveform.md)
+for mapping, working memory and measured extra decoding cost. Live visualization (#23) and loops
+(#19/#20) remain separate, in that review order.
 
 MP3 support (#17) uses pinned Symphonia 0.6.1 in the shared Rust preparation path,
 not browser decoding. Accepted: MPEG-1 Layer III, 44.1/48 kHz mono/stereo, CBR/VBR

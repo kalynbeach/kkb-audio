@@ -374,9 +374,12 @@ Playback proceeds through small, ordered increments:
    #22 consumes the approved compact player/session-library design and existing WAV, using MP3
    when available. The research player and silent prototype are not substitutes for design approval.
 7. **Waveform (#18).** Depends on both MP3 (#17) and the player frontend (#22).
-8. **WAV loops (#19), then MP3 loops (#20).** Establish seam/period geometry on WAV before
+8. **Live visualization (#23).** Separate visual surface; next review after #18, not waveform scope.
+9. **WAV loops (#19), then MP3 loops (#20).** Establish seam/period geometry on WAV before
    adding codec history/trim. No loop behavior is implied by linear MP3 seek reconstruction.
-9. **Live visualization (#23).** Follows #22 independently of the waveform/loop chain.
+
+Current approved implementation/review order: **#18 → #23 → #19 → #20**. This orders delivery;
+it does not make live visualization part of the waveform or authorize loop work here.
 
 FLAC, HTTP delivery and catalog work are not prerequisites for this sequence.
 
@@ -427,6 +430,16 @@ The same native worker/rings and browser worker/Wasm transport now prepare WAV o
 remains codec-unaware. Fixture, worker/compiled-callback, memory and muted browser evidence is
 recorded in the [dated MP3 document](2026-09-13-mp3-preparation.md). Independent final review and
 parent acceptance checks passed; #21/#22 and all waveform/loop/visualization features are unchanged.
+
+Implementation status, 2026-09-13 (#18): #21's approved direction and #22's compact player are
+in place. A dedicated cancellable worker now scans active Rust decoded/trimmed PCM into at most
+4096 min/max bins, independently of playback readiness and refill ownership. Source amplitude,
+consumed progress and preview seek use the existing source-frame coordinate. No loop, live visual,
+metadata or collection-cache work is included. [Waveform evidence](2026-09-13-source-waveform.md)
+records isolated checks, memory/work bounds and muted workloads. Independent media/lifecycle review
+passed; the UI review's status-label overlap was repaired and its retained recheck passed. Parent
+accepted the final source after independent checks and identity verification. This authorizes stacked
+publication only; merging, deployment and listening/device certification remain separate.
 
 `PlaybackSession` remains provisional. This player establishes a private consumer, not the eventual
 application migration or another speculative foundation/API layer. “Foundation ready” means this

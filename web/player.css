@@ -142,8 +142,20 @@ button[data-slot="button"] { transition: background-color 120ms ease-out; }
 .player-range:disabled { cursor: default; opacity: 0.4; background: transparent; }
 .player-range::-webkit-slider-runnable-track { height: 2px; background: var(--muted-foreground); }
 .player-range::-moz-range-track { height: 2px; background: var(--muted-foreground); }
-.player-range::-webkit-slider-thumb { appearance: none; width: 3px; height: 32px; margin-top: -15px; border: 0; border-radius: 0; background: var(--foreground); }
-.player-range::-moz-range-thumb { width: 3px; height: 32px; border: 0; border-radius: 0; background: var(--foreground); }
+.player-range::-webkit-slider-thumb { appearance: none; width: 0; height: 32px; margin-top: -15px; border: 0; border-radius: 0; background: transparent; }
+.player-range::-moz-range-thumb { width: 0; height: 32px; border: 0; border-radius: 0; background: transparent; }
+.player-waveform { position: relative; height: 40px; }
+.player-waveform .player-range { position: relative; z-index: 1; }
+.player-waveform[data-complete="true"] .player-range::-webkit-slider-runnable-track { background: transparent; }
+.player-waveform[data-complete="true"] .player-range::-moz-range-track { background: transparent; }
+.player-wave-envelope, .player-wave-envelope svg { position: absolute; inset: 0; width: 100%; height: 40px; pointer-events: none; }
+.player-wave-envelope svg { fill: none; stroke: var(--muted-foreground); stroke-width: 1.25; }
+.player-wave-envelope .player-wave-consumed { stroke: var(--foreground); }
+.player-consumed-cursor, .player-preview-cursor { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--foreground); pointer-events: none; }
+.player-consumed-cursor::before { content: ""; position: absolute; top: -2px; left: -2px; width: 5px; height: 5px; border-radius: 50%; background: var(--foreground); }
+.player-preview-cursor { background: none; border-left: 1px dashed var(--foreground); }
+.player-wave-status { position: absolute; top: -14px; left: 0; font: 10px/12px "TX-02", monospace; color: var(--muted-foreground); }
+.player-waveform:focus-within { outline: 2px solid var(--ring); outline-offset: 3px; }
 .player-time { display: flex; justify-content: space-between; align-items: center; gap: 8px; font: 11px/16px "TX-02", monospace; font-variant-numeric: tabular-nums; margin-top: 6px; }
 .player-time > output { width: 40px; }
 .player-time > output:last-child { text-align: right; }

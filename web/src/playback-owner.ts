@@ -1,4 +1,6 @@
 import { prepareProof, type PreparedProof, type SeekResult } from "./prepared-playback";
+import { prepareWaveform, type PrepareWaveform } from "./prepare-waveform";
+import type { SourceWaveform } from "./source-waveform";
 import { PreparationLifecycle } from "./preparation-lifecycle";
 import type { RenderSnapshot } from "./render-adapter";
 
@@ -19,6 +21,8 @@ export type PlaybackState = {
   error: string | null;
   volume: number;
   muted: boolean;
+  waveform: SourceWaveform | null;
+  waveformPhase: "empty" | "pending" | "complete" | "failed";
 };
 
 /** Clamp seconds to the closed media interval, then round to the nearest source
@@ -31,6 +35,7 @@ export function sourceFrameAtSeconds(seconds: number, sourceRate: number, totalF
 const emptyState: PlaybackState = {
   phase: "empty", fileName: "", totalFrames: 0, sourceRate: 0, outputRate: 0,
   snapshot: null, seekResult: null, busy: false, error: null, volume: 0.15, muted: false,
+  waveform: null, waveformPhase: "empty",
 };
 
 export class PlaybackOwner {
@@ -42,8 +47,11 @@ export class PlaybackOwner {
   #command: Promise<void> | undefined;
   #timer: ReturnType<typeof setInterval> | undefined;
 
+  #analysis: AbortController | undefined;
+
   constructor(private readonly prepare: PrepareWav = (file, signal) =>
-    prepareProof({ file, signal, channelCount: 2, maximumFrames: 1024 })) {}
+    prepareProof({ file, signal, channelCount: 2, maximumFrames: 1024 }),
+    private readonly analyse: PrepareWaveform = prepareWaveform) {}
 
   getState = (): PlaybackState => this.#state;
   subscribe = (listener: () => void): (() => void) => {
@@ -58,6 +66,8 @@ export class PlaybackOwner {
 
   async load(file: File): Promise<void> {
     const generation = ++this.#generation;
+    this.#analysis?.abort();
+    this.#analysis = undefined;
     this.#stopPolling();
     const previous = this.#lifecycle;
     // A cancelled preparation may still be unwinding. Its existing lifecycle owns
@@ -79,11 +89,20 @@ export class PlaybackOwner {
         outputRate: playback.ready.sampleRate, busy: false });
       this.#accept(snapshot, playback);
       this.#timer = setInterval(() => { void this.refresh(); }, 100);
+      const analysis = this.#analysis = new AbortController();
+      this.#publish({ waveformPhase: "pending" });
+      void Promise.resolve().then(() => this.analyse(file, playback.totalFrames!, playback.sourceRate!, analysis.signal)).then(waveform => {
+        if (generation === this.#generation && !analysis.signal.aborted) this.#publish({ waveform, waveformPhase: "complete" });
+      }).catch(() => {
+        if (generation === this.#generation && !analysis.signal.aborted) this.#publish({ waveform: null, waveformPhase: "failed" });
+      });
     } catch (error) { await this.#fail(error, generation); }
   }
 
   async close(): Promise<void> {
     ++this.#generation;
+    this.#analysis?.abort();
+    this.#analysis = undefined;
     this.#stopPolling();
     this.#poll = undefined;
     this.#command = undefined;
@@ -176,7 +195,8 @@ export class PlaybackOwner {
   async #fail(error: unknown, generation: number): Promise<void> {
     if (generation !== this.#generation) return;
     this.#stopPolling();
-    this.#publish({ phase: "error", busy: false, error: error instanceof Error ? error.message : String(error) });
+    this.#analysis?.abort();
+    this.#publish({ phase: "error", busy: false, waveform: null, waveformPhase: "empty", error: error instanceof Error ? error.message : String(error) });
     await this.#lifecycle.closeActive();
   }
   #stopPolling(): void {

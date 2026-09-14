@@ -1,0 +1,10 @@
+{
+  "sourceCopy": "/tmp/kkb-audio-18-validation-smZ2aL",
+  "sourceInputFiles": 150,
+  "mismatches": [],
+  "unchangedDailyFiles": 13738,
+  "baseline": "6a969096cd2a264ec39bb9b506af1db622bcfa4e",
+  "parentFullCheck": "135 pass before CSS repair",
+  "repairCheck": "build/typecheck; 16 UI tests, 124 assertions",
+  "scope": "Final runtime/test/build-input SHA256 identity; daily-driver web/dist, web/src/generated and target verified unchanged"
+}
