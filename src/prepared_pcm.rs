@@ -1,4 +1,5 @@
 //! Private host-neutral prepared-PCM seam used by the Milestone 3 proofs.
+use crate::media_loop::LoopRegion;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ChannelLayout {
@@ -32,7 +33,9 @@ impl StreamSpec {
 pub(crate) struct BlockMeta {
     pub(crate) slot_id: u32,
     pub(crate) epoch: u64,
-    /// Frame coordinate at StreamSpec.sample_rate, after any worker-side conversion.
+    /// First media PCM coordinate at StreamSpec.sample_rate, after conversion.
+    /// With an armed loop the following frames wrap inside the configured region;
+    /// a block can contain several wraps, never unrelated PCM beyond its B.
     pub(crate) pcm_frame_start: u64,
     pub(crate) valid_frames: usize,
     pub(crate) discontinuity: bool,
@@ -73,6 +76,21 @@ impl PcmOutput<'_> {
         }
     }
 
+    fn sample(&self, frame: usize) -> [f32; 2] {
+        match self {
+            Self::Mono(p) => [p[frame], 0.0],
+            Self::Stereo { left, right } => [left[frame], right[frame]],
+        }
+    }
+    fn set_sample(&mut self, frame: usize, value: [f32; 2]) {
+        match self {
+            Self::Mono(p) => p[frame] = value[0],
+            Self::Stereo { left, right } => {
+                left[frame] = value[0];
+                right[frame] = value[1];
+            }
+        }
+    }
     fn copy_from(
         &mut self,
         output_offset: usize,
@@ -146,6 +164,24 @@ pub(crate) struct PreparedPcmInput<S: PreparedBlockSource> {
     pcm_position: u64,
     terminal: bool,
     counters: PcmCounters,
+    loop_region: Option<LoopRegion>,
+    loop_head: [f32; 2],
+    loop_iteration: u64,
+    loop_last_media: u64,
+    loop_consumed: bool,
+    loop_extension_frames: u64,
+    loop_lost_frames: u64,
+    recovery_ready: bool,
+    loop_underruns: u64,
+    loop_recovering: bool,
+    fade_out: usize,
+    fade_in: usize,
+    last_sample: [f32; 2],
+    failure_sample: [f32; 2],
+    /// Bounded contribution summary for the last render call. The source/epoch
+    /// are spec/active_epoch; held head is loop_region.a, incoming iteration.
+    seam_frames: usize,
+    callback_first_iteration: u64,
 }
 
 impl<S: PreparedBlockSource> PreparedPcmInput<S> {
@@ -168,9 +204,63 @@ impl<S: PreparedBlockSource> PreparedPcmInput<S> {
             pcm_position: 0,
             terminal: false,
             counters: PcmCounters::default(),
+            loop_region: None,
+            loop_head: [0.0; 2],
+            loop_iteration: 0,
+            loop_last_media: 0,
+            loop_consumed: false,
+            loop_extension_frames: 0,
+            loop_lost_frames: 0,
+            recovery_ready: false,
+            loop_underruns: 0,
+            loop_recovering: false,
+            fade_out: 0,
+            fade_in: 0,
+            last_sample: [0.0; 2],
+            failure_sample: [0.0; 2],
+            seam_frames: 0,
+            callback_first_iteration: 0,
         })
     }
 
+    pub(crate) fn configure_loop(&mut self, region: Option<LoopRegion>, head: [f32; 2]) {
+        self.loop_region = region;
+        self.loop_head = head;
+        self.loop_iteration = 0;
+        self.loop_consumed = false;
+        self.recovery_ready = false;
+        self.loop_recovering = false;
+        self.fade_out = 0;
+        self.fade_in = 0;
+    }
+    pub(crate) fn loop_iteration(&self) -> u64 {
+        self.loop_iteration
+    }
+    pub(crate) fn loop_underruns(&self) -> u64 {
+        self.loop_underruns
+    }
+    pub(crate) fn loop_extension_frames(&self) -> u64 {
+        self.loop_extension_frames
+    }
+    pub(crate) fn loop_lost_frames(&self) -> u64 {
+        self.loop_lost_frames
+    }
+    pub(crate) fn loop_recovering(&self) -> bool {
+        self.loop_recovering
+    }
+    pub(crate) fn loop_needs_recovery(&self) -> bool {
+        self.loop_recovering && !self.recovery_ready && !self.preparing
+    }
+    pub(crate) fn seam_frames(&self) -> usize {
+        self.seam_frames
+    }
+    pub(crate) fn callback_first_iteration(&self) -> u64 {
+        self.callback_first_iteration
+    }
+    pub(crate) fn begin_loop_recovery(&mut self, epoch: u64) {
+        let held = self.pcm_position;
+        self.begin_seek(epoch, held, false);
+    }
     pub(crate) fn source_mut(&mut self) -> &mut S {
         &mut self.source
     }
@@ -215,6 +305,9 @@ impl<S: PreparedBlockSource> PreparedPcmInput<S> {
 
     pub(crate) fn finish_seek(&mut self) {
         self.preparing = false;
+        if self.loop_recovering {
+            self.recovery_ready = true;
+        }
     }
     pub(crate) fn preparing(&self) -> bool {
         self.preparing
@@ -271,17 +364,48 @@ impl<S: PreparedBlockSource> PreparedPcmInput<S> {
             return PcmRenderStatus::CapacityExceeded;
         }
         output.zero();
-        if self.preparing {
+        self.seam_frames = 0;
+        self.callback_first_iteration = self.loop_iteration;
+        let mut written = 0;
+        if self.preparing || self.loop_recovering {
             self.reclaim_stale();
-            return PcmRenderStatus::Rendered;
+            written = self.fade_out.min(frame_count);
+            self.render_failure(&mut output, 0, frame_count);
+            if self.loop_recovering {
+                self.loop_extension_frames =
+                    self.loop_extension_frames.saturating_add(if self.preparing
+                        || !self.recovery_ready
+                    {
+                        frame_count
+                    } else {
+                        written
+                    } as u64);
+            }
+            if self.preparing || !self.recovery_ready || written == frame_count {
+                return PcmRenderStatus::Rendered;
+            }
+            if let Some(region) = self.loop_region {
+                self.pcm_position = region.a;
+                self.loop_iteration = self.loop_iteration.saturating_add(1);
+                self.loop_consumed = false;
+                self.fade_in = region.fade;
+            }
+            self.loop_recovering = false;
+            self.recovery_ready = false;
         }
 
         if !self.flush_pending_retirement() {
             self.count_starvation_unless_ended();
+            self.start_loop_failure();
+            if self.loop_recovering {
+                self.loop_extension_frames = self
+                    .loop_extension_frames
+                    .saturating_add((frame_count - written) as u64);
+            }
+            self.render_failure(&mut output, written, frame_count);
             return PcmRenderStatus::Rendered;
         }
 
-        let mut written = 0;
         let mut scanned = 0;
         while written < frame_count {
             if self.current.is_none() {
@@ -328,8 +452,47 @@ impl<S: PreparedBlockSource> PreparedPcmInput<S> {
                 let available = meta.valid_frames - self.current_offset;
                 let copied = available.min(frame_count - written);
                 output.copy_from(written, self.current_offset, copied, block.planes());
-                self.pcm_position = meta.pcm_frame_start + (self.current_offset + copied) as u64;
-                (copied, copied == available, meta.end_of_stream)
+                let start = meta.pcm_frame_start + self.current_offset as u64;
+                for frame in 0..copied {
+                    let unfolded = start + frame as u64;
+                    let mut value = output.sample(written + frame);
+                    if let Some(region) = self.loop_region {
+                        let media = region.position(unfolded);
+                        if media == region.a
+                            && self.loop_consumed
+                            && self.loop_last_media == region.b - 1
+                        {
+                            self.loop_iteration = self.loop_iteration.saturating_add(1);
+                        }
+                        if written == 0 && frame == 0 {
+                            self.callback_first_iteration = self.loop_iteration;
+                        }
+                        self.loop_last_media = media;
+                        self.loop_consumed = true;
+                        if media >= region.b - region.fade as u64 {
+                            self.seam_frames += 1;
+                        }
+                        for (channel, sample) in value.iter_mut().enumerate() {
+                            *sample = region.sample(media, *sample, self.loop_head[channel]);
+                            if self.fade_in > 0 {
+                                *sample *=
+                                    (region.fade - self.fade_in + 1) as f32 / region.fade as f32;
+                            }
+                        }
+                        self.fade_in = self.fade_in.saturating_sub(1);
+                    }
+                    output.set_sample(written + frame, value);
+                    self.last_sample = value;
+                }
+                let next = start + copied as u64;
+                self.pcm_position = self
+                    .loop_region
+                    .map_or(next, |region| region.position(next));
+                (
+                    copied,
+                    copied == available,
+                    meta.end_of_stream && self.loop_region.is_none(),
+                )
             };
             written += copied;
             self.current_offset += copied;
@@ -346,10 +509,46 @@ impl<S: PreparedBlockSource> PreparedPcmInput<S> {
 
         if written < frame_count {
             self.count_starvation_unless_ended();
+            self.start_loop_failure();
+            if self.loop_recovering {
+                self.loop_extension_frames = self
+                    .loop_extension_frames
+                    .saturating_add((frame_count - written) as u64);
+            }
+            self.render_failure(&mut output, written, frame_count);
         }
         PcmRenderStatus::Rendered
     }
 
+    fn start_loop_failure(&mut self) {
+        if let Some(region) = self.loop_region
+            && !self.loop_recovering
+        {
+            self.loop_recovering = true;
+            self.recovery_ready = false;
+            self.loop_underruns = self.loop_underruns.saturating_add(1);
+            self.fade_out = region.fade;
+            self.failure_sample = self.last_sample;
+            self.loop_lost_frames = if self.loop_consumed && self.loop_last_media == region.b - 1 {
+                0
+            } else {
+                region.b - self.pcm_position
+            };
+        }
+    }
+    fn render_failure(&mut self, output: &mut PcmOutput<'_>, start: usize, end: usize) {
+        let Some(region) = self.loop_region else {
+            return;
+        };
+        for frame in start..end {
+            if self.fade_out == 0 {
+                break;
+            }
+            self.fade_out -= 1;
+            let weight = self.fade_out as f32 / region.fade as f32;
+            output.set_sample(frame, self.failure_sample.map(|v| v * weight));
+        }
+    }
     fn accept_block(&mut self, block: &S::Block) -> bool {
         let meta = block.meta();
         if meta.epoch != self.active_epoch {
@@ -358,6 +557,14 @@ impl<S: PreparedBlockSource> PreparedPcmInput<S> {
             } else {
                 self.counters.invalid_blocks = self.counters.invalid_blocks.saturating_add(1);
             }
+            return false;
+        }
+        if self.loop_region.is_some_and(|region| {
+            meta.pcm_frame_start < region.a
+                || meta.pcm_frame_start >= region.b
+                || meta.end_of_stream
+        }) {
+            self.counters.invalid_blocks = self.counters.invalid_blocks.saturating_add(1);
             return false;
         }
         let layout_valid = match (self.spec.layout, block.planes()) {
@@ -719,6 +926,113 @@ mod tests {
         output
     }
 
+    fn render_loop_partitions(partitions: &[usize]) -> (Vec<f32>, u64, usize) {
+        let region = LoopRegion::new(7, 24, 48000).unwrap();
+        let raw = |p: u64| {
+            if p == 7 {
+                0.75
+            } else if p == 23 {
+                -0.5
+            } else {
+                p as f32 / 64.0
+            }
+        };
+        let mut source = FixedSlotSource::<4>::new(ChannelLayout::Mono, 256);
+        for slot in 0..4u32 {
+            assert!(source.reserve(slot));
+            let start = 7 + u64::from(slot) * 256 % 17;
+            let block = source.slots[slot as usize].as_mut().unwrap();
+            for (j, v) in block.left.iter_mut().enumerate() {
+                *v = raw(region.position(start + j as u64));
+            }
+            assert!(source.admit_reserved(BlockMeta {
+                slot_id: slot,
+                epoch: 2,
+                pcm_frame_start: start,
+                valid_frames: 256,
+                discontinuity: false,
+                end_of_stream: false
+            }));
+        }
+        let mut input = PreparedPcmInput::new(
+            StreamSpec {
+                layout: ChannelLayout::Mono,
+                sample_rate: 48000,
+                source_id: 7,
+            },
+            2,
+            1024,
+            source,
+        )
+        .unwrap();
+        input.configure_loop(Some(region), [raw(7), 0.0]);
+        let mut result = Vec::new();
+        let mut contributions = 0;
+        for &count in partitions {
+            let at = result.len();
+            result.resize(at + count, 0.0);
+            input.render(PcmOutput::Mono(&mut result[at..]));
+            contributions += input.seam_frames();
+        }
+        for (j, &v) in result.iter().enumerate() {
+            let p = 7 + j as u64 % 17;
+            let expected = if p < 20 {
+                raw(p)
+            } else {
+                let weight = (p - 20) as f32 / 3.0;
+                (1.0 - weight) * raw(p) + weight * raw(7)
+            };
+            assert_eq!(v, expected);
+        }
+        assert_eq!(input.pcm_position(), 7 + result.len() as u64 % 17);
+        assert_eq!(input.counters().invalid_blocks, 0);
+        (result, input.loop_iteration(), contributions)
+    }
+    #[test]
+    fn media_loop_partition_and_contribution_accounting_includes_many_wraps_per_block() {
+        let all = render_loop_partitions(&[1000]);
+        assert_eq!(all, render_loop_partitions(&[1; 1000]));
+        assert_eq!(all, render_loop_partitions(&[17, 257, 1, 513, 212]));
+        assert_eq!(all.1, 58);
+    }
+    #[test]
+    fn media_loop_underrun_fades_exactly_holds_cursor_and_reprimes_start() {
+        let mut first = block(0, 2, 0, 4, false);
+        first.left = [0.5; 4];
+        first.right = [-0.25; 4];
+        let mut i = input([Some(first), None, None, None]);
+        i.configure_loop(Some(LoopRegion::new(0, 8, 48000).unwrap()), [0.5, -0.25]);
+        let mut l = [0.0; 7];
+        let mut r = [0.0; 7];
+        i.render(PcmOutput::Stereo {
+            left: &mut l,
+            right: &mut r,
+        });
+        assert_eq!(l, [0.5, 0.5, 0.5, 0.5, 0.25, 0.0, 0.0]);
+        assert_eq!(r, [-0.25, -0.25, -0.25, -0.25, -0.125, 0.0, 0.0]);
+        assert_eq!(i.pcm_position(), 4);
+        assert_eq!(i.loop_underruns(), 1);
+        assert!(i.loop_needs_recovery());
+        i.begin_loop_recovery(3);
+        assert_eq!(i.pcm_position(), 4);
+        let mut head = block(1, 3, 0, 4, false);
+        head.left = [0.5; 4];
+        head.right = [-0.25; 4];
+        i.source_mut().ready = [Some(head), None, None, None];
+        i.source_mut().head = 0;
+        i.finish_seek();
+        assert_eq!(i.pcm_position(), 4);
+        i.render(PcmOutput::Stereo {
+            left: &mut l[..2],
+            right: &mut r[..2],
+        });
+        assert_eq!(&l[..2], &[0.25, 0.5]);
+        assert_eq!(&r[..2], &[-0.125, -0.25]);
+        assert_eq!(i.pcm_position(), 2);
+        assert_eq!(i.loop_iteration(), 1);
+        assert!(!i.loop_recovering());
+    }
+
     #[test]
     fn deterministic_pcm_is_partition_independent_across_fixed_block_boundaries() {
         let single = render_fixed_partitions(&[1_000]);
@@ -984,12 +1298,19 @@ mod tests {
             right: &mut wr,
         }));
         let mut measured = make();
+        measured.configure_loop(Some(LoopRegion::new(0, 8, 48000).unwrap()), [0.25, -0.5]);
         let mut backpressured = input([Some(block(0, 2, 0, 1, false)), None, None, None]);
         backpressured.source_mut().reject_retire = true;
         let mut left = [0.0; 9];
         let mut right = [0.0; 9];
         let mut blocked_left = [0.0; 2];
         let mut blocked_right = [0.0; 2];
+        let recovery = [
+            Some(block(0, 3, 0, 4, false)),
+            Some(block(1, 3, 4, 4, false)),
+            None,
+            None,
+        ];
         reset_allocator_counts();
         MEASURE_ALLOCATIONS.with(|a| a.set(true));
         black_box(measured.render(PcmOutput::Stereo {
@@ -1000,11 +1321,26 @@ mod tests {
             left: black_box(&mut left[3..]),
             right: black_box(&mut right[3..]),
         }));
+        measured.begin_loop_recovery(3);
+        let source = measured.source_mut();
+        source.ready = recovery;
+        source.head = 0;
+        source.retired = std::array::from_fn(|_| None);
+        source.retired_len = 0;
+        measured.finish_seek();
+        black_box(measured.render(PcmOutput::Stereo {
+            left: &mut left,
+            right: &mut right,
+        }));
         black_box(backpressured.render(PcmOutput::Stereo {
             left: black_box(&mut blocked_left),
             right: black_box(&mut blocked_right),
         }));
         MEASURE_ALLOCATIONS.with(|a| a.set(false));
         assert_eq!(allocator_counts(), [0, 0, 0, 0]);
+        assert!(!measured.loop_recovering());
+        assert_eq!(left[0], 0.0); // Final fade-out frame.
+        assert_eq!(left[1], deterministic_sample(0, 0) * 0.5); // First of two fade-in frames.
+        assert_eq!(right[2], deterministic_sample(1, 1));
     }
 }

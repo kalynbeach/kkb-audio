@@ -1,0 +1,28 @@
+$ bun tools/build-worklet.ts
+    Finished `release` profile [optimized] target(s) in 0.03s
+$ bun x tsc --noEmit
+$ bun test tools/check-player-ui.test.tsx
+bun test v1.4.0 (34cbb9a40)
+
+tools/check-player-ui.test.tsx:
+(pass) multi-file wav admission never prepares; row selection is independent from explicit play [83.54ms]
+(pass) multi-file mp3 admission never prepares; row selection is independent from explicit play [37.31ms]
+(pass) drag previews separately from consumed time, release commits exactly once and waits for readiness [14.12ms]
+(pass) escape cancels preview without seeking [14.13ms]
+(pass) pointercancel cancels preview without seeking [8.76ms]
+(pass) blur cancels preview without seeking [11.22ms]
+(pass) windowblur cancels preview without seeking [9.16ms]
+(pass) lostcapture cancels preview without seeking [8.35ms]
+(pass) keyboard seeking, endpoint and explicit replay preserve playback intent [53.86ms]
+(pass) accessible volume popup has keyboard control, mute and focus return independent of playback [61.56ms]
+(pass) endpoint keeps keyboard focus; seeking back from Ended requires explicit Play [36.18ms]
+(pass) playing drag preview survives periodic consumed updates and resumes acknowledged playing state [12.54ms]
+(pass) library/Settings/theme/responsive disclosures preserve owner and seek identity, and return focus [88.13ms]
+(pass) same-named entry replacement cancels an uncommitted seek, and session removal/Clear stays recoverable [68.29ms]
+(pass) loading is cancellable from internal library Settings; malformed files remain browsable and retryable [81.28ms]
+(pass) completed source waveform keeps consumed progress separate and reconciles an adjusted seek [11.90ms]
+
+ 16 pass
+ 0 fail
+ 124 expect() calls
+Ran 16 tests across 1 file. [746.00ms]

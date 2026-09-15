@@ -1,0 +1,56 @@
+Final isolated implementation checks; independent review/parent acceptance pending.
+Bun1.4.0 / Rust1.98.0 / Symphonia0.6.1; no physical tests selected.
+
+retained-wav-rust-debug.log
+test cpal_host::tests::media_loop_native_worker_rings_callback_reference_controls_and_underrun ... ok
+test cpal_host::tests::mp3_late_over_head_native_worker_has_bounded_normal_replenishment has been running for over 60 seconds
+test cpal_host::tests::mp3_late_over_head_native_worker_has_bounded_normal_replenishment ... ok
+
+test result: ok. 84 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 77.22s
+
+retained-wav-rust-release.log
+test cpal_host::tests::converted_wav_native_worker_samples_pause_starvation_and_media_cursor ... ok
+test cpal_host::tests::mp3_late_over_head_native_worker_has_bounded_normal_replenishment ... ok
+test cpal_host::tests::media_loop_native_worker_rings_callback_reference_controls_and_underrun ... ok
+
+test result: ok. 84 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 48.44s
+
+retained-wav-clippy-native.log
+Checking kkb-audio v0.1.0 (/private/tmp/kkb20-final-20260914)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.41s
+
+retained-wav-clippy-wasm.log
+Checking kkb-audio v0.1.0 (/private/tmp/kkb20-final-20260914)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.51s
+
+retained-wav-fmt.log
+
+
+Full bun run check (including paused MP3 EOF acknowledgment):
+(pass) PreparedPlanarAdapter > memory buffer identity change becomes permanent silence [0.13ms]
+(pass) compiled plan host adapter > capacity, malformed layout, and detached memory become permanent silence before Wasm [0.31ms]
+ 104 pass
+ 0 fail
+Ran 104 tests across 17 files. [3.82s]
+$ bun tools/check-wasm-memory.ts web/dist/kkb_audio_bg.wasm
+{"bytes":16777216,"exportedName":"memory","maximumPages":256,"minimumPages":256,"shared":false}
+ 13 pass
+ 0 fail
+Ran 13 tests across 5 files. [2.36s]
+ 4 pass
+ 0 fail
+Ran 4 tests across 2 files. [71.11s]
+ 3 pass
+ 0 fail
+Ran 3 tests across 1 file. [195.00ms]
+ 6 pass
+ 0 fail
+Ran 6 tests across 2 files. [129.00ms]
+ 8 pass
+ 0 fail
+Ran 8 tests across 1 file. [2.31s]
+ 22 pass
+ 0 fail
+Ran 22 tests across 1 file. [937.00ms]
+{"bytes":46477,"forbiddenPatterns":[],"processorRegistrations":1,"synchronousInstantiation":true,"auditedCallbackBodies":["processor.process","WorkletKernel.render","PreparedPlanarAdapter.process","PreparedPlanarAdapter.#fail","wasmRenderFailure","fillSilence"],"callbackForbiddenPatterns":[]}
+{"bytes":35209,"forbiddenPatterns":[],"processorRegistrations":1,"synchronousInstantiation":true,"auditedCallbackBodies":["processor.process","WorkletPlan.render","PreparedPlanAdapter.process","PreparedPlanAdapter.#fail","planSilence"],"callbackForbiddenPatterns":[]}

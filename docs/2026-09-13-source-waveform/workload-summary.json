@@ -1,0 +1,83 @@
+{
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+  "workers": [
+    {
+      "url": "./pcm-worker.js",
+      "lifetime": 11340.5
+    },
+    {
+      "url": "./waveform-worker.js",
+      "complete": {
+        "bytes": 32760,
+        "memoryBytes": 16777216,
+        "milliseconds": 3822.799999952316,
+        "totalFrames": 8640000
+      },
+      "lifetime": 3826.7000000476837
+    },
+    {
+      "url": "./pcm-worker.js",
+      "lifetime": 35197.5
+    },
+    {
+      "url": "./waveform-worker.js",
+      "complete": {
+        "bytes": 32768,
+        "memoryBytes": 16777216,
+        "milliseconds": 33603.89999997616,
+        "totalFrames": 28800000
+      },
+      "lifetime": 33614.09999990464
+    },
+    {
+      "url": "./pcm-worker.js",
+      "lifetime": 1086.5
+    },
+    {
+      "url": "./waveform-worker.js",
+      "lifetime": 322.2000000476837
+    },
+    {
+      "url": "./pcm-worker.js",
+      "lifetime": 1053.1999999284817
+    },
+    {
+      "url": "./waveform-worker.js",
+      "lifetime": 289.10000002384186
+    },
+    {
+      "url": "./pcm-worker.js",
+      "lifetime": 1295.1000000238346
+    },
+    {
+      "url": "./waveform-worker.js",
+      "complete": {
+        "bytes": 24168,
+        "memoryBytes": 16777216,
+        "milliseconds": 6.600000023841858,
+        "totalFrames": 6042
+      },
+      "lifetime": 14.5
+    },
+    {
+      "url": "./pcm-worker.js",
+      "lifetime": 730.3999999761654
+    },
+    {
+      "url": "./waveform-worker.js",
+      "lifetime": 67
+    }
+  ],
+  "cancel": 187.70000004768372,
+  "cancelClick": 4.899999976158142,
+  "wav": {
+    "snapshots": 43,
+    "starvation": 0,
+    "position": 175360
+  },
+  "mp3": {
+    "snapshots": 338,
+    "starvation": 0,
+    "position": 1603840
+  }
+}

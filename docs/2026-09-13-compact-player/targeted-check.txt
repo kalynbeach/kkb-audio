@@ -1,0 +1,35 @@
+bun test v1.4.0 (34cbb9a40)
+
+web/test/player-collection.test.ts:
+(pass) bounded admission in picker order retains distinct same-named File references without preparation [0.78ms]
+(pass) selection is independent; ordinary activation never autoplays; row play resumes, pauses and replays [0.91ms]
+(pass) previous/next start at zero preserving intent and selection, bounded with no wrap or auto-advance [0.33ms]
+(pass) inactive removal preserves active playback; active removal closes without successor; clear releases references and preserves gain [0.22ms]
+(pass) close cancels pending explicit autoplay and disposes a late result [1.40ms]
+(pass) clear cancels pending explicit autoplay and disposes a late result [1.18ms]
+(pass) remove cancels pending explicit autoplay and disposes a late result [1.19ms]
+(pass) same-name replacement ignores obsolete completion and late rejection, then errors recover by retry [1.46ms]
+(pass) rapid next during preparation preserves explicit playing intent, not the stale request [1.35ms]
+
+web/test/playback-owner.test.ts:
+(pass) one clamp and nearest-source-frame rule includes both endpoints and half frames [0.07ms]
+(pass) load stays paused; periodic updates use consumed cursor, never render clock or read-ahead [263.21ms]
+(pass) polls coalesce and play waits without overlapping snapshots [2.76ms]
+(pass) polls coalesce and pause waits without overlapping snapshots [1.46ms]
+(pass) polls coalesce and seek waits without overlapping snapshots [1.27ms]
+(pass) seek waits for readiness and preserves paused=%s; replay seeks zero then plays [1.65ms]
+(pass) seek waits for readiness and preserves paused=%s; replay seeks zero then plays [1.64ms]
+(pass) volume and mute retain level and position without lifecycle or command work [0.60ms]
+(pass) late preparation after close is cancelled and disposed without reviving UI [2.47ms]
+(pass) late preparation after replace is cancelled and disposed without reviving UI [1.25ms]
+(pass) late status completion after replace cannot restore old cursor/state [1.57ms]
+(pass) late seek completion after replace cannot restore old cursor/state [1.27ms]
+(pass) late status completion after close cannot restore old cursor/state [1.37ms]
+(pass) late seek completion after close cannot restore old cursor/state [1.71ms]
+(pass) malformed/unsupported preparation and runtime failures recover on a new load [0.76ms]
+(pass) consumed EOS acknowledges suspension; seeking away stays paused until explicit Play [0.56ms]
+
+ 25 pass
+ 0 fail
+ 167 expect() calls
+Ran 25 tests across 2 files. [316.00ms]

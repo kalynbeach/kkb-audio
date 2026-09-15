@@ -1,0 +1,9 @@
+{
+  "name": "compact-dark",
+  "prompt": "Create a DARK counterpart of the first supplied compact portrait Wave Player card. Preserve its exact layout, card dimensions, placement, tall silhouette, artwork size, typography hierarchy, full-track waveform, and all control positions. This is ONE individual landscape image matching the first image's dimensions, not a contact sheet. Convert the light neutral card to a deliberate dark theme; do not redesign it.\nDARK counterpart: board #080807, card #0c0c0b, text #f2f2ed, thin rules #292925. Keep the signal art near-black/green, white consumed waveform and readable dark-gray remainder. No blue/glossy buttons, neon control accents or drop shadow.\nKeep title \"Low Tide\" in prominent TX-02-like monospace; Inter artist/album line \"North Window | Tidal Studies\"; Departure Mono-like pixel lettering for compact VISUAL and LIBRARY tabs, VISUAL underlined. Green oscilloscope remains the dominant art field. Below it small separate amplitude waveform and 01:24 / 04:32 times, round-topped acknowledged playhead at 30.9%. Centered fine previous / Pause / next group, small A/B off control at far left and small volume icon far right; volume slider remains hidden. No theme selector. Keep portrait structure and tight padding; no added controls, labels, rounded pills or decoration. Caption outside UI: \"Design fixture — simulated waveform and playback\". Intended viewport1440x1000, intended card380x532. Full composition visible.",
+  "referenced_image_paths": [
+    "/Users/kalynbeach/.codex/generated_images/01a09c32-3f86-7b63-a39f-4f74c62cff21/exec-a9dc26d8-ae8a-4677-8ffb-6ff226fd149d.png",
+    "/Users/kalynbeach/dev/kb/kkb-audio/docs/2026-09-13-wave-player-design-assets/research-foundations-dark.png",
+    "/Users/kalynbeach/dev/kb/kkb-audio/docs/2026-09-13-wave-player-design-assets/research-selection-dark.png"
+  ]
+}

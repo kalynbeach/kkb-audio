@@ -959,7 +959,7 @@ readiness contract.
 
 ### Loop contract
 
-**Working design.** Initial loops use half-open logical intervals:
+**Decision (#19/#20, parent-approved 2026-09-14; implementation accepted for stacked PR publication).** Local WAV/MP3 loops use half-open logical intervals:
 
 ```text
 [loop_start, loop_end)
@@ -968,12 +968,36 @@ readiness contract.
 Events at `loop_start` repeat. Events exactly at `loop_end` are outside the active loop. The working
 priority is to preserve this nominal loop period and report any seam transformation explicitly.
 
-A short source-side transition may smooth the boundary, but equal-power overlap is only bounded seam
-smoothing; it cannot guarantee that every signal is click-free. An overlap also cannot simultaneously
-preserve every source sample at unit rate, preserve the nominal period, and expose one authoritative
-media coordinate. WAV fixtures must therefore settle the transition geometry, fade clamping, minimum
-loop length, authoritative UI coordinate, automation behavior, and contribution provenance before
-loop implementation. The architecture does not select those details in advance.
+Both codecs use **held-head seam smoothing**, not a moving-head crossfade. Let the requested source
+boundaries be A/B at rate Rs and realized converted boundaries be a=ceil(A·Ro/Rs), b=ceil(B·Ro/Rs).
+Repeat the fixed globally aligned converted slice [a,b), P=b−a output frames. With
+F=min(floor(Ro/200),floor(P/4)), require P≥8 and F≥2; otherwise reject looping without changing
+linear playback or the last accepted region. No zero-crossing adjustment moves either boundary.
+For j=0…F−1, replace only tail sample x[b−F+j] with
+(1−j/(F−1))·x[b−F+j] + (j/(F−1))·x[a], independently per channel. The final tail value is exactly
+x[a]. The first head sample is reused as a held contribution; the last outgoing sample has zero
+weight. All P timeline frames remain, the head is replayed unmodified at wrap, and no other span is
+skipped or duplicated. Convex weights preserve DC within f32 rounding and avoid intentional gain
+overshoot, but change slopes and can distort periodic signals. This is not universal click-free or
+listening acceptance. An ordinary overlap cannot preserve every sample at unit rate, the period,
+and one authoritative coordinate together; this deliberately transforms the tail instead.
+
+The preserved period is the **realized output-grid period**, not exact requested source duration.
+Each conversion period differs from (B−A)·Ro/Rs by less than one output frame; repeated fixed-grid
+quantization accumulates over iterations, without a bounded cumulative-drift promise. The converter
+does not synthesize new fractional phases or alternate period lengths. Same-rate bypass remains
+exact before the stated seam. Display requested source boundaries/duration and realized output
+boundaries/period separately, including the floor-mapped realized start cursor. Exact fields accept
+fractional seconds or explicit integer source frames, so a legal short region remains inspectable.
+
+Prepare at most 4096 head frames (possibly the entire short region), using the incumbent converter's
+preceding globally aligned FFT chunk and at most two input chunks of reconstruction pre-roll. The
+head is worker-owned, separate from four 1024-frame transport slots. Cached-head continuation uses
+an exact output-frame seek, never a lossy PCM→source→PCM round trip. Head preparation must also
+progress when consuming a converter chunk exposes EOF drain output without another input push. Longer regions are streamed;
+no unbounded full-track PCM cache or extra waveform analysis is introduced. References independently
+convert uninterrupted source from zero, crop the realized interval, apply the formula and repeat it.
+Same-build exactness is not native-to-Wasm bit identity or a new converter quality guarantee.
 
 The session still prepares the loop head before activation, keeps render time continuous while media
 time wraps, and reports the media discontinuity and transformation provenance. Any seam processing
@@ -991,20 +1015,101 @@ Disabled → Preparing → Armed → Active
                     └────────→ Failed
 ```
 
-The player should not claim a loop is armed until the head is buffered.
+The player must not claim Armed until both the prepared head and the initial four-slot supply are
+acknowledged. Preparing is not effective looping. Armed is ready but paused; Active is consuming an
+enabled loop. Normal wraps are worker/prepared-input behavior, never UI polling, EOS replay, public
+seek, or render-instance replacement. Initial head-not-ready is Preparing, not LoopUnderrun.
+
+| Control | Acknowledged behavior |
+| --- | --- |
+| Load/replacement | Whole track, Disabled; editor disclosure may stay open. |
+| Disabled edit/reset | Store only a valid region, no engine reposition or autoplay. |
+| Enable | Capture the exact next media PCM cursor at the renderer/control boundary, after any normal wrap. Inside [a,b), preserve it; outside choose a. Preserve pause; EOS becomes paused. |
+| Disable | Preserve that exact acknowledged PCM cursor and resume ordinary source preparation there, not after finishing an iteration. |
+| Enabled edit | Test inclusion at acknowledgment, not the stale UI snapshot. Preserve exact PCM; if excluded, disable without relocating. Report the effective enabled state, including an edit that became outside while playing. |
+| Explicit user seek | Existing nearest-source/ceil-output rule; inside retains enable, outside including B disables. |
+| Pause/resume | Freeze/resume current media and render clocks; keep readiness and downstream state. |
+| Disabled EOS/replay | EOS remains ended; explicit replay returns to zero. An enabled normal loop does not consume EOS. |
+| Preparing changes/close | One executing worker job plus one replaceable latest request; identity/epoch covers begin, captured PCM, head and finish. Superseded completions cannot arm old work. Close/replacement cancels ownership through the incumbent lifecycle. |
+
+A private loop-change begin/finish acknowledgment captures exact output PCM **and prior EOS**; it is
+not a public seek with a stale source cursor. Enabling after acknowledgment-time EOS pauses before
+new PCM can become consumable. Browser preparation waits for main-thread context-suspension
+acknowledgment before head/supply/finish, including across superseded begins. Native acknowledgment
+uses a bounded pause-command update without overwriting a newer explicit transport command.
+Disabled native region edits use acknowledged effective enable or latest pending intent, never mere
+presence of requested bounds. Owner requests waiting for a status poll still retain latest loop
+intent/revision; superseding preparation discards obsolete pending work. Explicit control changes may prepare silence while preserving render time;
+that is distinct from normal wrap behavior. Invalid/unsupported/too-short requests are rejected with
+feedback, retaining the previous accepted region and playback. Media I/O, decoder or worker/runtime
+corruption remains a terminal playback failure **and loop Failed**. Recovery after teardown is an
+explicit track retry/reload, never a loop checkbox pretending to revive a dead worker. There is no
+additional invented loop-local recoverable error category.
 
 If an armed loop still underruns:
 
-1. fade quickly to silence
-2. keep the render thread and render clock running
-3. emit `LoopUnderrun`
-4. re-prime the exact loop start
-5. fade back in and resume
+1. latch `Failed` / `LoopUnderrun` once, hold the authoritative media cursor and retain the last rendered source-side value v per channel
+2. emit F fade-out frames v·(F−1−j)/F for j=0…F−1, then silence; the render clock continues, with no callback wait
+3. reject obsolete supply under a fresh source epoch and request exact output-grid a through the bounded recovery handshake, not public seek
+4. re-prime head plus initial supply; readiness cannot truncate the fade-out, and silence remains until both it and preparation are complete
+5. restart at a with F fade-in frames x·(j+1)/F; preserve downstream state, count the failed interval's added render frames and discarded remaining media PCM separately
 
 This lengthens the failed loop iteration. It does not block the callback or play unrelated media past
 the boundary. Stricter policies may be required when several synchronized sources are active.
 
-Long creative crossfades remain deferred but should reuse the same transition machinery.
+Normal wraps increment a loop iteration when its first head frame is consumed, not the control
+epoch. Through the seam the authoritative coordinate is still the outgoing tail position; bounded
+contribution accounting identifies that tail and the held head at a from the incoming iteration,
+under the same source identity/control epoch. A block can contain multiple wraps; its first PCM
+coordinate plus the region maps every frame, with fixed callback first/final iteration and seam-frame
+counts rather than an unbounded contribution list. Render-frame processing/automation is continuous;
+media-time boundary semantics remain as above without adding a public event system.
+
+Explicit changes/recovery clear obsolete source observations and #23 visual history. Normal wraps
+leave the private pre-volume analyser continuous. Its samples remain untagged approximate browser
+history, not a canonical provenance API or speaker clock. The original full-track waveform retains
+its identity and amplitude. Long creative crossfades remain separate future scope;
+no general transition/session framework is introduced by #19.
+
+#### Private MP3 loop history (#20)
+
+The source coordinate is #17's pinned-decoder validated decoded-and-trimmed timeline,
+not recovered encoder input. Ordinary seeks retain reset/decode/discard and truthful
+`AnchorAndDiscard` even at equal rates. Normal loop continuation instead uses one
+source-owner-local encoded recipe, acquired **before Armed**. Initial acquisition and
+head/start reconstruction may decode linearly with cancellation and a30-second rejection
+budget; no O(target) acquisition is initiated by an active normal wrap.
+
+For the packet containing the converter's earlier source read anchor plus validated delay,
+retain its unchanged predecessor, up to511 preceding main-data bytes, exact raw/byte/source
+coordinates and genuine unread-reservoir bookkeeping. Reset the unmodified Symphonia0.6.1
+decoder, feed an internal same-rate/channel zero-side-information carrier containing that
+suffix, then decode the original predecessor. Discard both outputs. Packet0 needs no warm-up;
+packet1 needs only original packet0. At most two discarded decodes plus the ordinary next
+source packet precede raw readiness; converter pre-roll remains separate. Carrier bytes are
+never source PCM, waveform input, media-time contributions, metadata or validation evidence.
+
+This horizon is source-derived: MPEG-1 reservoir references are9bits (511bytes), hybrid overlap
+is replaced by each granule, and synthesis retains16 steps. After correct compressed history,
+the predecessor's second granule provides18 correct synthesis steps. Packet-local scalefactors
+and overwritten spectral scratch add no older dependency. No guessed preroll, incomplete-history
+concealment, state cloning, decoder fork or general seek index is used. Original CRC and genuine
+reservoir checks remain mandatory before original packets decode. Artificial carrier padding
+cannot legitimize missing source history; decode/I/O failures remain terminal track failures.
+
+One completed anchor and at most one transient replacement belong to the active reader.
+Each owns fixed1045-byte predecessor and511-byte history arrays (1556 encoded payload bytes).
+The replacement's rolling buffer is511bytes; carrier scratch is at most1044bytes; at most one
+additional owned packet-input copy is1045bytes. The conservative additional encoded payload
+ceiling is **5712bytes**, excluding existing host cache/read buffers, decoder working/output
+buffers and scalar/container/allocator overhead. There is still only one active reader/decoder,
+4096 converted head frames, four1024-frame slots and fixed16MiB Wasm memory. All allocation,
+replacement and destruction remain off-callback. Superseding preparation cancels pending
+acquisition before install/publication. Same-owner/same-target completed recipes may be reused
+under a verified new request; replacement/close never transfers an anchor across sources.
+
+See [dated evidence and limitations](2026-09-14-mp3-loops.md) for the corrected CRC/VBRI research
+coverage, actual worker/callback references, measured normal wraps and pending human listening.
 
 ### Underrun and failure policy
 
@@ -1345,7 +1450,11 @@ it makes the native runtime portable unchanged.
 
 ### Symphonia
 
-Role: pure-Rust demuxing and decoding candidate.
+Role: pure-Rust demuxing and decoding candidate; the private local-MP3 slice now pins
+Symphonia 0.6.1 with MP3-only features. Its strict incremental inspector feeds the packet decoder,
+not the tolerant demuxer, and reconstructs seek history by reset/decode/discard. WAV retains its
+existing private PCM parser. See [MP3 policies/evidence](2026-09-13-mp3-preparation.md); other
+codec/container roles below remain future candidates, not current support.
 
 Enable only required format and codec features. Keep all parsing, decoding, I/O, construction, and
 allocation outside the render thread. Validate browser worker compilation and performance for the
@@ -1476,8 +1585,8 @@ The following questions remain intentionally unresolved:
 - What precise rounding rule converts seconds to media or render frames?
 - How should simultaneous events at one frame be ordered?
 - Which automation events may be coalesced or dropped when their queue is full?
-- What loop seam geometry best preserves the nominal period while providing bounded smoothing, as
-  established by WAV fixtures?
+- What listening evidence supports the chosen WAV held-head smoothing on representative music,
+  beyond the declared fixed-grid geometry and numerical fixtures?
 - What latency target is required for microphone monitoring and live effects?
 - When should processed-signal provenance generalize from a preset revision to a complete render
   recipe revision?

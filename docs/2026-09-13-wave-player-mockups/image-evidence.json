@@ -1,0 +1,56 @@
+[
+  {
+    "file": "mobile-library-dark.png",
+    "width": 978,
+    "height": 1609,
+    "sha256": "af5ca60894443463268345b61b69b1200a2672826c7011f1f4485c19adebfc5b",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "file": "compact-dark.png",
+    "width": 1505,
+    "height": 1045,
+    "sha256": "d7f19c71c0fed8f61f2a507766a58c055d92098d45e84c3297ec5bf558d8aa4f",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "file": "desktop-library-light.png",
+    "width": 1505,
+    "height": 1045,
+    "sha256": "c504cc3a34207cd13d2350e6aaf66b31fa26fa8e4db72e5ff207e953bd90804e",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "file": "compact-light.png",
+    "width": 1505,
+    "height": 1045,
+    "sha256": "aca36c198442797212c9559816a0962b821b9c923c063fa77f44952be146e161",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "file": "mobile-library-light.png",
+    "width": 977,
+    "height": 1610,
+    "sha256": "2ac090f14fb85529a59a8f01a9970538def2cddb7b5109d3004430e21cffaa99",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  },
+  {
+    "file": "desktop-library-dark.png",
+    "width": 1505,
+    "height": 1045,
+    "sha256": "b4b4ebe6d0c2699118158d35e2ab84a96a98bdae1b5fd9fcc854556d3eecba77",
+    "modelMetadataExcerpts": [
+      ":00ZmsoftwareAgent¢dnameigpt-imagegversionc2.0qdigitalSourceTypexFhtt"
+    ]
+  }
+]

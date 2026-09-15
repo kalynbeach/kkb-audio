@@ -1,0 +1,5 @@
+PASS real pointer previews without committing or changing consumed time
+PASS real Escape cancellation blocks subsequent move/release commit
+PASS real pointer release commits exactly one acknowledged seek
+Browser page errors: {"errors":[],"lifecycle":{"effectiveLaunch":{"browserLaunched":true,"engine":"chrome","launchHash":11150461532353909000},"launched":false,"relaunchedBrowser":false,"restartedBackground":false,"restoreStatus":"not_configured","reused":true,"saveStatus":"not_attempted"}}
+Browser console payload: {"lifecycle":{"effectiveLaunch":{"browserLaunched":true,"engine":"chrome","launchHash":11150461532353909000},"launched":false,"relaunchedBrowser":false,"restartedBackground":false,"restoreStatus":"not_configured","reused":true,"saveStatus":"not_attempted"},"messages":[{"args":[{"type":"string","value":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools"},{"type":"string","value":"font-weight:bold"}],"text":"%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold","type":"info"}]}

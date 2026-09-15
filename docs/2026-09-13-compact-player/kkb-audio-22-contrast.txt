@@ -1,0 +1,3 @@
+light: old destructive #a66f6b on #f4f4f0 = 3.7289:1; foreground #171714 on #f4f4f0 = 16.2906:1; >=4.5:1 PASS
+dark: old destructive #a66f6b on #080807 = 4.8730:1; foreground #f2f2ed on #080807 = 17.8406:1; >=4.5:1 PASS
+WCAG sRGB relative luminance calculation; exact unchanged semantic token values from web/styles/theme.css. Only .player-error color changed. No browser/screenshot/detector rerun.

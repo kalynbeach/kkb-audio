@@ -1,0 +1,3 @@
+PASS 142 source/test/fixture/build-input files byte-identical
+Copy: /tmp/kkb-audio-22-validation-repair-oJ1Iuj
+Manifest SHA256: 99cf67827a8eae58fc37bde214a68f6552678387d2d78d835ee7e70592af3722

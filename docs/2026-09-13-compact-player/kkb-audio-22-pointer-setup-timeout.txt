@@ -1,0 +1,13 @@
+16 | await Bun.write(join(fixtures, longName), wavFixture(24, 2, 44100, 44100 * 30, true));
+17 | await Bun.write(join(fixtures, "malformed.wav"), "not WAV data");
+18 | function browser(...args: string[]): unknown {
+19 |   const result = Bun.spawnSync(["agent-browser", "--session", session, "--json", ...args]);
+20 |   const response = JSON.parse(result.stdout.toString());
+21 |   if (result.exitCode || !response.success) throw new Error(`${args.join(" ")}: ${response.error ?? result.stderr.toString()}`);
+                                                           ^
+error: wait --fn document.querySelector('.player-time [role=status]').textContent==="Playing": Wait timed out after 25000ms
+      at browser (/private/tmp/kkb-audio-22-validation/tools/check-compact-player-browser.ts:21:55)
+      at phase (/private/tmp/kkb-audio-22-validation/tools/check-compact-player-browser.ts:32:33)
+      at /private/tmp/kkb-audio-22-validation/tools/check-compact-player-browser.ts:68:80
+
+Bun v1.4.0 (macOS arm64)

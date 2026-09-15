@@ -1,4 +1,4 @@
-# Audio-engine lab and local WAV player
+# Audio-engine lab and compact local player
 
 <!-- impeccable:product-schema 1 -->
 
@@ -12,24 +12,67 @@ and Inter/TX-02 choices.
 
 web
 
-## Local WAV player
+## Compact local player
 
-`/player.html` is the first usable local-file playback surface alongside the learning lab and proof
-pages. Kalyn can choose one supported WAV, play/pause/resume, preview and commit a seek, replay,
-control listening volume and close/cancel without understanding the transport. Nothing is uploaded.
-Loading and replacement stay paused; playback starts with explicit Play. Ended is terminal and
-paused, so seeking backward does not restart audio until Play; Replay seeks zero then plays.
+`/player.html` delivers #22's approved track-first listening object alongside the unchanged lab and
+proofs. Open files or Settings → Add files admits up to 100 WAV/MP3 File references in picker order,
+with explicit unsupported/over-limit counts. Repeated names do not imply identity. Nothing is
+uploaded, persisted, eagerly decoded or cached across the collection. Reload ends the session.
+Only the active track is prepared through the existing private PlaybackOwner; this is not a public
+session API. Filename is the identity fallback; artist, album and artwork are unavailable. Duration
+stays unknown until actual preparation, elapsed time follows consumed source frames, not speakers.
 
-The supported subset remains nonempty little-endian RIFF PCM16/24 mono/stereo, same-rate playback
-and prepared 44100 ↔ 48000 Hz conversion. Unsupported files recover through replacement. Duration
-comes from source metadata and elapsed time from consumed source frames, not an audible clock.
-Listening gain starts at 15% after the compiled 0.5 gain, with mute retaining the chosen level.
+Library rows are playback-only: selection does not affect playback; row Play explicitly loads/plays,
+or pauses/resumes/replays the current track. Previous/next replace at zero, preserving playing or
+paused intent. No wrap or auto-advance. Addition/selection/ordinary preparation never autoplays.
+Settings holds Add files, Remove selected, Clear session and Close track/Cancel loading. Removing an
+inactive entry does not interrupt; removing active or Clear cancels/closes without a playback
+successor. Removed selection moves to the next remaining row, or previous at the end. Original files
+are never modified. Failed files remain browsable and retryable.
 
-The private playback owner is established through this consumer, not a frozen public session API.
-The eventual separate `wave-player` app/package, additional codecs, waveform, queues, loops, HTTP,
-catalog, device handoff and production deployment remain out of scope. Targeted muted checks are
-not broad browser/device/background or listening-quality certification. See the
-[player evidence](docs/2026-09-10-local-wav-player-evidence.md).
+The centered 380 × 532 desktop player contains identity, a live oscilloscope with honest fallback, a functional
+40px source-waveform seek target with consumed time, and independent centered transport. At ≥1212px the library is
+a right companion; below it replaces only the visual region. Viewport, library and Light/Dark/System
+changes preserve the owner and playback. Volume is a slim anchored disclosure; mute retains the level,
+initially 15% after compiled gain 0.5. Seeking previews before a single commit; cancellation abandons
+the draft. Ended is terminal and paused; seeking back stays paused until Play, Replay returns to zero.
+
+Supported: nonempty little-endian RIFF PCM16/24 WAV or MPEG-1 Layer III MP3, mono/stereo, same-rate or
+44.1 ↔ 48 kHz conversion. MP3 is bounded to 32 MiB and ten minutes including codec padding; full policy
+is in [MP3 evidence](docs/2026-09-13-mp3-preparation.md). Errors recover through another row or retry.
+The full-track source waveform (#18) scans only the active file in an independent cancellable Rust/Wasm
+worker after playback readiness. Playback/seek remain functional during preparation or analysis failure.
+At most 4096 time bins (32 KiB) retain channel min/max extrema, not signed averages; display columns
+combine all overlapping bins. Fixed full-scale amplitude is not listening volume or measured output.
+Seeks, mute and conversion do not rebuild it; replacement/close discard it and reject late jobs. There
+is no retained collection cache. See [waveform evidence](docs/2026-09-13-source-waveform.md) for source-frame
+mapping and bounded extra decoding costs.
+
+The separate live oscilloscope (#23) observes actual worklet output before
+listening volume/mute, including fixed engine gain and output-rate conversion. Mono has one solid
+trace; stereo independently overlays left solid/right dashed traces. Private browser analyser
+histories are untagged, approximate trailing windows, not source-frame or measured speaker sync.
+At most three 2048-sample windows/channel (48 KiB total) provide finite persistence at ≤30 Hz.
+Pause freezes the last observation; seeking clears it even while paused. Ended shows no live signal.
+Hidden/internal-library, reduced-motion and Settings Pause visual stop reads/drawing and detach the
+tap; returning waits for fresh rendered history without starting audio. Canvas/analyser failure is
+visual-only. No extra decoding, audio callback work, microphone or playback owner is introduced.
+[Live signal evidence](docs/2026-09-13-live-oscilloscope.md) records timing and support limitations.
+WAV/MP3 loops (#19/#20) are implemented, with one region defaulting to whole-track/off. Opening
+its opaque editor does not enable looping or start audio. Exact fields (fractional mm:ss or source
+frames suffixed `f`), independent labelled handles, hatched region, Shift-drag and Reset preserve the
+approved compact composition. Fields expose requested boundaries; details distinguish realized output
+period and accumulated conversion quantization. At acknowledgment, enable outside moves to A without
+autoplay; disable preserves exact PCM; an edit excluding the current cursor disables without moving
+it. Normal prepared wraps keep render/downstream state continuous. Preparing and Failed are honest;
+starvation adds a bounded fade/silence/re-prime interval. Terminal source failures require explicit
+track retry, not a dead loop-only Retry. Held-head smoothing is not a universal click-free guarantee;
+human listening remains pending. Review repairs retain latest control intent before preparation,
+pause an acknowledgment-time EOS before any loop head can play, expose initial short-file rejection,
+and keep visual explanations visible above the bounded editor. See [loop evidence](docs/2026-09-14-wav-loops.md).
+MP3 loop continuation uses a bounded private encoded anchor on the decoded-and-trimmed timeline; internal carrier/predecessor PCM is discarded, never media. See [MP3 loop evidence](docs/2026-09-14-mp3-loops.md). Persistence/catalog, queues, HTTP, broader codecs and deployment remain out of scope. No fake signal, clock or dead loop controls ship.
+Muted/device-free checks are not listening, broad browser, device or background certification; see
+[implementation evidence](docs/2026-09-13-compact-player.md).
 
 ## Users and purpose
 

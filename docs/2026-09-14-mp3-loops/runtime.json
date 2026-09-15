@@ -1,0 +1,386 @@
+{
+  "late": {
+    "after": {
+      "ended": false,
+      "epoch": 4,
+      "failureCode": 0,
+      "invalidBlockCount": 0,
+      "lastFrameCount": 128,
+      "loopExtensionFrames": 0,
+      "loopFirstIteration": 28,
+      "loopIteration": 28,
+      "loopLostFrames": 0,
+      "loopRecovering": false,
+      "loopSeamFrames": 0,
+      "loopUnderruns": 0,
+      "memoryBytes": 16777216,
+      "pcmPosition": 28317556,
+      "presentationTime": null,
+      "processCount": 926,
+      "ready": true,
+      "renderFrame": 118528,
+      "slotCount": 4,
+      "sourcePosition": 28317556,
+      "staleBlockCount": 12,
+      "starvationCount": 0
+    },
+    "before": {
+      "ended": false,
+      "epoch": 4,
+      "failureCode": 0,
+      "invalidBlockCount": 0,
+      "lastFrameCount": 128,
+      "loopExtensionFrames": 0,
+      "loopFirstIteration": 0,
+      "loopIteration": 0,
+      "loopLostFrames": 0,
+      "loopRecovering": false,
+      "loopSeamFrames": 0,
+      "loopUnderruns": 0,
+      "memoryBytes": 16777216,
+      "pcmPosition": 28314256,
+      "presentationTime": null,
+      "processCount": 4,
+      "ready": true,
+      "renderFrame": 512,
+      "slotCount": 4,
+      "sourcePosition": 28314256,
+      "staleBlockCount": 12,
+      "starvationCount": 0
+    },
+    "context": "running",
+    "mute": "Volume (muted)",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/152.0.0.0 Safari/537.36",
+    "worker": {
+      "admittedPcmFrames": 28434832,
+      "epoch": 4,
+      "initialAdmittedBlocks": 4,
+      "loopRestorePackets": 60,
+      "maxPollDelayMilliseconds": 20.199999928474423,
+      "polls": 2806,
+      "preparedPcmFrames": 28434832,
+      "rejections": 0,
+      "sourceFramesRead": 28314000,
+      "type": "producer-status",
+      "url": "./pcm-worker.js"
+    }
+  },
+  "recovery": {
+    "context": "running",
+    "snapshot": {
+      "ended": false,
+      "epoch": 5,
+      "failureCode": 0,
+      "invalidBlockCount": 0,
+      "lastFrameCount": 128,
+      "loopExtensionFrames": 7168,
+      "loopFirstIteration": 459,
+      "loopIteration": 459,
+      "loopLostFrames": 2504,
+      "loopRecovering": false,
+      "loopSeamFrames": 0,
+      "loopUnderruns": 1,
+      "memoryBytes": 16777216,
+      "pcmPosition": 28315021,
+      "presentationTime": null,
+      "processCount": 14738,
+      "ready": true,
+      "renderFrame": 1886464,
+      "slotCount": 4,
+      "sourcePosition": 28315021,
+      "staleBlockCount": 14,
+      "starvationCount": 1
+    }
+  },
+  "convertedWhole": {
+    "events": [
+      {
+        "admittedPcmFrames": 96256,
+        "epoch": 2,
+        "initialAdmittedBlocks": 4,
+        "loopRestorePackets": 4,
+        "maxPollDelayMilliseconds": 15.299999952316284,
+        "polls": 153,
+        "preparedPcmFrames": 96256,
+        "rejections": 0,
+        "sourceFramesRead": 0,
+        "type": "producer-status",
+        "url": "./pcm-worker.js"
+      },
+      {
+        "admittedPcmFrames": 101376,
+        "epoch": 2,
+        "initialAdmittedBlocks": 4,
+        "loopRestorePackets": 4,
+        "maxPollDelayMilliseconds": 16,
+        "polls": 161,
+        "preparedPcmFrames": 101376,
+        "rejections": 0,
+        "sourceFramesRead": 0,
+        "type": "producer-status",
+        "url": "./pcm-worker.js"
+      },
+      {
+        "admittedPcmFrames": 106496,
+        "epoch": 2,
+        "initialAdmittedBlocks": 4,
+        "loopRestorePackets": 6,
+        "maxPollDelayMilliseconds": 16,
+        "polls": 168,
+        "preparedPcmFrames": 106496,
+        "rejections": 0,
+        "sourceFramesRead": 0,
+        "type": "producer-status",
+        "url": "./pcm-worker.js"
+      },
+      {
+        "admittedPcmFrames": 110592,
+        "epoch": 2,
+        "initialAdmittedBlocks": 4,
+        "loopRestorePackets": 6,
+        "maxPollDelayMilliseconds": 16,
+        "polls": 175,
+        "preparedPcmFrames": 111616,
+        "rejections": 0,
+        "sourceFramesRead": 0,
+        "type": "producer-status",
+        "url": "./pcm-worker.js"
+      }
+    ],
+    "mute": "Volume (muted)",
+    "snapshot": {
+      "ended": false,
+      "epoch": 2,
+      "failureCode": 0,
+      "invalidBlockCount": 0,
+      "lastFrameCount": 128,
+      "loopExtensionFrames": 0,
+      "loopFirstIteration": 2,
+      "loopIteration": 2,
+      "loopLostFrames": 0,
+      "loopRecovering": false,
+      "loopSeamFrames": 0,
+      "loopUnderruns": 0,
+      "memoryBytes": 16777216,
+      "pcmPosition": 7720,
+      "presentationTime": null,
+      "processCount": 844,
+      "ready": true,
+      "renderFrame": 108032,
+      "slotCount": 4,
+      "sourcePosition": 7092,
+      "staleBlockCount": 4,
+      "starvationCount": 0
+    },
+    "workers": [
+      {
+        "terminated": true,
+        "url": "./pcm-worker.js"
+      },
+      {
+        "terminated": true,
+        "url": "./waveform-worker.js"
+      },
+      {
+        "terminated": false,
+        "url": "./pcm-worker.js"
+      },
+      {
+        "terminated": true,
+        "url": "./waveform-worker.js"
+      }
+    ]
+  },
+  "finalPaused": {
+    "context": "suspended",
+    "events": [
+      {
+        "kind": "input",
+        "trusted": false,
+        "value": ""
+      },
+      {
+        "kind": "beforeinput",
+        "trusted": true,
+        "value": ""
+      },
+      {
+        "kind": "input",
+        "trusted": true,
+        "value": "28314000f"
+      },
+      {
+        "key": "Enter",
+        "kind": "keydown",
+        "trusted": true,
+        "value": "28314000f"
+      },
+      {
+        "kind": "change",
+        "trusted": true,
+        "value": "9:49.875000"
+      },
+      {
+        "kind": "blur",
+        "trusted": true,
+        "value": "9:49.875000"
+      },
+      {
+        "kind": "input",
+        "trusted": false,
+        "value": ""
+      },
+      {
+        "kind": "beforeinput",
+        "trusted": true,
+        "value": ""
+      },
+      {
+        "kind": "input",
+        "trusted": true,
+        "value": "28318097f"
+      },
+      {
+        "key": "Enter",
+        "kind": "keydown",
+        "trusted": true,
+        "value": "28318097f"
+      },
+      {
+        "kind": "change",
+        "trusted": true,
+        "value": "9:49.960354"
+      },
+      {
+        "kind": "blur",
+        "trusted": true,
+        "value": "9:49.960354"
+      }
+    ],
+    "handles": [
+      {
+        "name": "Loop A",
+        "value": "28314000"
+      },
+      {
+        "name": "Loop B",
+        "value": "28318097"
+      }
+    ],
+    "mute": "Volume (muted)",
+    "snapshot": {
+      "ended": false,
+      "epoch": 2,
+      "failureCode": 0,
+      "invalidBlockCount": 0,
+      "lastFrameCount": 128,
+      "loopExtensionFrames": 0,
+      "loopFirstIteration": 0,
+      "loopIteration": 0,
+      "loopLostFrames": 0,
+      "loopRecovering": false,
+      "loopSeamFrames": 0,
+      "loopUnderruns": 0,
+      "memoryBytes": 16777216,
+      "pcmPosition": 28314000,
+      "presentationTime": null,
+      "processCount": 2,
+      "ready": true,
+      "renderFrame": 256,
+      "slotCount": 4,
+      "sourcePosition": 28314000,
+      "staleBlockCount": 4,
+      "starvationCount": 0
+    }
+  },
+  "finalIdentity": {
+    "after": {
+      "ended": false,
+      "epoch": 2,
+      "failureCode": 0,
+      "invalidBlockCount": 0,
+      "lastFrameCount": 128,
+      "loopExtensionFrames": 0,
+      "loopFirstIteration": 16,
+      "loopIteration": 16,
+      "loopLostFrames": 0,
+      "loopRecovering": false,
+      "loopSeamFrames": 0,
+      "loopUnderruns": 0,
+      "memoryBytes": 16777216,
+      "pcmPosition": 28317824,
+      "presentationTime": null,
+      "processCount": 544,
+      "ready": true,
+      "renderFrame": 69632,
+      "slotCount": 4,
+      "sourcePosition": 28317824,
+      "staleBlockCount": 4,
+      "starvationCount": 0
+    },
+    "before": {
+      "ended": false,
+      "epoch": 2,
+      "failureCode": 0,
+      "invalidBlockCount": 0,
+      "lastFrameCount": 128,
+      "loopExtensionFrames": 0,
+      "loopFirstIteration": 0,
+      "loopIteration": 0,
+      "loopLostFrames": 0,
+      "loopRecovering": false,
+      "loopSeamFrames": 0,
+      "loopUnderruns": 0,
+      "memoryBytes": 16777216,
+      "pcmPosition": 28314256,
+      "presentationTime": null,
+      "processCount": 4,
+      "ready": true,
+      "renderFrame": 512,
+      "slotCount": 4,
+      "sourcePosition": 28314256,
+      "staleBlockCount": 4,
+      "starvationCount": 0
+    },
+    "context": "running",
+    "hashes": {
+      "kkb_audio_bg.wasm": "106d4161c39c03204a23d589f8ab5dd062a045993b9815621378b82cb3862c99",
+      "pcm-worker.js": "6dc0ef677c17e1a7cd77b48cb6ec07ee359ed7e7ec8b9e7877f22a182a9ebd45",
+      "worklet-processor.js": "e6e4997766735b0cf067567fd2f137f96935fde4f7d919c6013a6bd907ab19eb"
+    },
+    "mute": "Volume (muted)",
+    "worker": {
+      "admittedPcmFrames": 28391824,
+      "epoch": 2,
+      "initialAdmittedBlocks": 4,
+      "loopRestorePackets": 36,
+      "maxPollDelayMilliseconds": 19.399999976158146,
+      "polls": 6738,
+      "preparedPcmFrames": 28391824,
+      "rejections": 0,
+      "sourceFramesRead": 28314000,
+      "type": "producer-status",
+      "url": "./pcm-worker.js"
+    }
+  },
+  "closed": {
+    "contexts": [
+      "closed"
+    ],
+    "workers": [
+      {
+        "terminated": true,
+        "url": "./pcm-worker.js"
+      },
+      {
+        "terminated": true,
+        "url": "./waveform-worker.js"
+      }
+    ]
+  },
+  "notes": [
+    "Earlier screenshots/replacement/recovery predate final test-only additions; finalIdentity binds final built production artifacts.",
+    "Initial rapid field commit not observed; accepted-state checks in bounded retry passed. No shared UI fix or owner-loss claim.",
+    "Muted foreground observations are not listening/device/background certification."
+  ]
+}

@@ -1,3 +1,5 @@
+import { OscilloscopeTap, type OscilloscopeBuffers, type OscilloscopeRead } from "./oscilloscope-tap";
+import { mediaLoopRegion } from "./media-loop";
 import { LOCAL_PCM_SLOT_FRAMES } from "./pcm-protocol";
 import {
   InitializationFailure,
@@ -39,6 +41,7 @@ export class InitializationError extends Error {
 }
 
 export type SeekResult = {
+  loopEnabled?: boolean;
   epoch: number;
   requestedFrame: number;
   pcmFrame: number;
@@ -55,7 +58,11 @@ export class PreparedProof {
   readonly #workerInitialAdmittedBlocks: number;
   readonly totalFrames: number | undefined;
   readonly sourceRate: number | undefined;
+  readonly anchorAndDiscard: boolean;
   #listeningGain: GainNode | undefined;
+  #oscilloscope: OscilloscopeTap | undefined;
+  #oscilloscopeFailed = false;
+  #visualReady = false;
   #activated = false;
   #closed = false;
   #workerTerminated = false;
@@ -63,7 +70,8 @@ export class PreparedProof {
   #epoch = 1;
   #observedEpoch = 1;
   #postedSeek: number | undefined;
-  #queuedSeek: { epoch: number; target: number } | undefined;
+  #queuedSeek: { epoch: number; target: number; loop?: { a: number; b: number }; recovery?: boolean; loopChange?: { a: number; b: number; enabled: boolean; edit: boolean } } | undefined;
+  #loop: { a: number; b: number } | undefined;
   #seekResolve: ((result: SeekResult) => void) | undefined;
   #seekReject: ((error: Error) => void) | undefined;
   producerObservation: unknown;
@@ -79,9 +87,11 @@ export class PreparedProof {
     workerInitialAdmittedBlocks = 0,
     totalFrames?: number,
     sourceRate?: number,
+    anchorAndDiscard = false,
   ) {
     this.totalFrames = totalFrames;
     this.sourceRate = sourceRate;
+    this.anchorAndDiscard = anchorAndDiscard;
     this.#context = context;
     this.#node = node;
     this.#gate = gate;
@@ -106,6 +116,7 @@ export class PreparedProof {
         return;
       }
       this.#observedEpoch = value.snapshot.epoch;
+      this.#visualReady = value.snapshot.epoch === this.#epoch && value.snapshot.ready && !value.snapshot.ended;
       if (value.snapshot.failureCode !== 0) { this.failRuntime(value.snapshot.failureCode); return; }
       this.#snapshotResolve?.(value.snapshot);
       return;
@@ -123,25 +134,40 @@ export class PreparedProof {
 
   acceptWorkerMessage(value: unknown): void {
     if (this.#closed || this.#runtimeFailure !== 0) return;
-    const message = value as { type?: string; epoch?: number; requestedFrame?: number; pcmFrame?: number } | null;
+    const message = value as { type?: string; epoch?: number; requestedFrame?: number; pcmFrame?: number; result?: SeekResult["result"]; loopEnabled?: boolean } | null;
+    if (message?.type === "loop-ended" && Number.isSafeInteger(message.epoch) && message.epoch! <= this.#epoch) {
+      // Do not use status()/pause(): this acknowledgment must not overlap a poll.
+      // An obsolete begin still needs its pause acknowledgment to release the
+      // worker's single executing transition before the latest one can proceed.
+      void this.#context.suspend().then(() => {
+        if (!this.#closed && this.#runtimeFailure === 0) this.#worker?.postMessage({ type: "loop-paused", epoch: message.epoch });
+      }).catch(() => { if (!this.#closed) this.failRuntime(InitializationFailure.ContextState); });
+      return;
+    }
+    if (message?.type === "loop-underrun" && message.epoch === this.#epoch && this.#loop && !this.#seekResolve) {
+      void this.#seek(this.#loop.a, true).catch(() => {});
+      return;
+    }
     if (message?.type === "seek-accepted" && message.epoch === this.#postedSeek) {
       this.#postedSeek = undefined;
       this.#dispatchSeek();
       return;
     }
     if (message?.type === "producer-status" && message.epoch === this.#epoch) this.producerObservation = value;
-    if (message?.type === "seek-complete" && message.epoch === this.#epoch && Number.isSafeInteger(message.pcmFrame) && Number.isSafeInteger(message.requestedFrame)) {
+    if (message?.type === "seek-complete" && message.epoch === this.#epoch && Number.isSafeInteger(message.pcmFrame) && Number.isSafeInteger(message.requestedFrame) && (message.result === "Exact" || message.result === "AnchorAndDiscard" || message.result === "Adjusted")) {
       this.#observedEpoch = this.#epoch;
       const pcmFrame = message.pcmFrame!;
       const actualMediaFrame = Math.min(this.totalFrames!, Math.floor(pcmFrame * this.sourceRate! / this.#context.sampleRate));
+      if (message.loopEnabled === false) this.#loop = undefined;
       this.#seekResolve?.({ epoch: this.#epoch, requestedFrame: message.requestedFrame!, pcmFrame, actualMediaFrame,
-        result: this.sourceRate === this.#context.sampleRate ? "Exact" : actualMediaFrame === message.requestedFrame ? "AnchorAndDiscard" : "Adjusted" });
+        result: message.result, loopEnabled: message.loopEnabled });
     }
     const code = workerFailureCode(value);
     if (code !== undefined) this.failRuntime(code);
   }
 
   failRuntime(code: number): void {
+    this.releaseOscilloscope();
     if (this.#runtimeFailure === 0) {
       this.#runtimeFailure = code;
     }
@@ -217,8 +243,8 @@ export class PreparedProof {
     if (!this.#listeningGain) {
       this.#listeningGain = new GainNode(this.#context, { gain: value });
       this.#listeningGain.connect(this.#context.destination);
-      if (this.#activated) {
-        this.#node.disconnect();
+      if (this.#activated && this.totalFrames !== undefined) {
+        this.#node.disconnect(this.#context.destination);
         this.#node.connect(this.#listeningGain);
       }
     }
@@ -227,12 +253,14 @@ export class PreparedProof {
 
   async play(): Promise<RenderSnapshot> {
     this.#throwIfUnavailable();
-    if (this.totalFrames === undefined) throw new Error("Load a WAV first");
+    if (this.totalFrames === undefined) throw new Error("Load local audio first");
     if (!this.#activated) { this.#node.connect(this.#listeningGain ?? this.#context.destination); this.#activated = true; }
     const snapshot = await this.status();
     if (!snapshot.ended || this.#seekResolve !== undefined) {
       this.#worker?.postMessage({ type: "activate" });
+      const wasPaused = this.paused;
       await this.#context.resume();
+      if (wasPaused) this.#oscilloscope?.restartWarmup();
       this.#throwIfUnavailable();
     }
     return this.status();
@@ -244,18 +272,31 @@ export class PreparedProof {
     return this.status();
   }
 
+  setLoop(a: number, b: number, enabled: boolean, edit = false): Promise<SeekResult> {
+    this.#throwIfUnavailable();
+    if (enabled && (!Number.isSafeInteger(a) || !Number.isSafeInteger(b) || a < 0 || a >= b || b > this.totalFrames!)) throw new Error("Loops require a supported media interval");
+    if (enabled) mediaLoopRegion(a, b, this.sourceRate!, this.#context.sampleRate, this.totalFrames!);
+    this.#loop = enabled ? { a, b } : undefined;
+    return this.#seek(0, false, { a, b, enabled, edit });
+  }
   seek(target: number): Promise<SeekResult> {
+    if (this.#loop && (target < this.#loop.a || target >= this.#loop.b)) this.#loop = undefined;
+    return this.#seek(target, false);
+  }
+  #seek(target: number, recovery: boolean, loopChange?: { a: number; b: number; enabled: boolean; edit: boolean }): Promise<SeekResult> {
     this.#throwIfUnavailable();
     if (this.totalFrames === undefined || !Number.isSafeInteger(target) || target < 0 || target > this.totalFrames || this.#epoch === Number.MAX_SAFE_INTEGER) throw new Error("Seek requires a source frame in [0, totalFrames]");
+    this.releaseOscilloscope();
+    this.#visualReady = false;
     this.#seekReject?.(new Error("Seek superseded"));
     this.#epoch += 1;
     this.producerObservation = undefined;
     return new Promise((resolve, reject) => {
       const clear = () => { clearTimeout(timeout); this.#seekResolve = undefined; this.#seekReject = undefined; };
-      const timeout = setTimeout(() => { this.#seekReject?.(new Error("Seek preparation timed out")); this.failRuntime(InitializationFailure.Timeout); }, 5000);
+      const timeout = setTimeout(() => { this.#seekReject?.(new Error("Seek preparation timed out")); this.failRuntime(InitializationFailure.Timeout); }, this.anchorAndDiscard ? 35000 : 5000);
       this.#seekResolve = result => { clear(); resolve(result); };
       this.#seekReject = error => { clear(); reject(error); };
-      this.#queuedSeek = { epoch: this.#epoch, target };
+      this.#queuedSeek = { epoch: this.#epoch, target, loop: this.#loop, recovery, loopChange };
       this.#dispatchSeek();
     });
   }
@@ -277,11 +318,28 @@ export class PreparedProof {
 
   stall(value: boolean): void { this.#throwIfUnavailable(); this.#worker?.postMessage({ type: "stall", value }); }
 
+  readOscilloscope(buffers: OscilloscopeBuffers): OscilloscopeRead {
+    if (this.#closed || this.#runtimeFailure || this.#oscilloscopeFailed || this.totalFrames === undefined) return "unavailable";
+    if (!this.#visualReady || this.#seekResolve || this.paused) return "warming";
+    try {
+      this.#oscilloscope ??= new OscilloscopeTap(this.#context, this.#node, this.#node.channelCount as 1 | 2);
+      const result = this.#oscilloscope.read(buffers);
+      if (result === "unavailable") this.#oscilloscopeFailed = true;
+      return result;
+    } catch { this.#oscilloscopeFailed = true; this.releaseOscilloscope(); return "unavailable"; }
+  }
+
+  releaseOscilloscope(): void {
+    this.#oscilloscope?.dispose();
+    this.#oscilloscope = undefined;
+  }
+
   async close(): Promise<void> {
     if (this.#closed) {
       return;
     }
     this.#closed = true;
+    this.releaseOscilloscope();
     this.#seekReject?.(new Error("Playback closed"));
     this.#snapshotReject?.(InitializationFailure.ContextState);
     this.#node.disconnect();
@@ -361,15 +419,28 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
     let totalFrames: number | undefined;
     let totalPcmFrames: number | undefined;
     let sourceRate: number | undefined;
+    let anchorAndDiscard = false;
     let channelCount = options.channelCount;
     if (options.file) {
-      const metadata = await wait(new Promise<{ channelCount: 1 | 2; totalFrames: number; totalPcmFrames: number; sampleRate: number }>((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error("WAV inspection timed out")), timeoutMilliseconds);
-        worker!.onerror = () => { clearTimeout(timeout); reject(new Error("WAV worker failed")); };
+      const metadata = await wait(new Promise<{ channelCount: 1 | 2; totalFrames: number; totalPcmFrames: number; sampleRate: number; anchorAndDiscard: boolean }>((resolve, reject) => {
+        const cleanup = () => { clearTimeout(timeout); options.signal?.removeEventListener("abort", cancelled); };
+        const cancelled = () => { cleanup(); reject(new Error("Preparation cancelled")); };
+        const timedOut = () => { cleanup(); reject(new Error("Media inspection timed out")); };
+        let timeout = setTimeout(timedOut, timeoutMilliseconds);
+        let inspectionBudgetReceived = false;
+        options.signal?.addEventListener("abort", cancelled, { once: true });
+        if (options.signal?.aborted) { cancelled(); return; }
+        worker!.onerror = () => { cleanup(); reject(new Error("Media worker failed")); };
         worker!.onmessage = event => {
           clearTimeout(timeout);
+          if (event.data?.type === "inspection-started" && event.data.timeoutMilliseconds === 35000 && !inspectionBudgetReceived) {
+            inspectionBudgetReceived = true;
+            timeout = setTimeout(timedOut, options.timeoutMilliseconds ?? event.data.timeoutMilliseconds);
+            return;
+          }
+          cleanup();
           if (event.data?.type === "metadata") resolve(event.data);
-          else reject(new Error(event.data?.detail ?? "Unsupported or malformed WAV"));
+          else reject(new Error(event.data?.detail ?? "Unsupported or malformed local audio"));
         };
         worker!.postMessage({ type: "inspect", file: options.file, module, sampleRate: context.sampleRate });
       }));
@@ -377,6 +448,7 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
       totalFrames = metadata.totalFrames;
       totalPcmFrames = metadata.totalPcmFrames;
       sourceRate = metadata.sampleRate;
+      anchorAndDiscard = metadata.anchorAndDiscard;
     }
     const config = {
       channelCount,
@@ -464,7 +536,7 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
     if (context.state !== "suspended" || gate.result.type !== "ready") {
       throw new InitializationError(InitializationFailure.ContextState);
     }
-    prepared = new PreparedProof(context, node, gate, ready, worker, workerInitialAdmittedBlocks, totalFrames, sourceRate);
+    prepared = new PreparedProof(context, node, gate, ready, worker, workerInitialAdmittedBlocks, totalFrames, sourceRate, anchorAndDiscard);
     return prepared;
   } catch (error) {
     worker?.terminate();

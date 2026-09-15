@@ -1,0 +1,8 @@
+{
+  "name": "desktop-library-dark",
+  "prompt": "Create ONE dark counterpart of first supplied desktop-library-light mockup. Match its exact card/library positions, dimensions, typography, row density, and all content. Second supplied image is compact-dark for color reference. Keep the portrait player and companion panel separate with tiny gap. NO tabs or view selectors. No theme controls. No volume slider.\nDARK counterpart: board #080807, card #0c0c0b, text #f2f2ed, thin rules #292925. Keep the signal art near-black/green, white consumed waveform and readable dark-gray remainder. No blue/glossy buttons, neon control accents or drop shadow.\nPreserve Low Tide TX-02-like title, Inter artist/album, fine Departure Mono-like short markers. Large green signal field. A 00:48, B 01:36, checked Loop, Reset, bracket region and round-top current cursor, 01:24 and04:32. The acknowledged cursor must be inside A/B region. Small Library action bottom-left, centered previous/Pause/next group, small speaker icon at right. Library has same five rows, loaded Playing Low Tide, separately selected Glass Current with Load, complete long-title and filename fallback, failed Night Transit with warning and Retry. State labels unboxed and neutral, fine dotted focus, no colored pills. Preserve exact outside caption \"Design fixture — simulated waveform and playback\". No added elements or anatomy changes.",
+  "referenced_image_paths": [
+    "/Users/kalynbeach/.codex/generated_images/01a09c32-3f86-7b63-a39f-4f74c62cff21/exec-6e23ef40-428c-4391-957b-5a5f65b3c997.png",
+    "/Users/kalynbeach/.codex/generated_images/01a09c32-3f86-7b63-a39f-4f74c62cff21/exec-c91e2a07-5f12-4e02-93fe-8597ebe9fbcc.png"
+  ]
+}

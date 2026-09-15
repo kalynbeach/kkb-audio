@@ -1,0 +1,424 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-14T01:23:32.489Z",
+  "title": "Design System: Learning lab and local player",
+  "extensions": {
+    "colorMeta": {
+      "scope-surface": { "role": "neutral", "displayName": "Oscilloscope surface (light)" },
+      "scope-surface-dark": { "role": "neutral", "displayName": "Oscilloscope surface (dark)" },
+      "scope-left": { "role": "accent", "displayName": "Solid left/mono signal (light)" },
+      "scope-left-dark": { "role": "accent", "displayName": "Solid left/mono signal (dark)" },
+      "scope-right": { "role": "accent", "displayName": "Dashed right signal (light)" },
+      "scope-right-dark": { "role": "accent", "displayName": "Dashed right signal (dark)" },
+      "scope-baseline": { "role": "neutral", "displayName": "Oscilloscope baseline (light)" },
+      "scope-baseline-dark": { "role": "neutral", "displayName": "Oscilloscope baseline (dark)" },
+      "scope-caption": { "role": "neutral", "displayName": "Oscilloscope explanation (light)" },
+      "scope-caption-dark": { "role": "neutral", "displayName": "Oscilloscope explanation (dark)" },
+      "pi-ground": {
+        "role": "neutral",
+        "displayName": "Warm page ground (light)",
+        "tonalRamp": [
+          "oklch(15.00% 0.00530 106.50)",
+          "oklch(26.43% 0.00530 106.50)",
+          "oklch(37.86% 0.00530 106.50)",
+          "oklch(49.29% 0.00530 106.50)",
+          "oklch(60.71% 0.00530 106.50)",
+          "oklch(72.14% 0.00530 106.50)",
+          "oklch(83.57% 0.00530 106.50)",
+          "oklch(95.00% 0.00530 106.50)"
+        ]
+      },
+      "pi-ground-dark": {
+        "role": "neutral",
+        "displayName": "Warm page ground (dark)",
+        "tonalRamp": [
+          "oklch(15.00% 0.00256 106.74)",
+          "oklch(26.43% 0.00256 106.74)",
+          "oklch(37.86% 0.00256 106.74)",
+          "oklch(49.29% 0.00256 106.74)",
+          "oklch(60.71% 0.00256 106.74)",
+          "oklch(72.14% 0.00256 106.74)",
+          "oklch(83.57% 0.00256 106.74)",
+          "oklch(95.00% 0.00256 106.74)"
+        ]
+      },
+      "pi-ground-deep": {
+        "role": "neutral",
+        "displayName": "Inset ground (light)",
+        "tonalRamp": [
+          "oklch(15.00% 0.00799 106.55)",
+          "oklch(26.43% 0.00799 106.55)",
+          "oklch(37.86% 0.00799 106.55)",
+          "oklch(49.29% 0.00799 106.55)",
+          "oklch(60.71% 0.00799 106.55)",
+          "oklch(72.14% 0.00799 106.55)",
+          "oklch(83.57% 0.00799 106.55)",
+          "oklch(95.00% 0.00799 106.55)"
+        ]
+      },
+      "pi-ground-deep-dark": {
+        "role": "neutral",
+        "displayName": "Inset ground (dark)",
+        "tonalRamp": [
+          "oklch(15.00% 0.00000 0.00)",
+          "oklch(26.43% 0.00000 0.00)",
+          "oklch(37.86% 0.00000 0.00)",
+          "oklch(49.29% 0.00000 0.00)",
+          "oklch(60.71% 0.00000 0.00)",
+          "oklch(72.14% 0.00000 0.00)",
+          "oklch(83.57% 0.00000 0.00)",
+          "oklch(95.00% 0.00000 0.00)"
+        ]
+      },
+      "pi-surface-solid": {
+        "role": "neutral",
+        "displayName": "Solid surface (light)",
+        "tonalRamp": [
+          "oklch(15.00% 0.00394 106.47)",
+          "oklch(26.43% 0.00394 106.47)",
+          "oklch(37.86% 0.00394 106.47)",
+          "oklch(49.29% 0.00394 106.47)",
+          "oklch(60.71% 0.00394 106.47)",
+          "oklch(72.14% 0.00394 106.47)",
+          "oklch(83.57% 0.00394 106.47)",
+          "oklch(95.00% 0.00394 106.47)"
+        ]
+      },
+      "pi-surface-solid-dark": {
+        "role": "neutral",
+        "displayName": "Solid surface (dark)",
+        "tonalRamp": [
+          "oklch(15.00% 0.00209 106.64)",
+          "oklch(26.43% 0.00209 106.64)",
+          "oklch(37.86% 0.00209 106.64)",
+          "oklch(49.29% 0.00209 106.64)",
+          "oklch(60.71% 0.00209 106.64)",
+          "oklch(72.14% 0.00209 106.64)",
+          "oklch(83.57% 0.00209 106.64)",
+          "oklch(95.00% 0.00209 106.64)"
+        ]
+      },
+      "pi-ink": {
+        "role": "primary",
+        "displayName": "Primary ink (light)",
+        "tonalRamp": [
+          "oklch(15.00% 0.00582 106.91)",
+          "oklch(26.43% 0.00582 106.91)",
+          "oklch(37.86% 0.00582 106.91)",
+          "oklch(49.29% 0.00582 106.91)",
+          "oklch(60.71% 0.00582 106.91)",
+          "oklch(72.14% 0.00582 106.91)",
+          "oklch(83.57% 0.00582 106.91)",
+          "oklch(95.00% 0.00582 106.91)"
+        ]
+      },
+      "pi-ink-dark": {
+        "role": "primary",
+        "displayName": "Primary ink (dark)",
+        "tonalRamp": [
+          "oklch(15.00% 0.00663 106.52)",
+          "oklch(26.43% 0.00663 106.52)",
+          "oklch(37.86% 0.00663 106.52)",
+          "oklch(49.29% 0.00663 106.52)",
+          "oklch(60.71% 0.00663 106.52)",
+          "oklch(72.14% 0.00663 106.52)",
+          "oklch(83.57% 0.00663 106.52)",
+          "oklch(95.00% 0.00663 106.52)"
+        ]
+      },
+      "pi-ink-soft": {
+        "role": "neutral",
+        "displayName": "Soft ink (light)",
+        "tonalRamp": [
+          "oklch(15.00% 0.00688 106.77)",
+          "oklch(26.43% 0.00688 106.77)",
+          "oklch(37.86% 0.00688 106.77)",
+          "oklch(49.29% 0.00688 106.77)",
+          "oklch(60.71% 0.00688 106.77)",
+          "oklch(72.14% 0.00688 106.77)",
+          "oklch(83.57% 0.00688 106.77)",
+          "oklch(95.00% 0.00688 106.77)"
+        ]
+      },
+      "pi-ink-soft-dark": {
+        "role": "neutral",
+        "displayName": "Soft ink (dark)",
+        "tonalRamp": [
+          "oklch(15.00% 0.00954 106.60)",
+          "oklch(26.43% 0.00954 106.60)",
+          "oklch(37.86% 0.00954 106.60)",
+          "oklch(49.29% 0.00954 106.60)",
+          "oklch(60.71% 0.00954 106.60)",
+          "oklch(72.14% 0.00954 106.60)",
+          "oklch(83.57% 0.00954 106.60)",
+          "oklch(95.00% 0.00954 106.60)"
+        ]
+      },
+      "pi-muted-ink": {
+        "role": "neutral",
+        "displayName": "Metadata ink (light)",
+        "tonalRamp": [
+          "oklch(15.00% 0.00923 106.71)",
+          "oklch(26.43% 0.00923 106.71)",
+          "oklch(37.86% 0.00923 106.71)",
+          "oklch(49.29% 0.00923 106.71)",
+          "oklch(60.71% 0.00923 106.71)",
+          "oklch(72.14% 0.00923 106.71)",
+          "oklch(83.57% 0.00923 106.71)",
+          "oklch(95.00% 0.00923 106.71)"
+        ]
+      },
+      "pi-muted-ink-dark": {
+        "role": "neutral",
+        "displayName": "Metadata ink (dark)",
+        "tonalRamp": [
+          "oklch(15.00% 0.01161 106.71)",
+          "oklch(26.43% 0.01161 106.71)",
+          "oklch(37.86% 0.01161 106.71)",
+          "oklch(49.29% 0.01161 106.71)",
+          "oklch(60.71% 0.01161 106.71)",
+          "oklch(72.14% 0.01161 106.71)",
+          "oklch(83.57% 0.01161 106.71)",
+          "oklch(95.00% 0.01161 106.71)"
+        ]
+      },
+      "pi-line": {
+        "role": "neutral",
+        "displayName": "Structural rule (light)",
+        "tonalRamp": [
+          "oklch(15.00% 0.01084 106.62)",
+          "oklch(26.43% 0.01084 106.62)",
+          "oklch(37.86% 0.01084 106.62)",
+          "oklch(49.29% 0.01084 106.62)",
+          "oklch(60.71% 0.01084 106.62)",
+          "oklch(72.14% 0.01084 106.62)",
+          "oklch(83.57% 0.01084 106.62)",
+          "oklch(95.00% 0.01084 106.62)"
+        ]
+      },
+      "pi-line-dark": {
+        "role": "neutral",
+        "displayName": "Structural rule (dark)",
+        "tonalRamp": [
+          "oklch(15.00% 0.00717 106.85)",
+          "oklch(26.43% 0.00717 106.85)",
+          "oklch(37.86% 0.00717 106.85)",
+          "oklch(49.29% 0.00717 106.85)",
+          "oklch(60.71% 0.00717 106.85)",
+          "oklch(72.14% 0.00717 106.85)",
+          "oklch(83.57% 0.00717 106.85)",
+          "oklch(95.00% 0.00717 106.85)"
+        ]
+      },
+      "pi-line-strong": {
+        "role": "neutral",
+        "displayName": "Focus rule (light)",
+        "tonalRamp": [
+          "oklch(15.00% 0.01272 106.71)",
+          "oklch(26.43% 0.01272 106.71)",
+          "oklch(37.86% 0.01272 106.71)",
+          "oklch(49.29% 0.01272 106.71)",
+          "oklch(60.71% 0.01272 106.71)",
+          "oklch(72.14% 0.01272 106.71)",
+          "oklch(83.57% 0.01272 106.71)",
+          "oklch(95.00% 0.01272 106.71)"
+        ]
+      },
+      "pi-line-strong-dark": {
+        "role": "neutral",
+        "displayName": "Focus rule (dark)",
+        "tonalRamp": [
+          "oklch(15.00% 0.00960 106.78)",
+          "oklch(26.43% 0.00960 106.78)",
+          "oklch(37.86% 0.00960 106.78)",
+          "oklch(49.29% 0.00960 106.78)",
+          "oklch(60.71% 0.00960 106.78)",
+          "oklch(72.14% 0.00960 106.78)",
+          "oklch(83.57% 0.00960 106.78)",
+          "oklch(95.00% 0.00960 106.78)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "body": {
+        "displayName": "Player body",
+        "purpose": "Recurring empty-state instructions and Settings copy; not a lab type override."
+      },
+      "label": {
+        "displayName": "Control label",
+        "purpose": "Shared button and appearance-option labels."
+      },
+      "mono": {
+        "displayName": "Filename and technical copy",
+        "purpose": "Filename rows, unavailable metadata and visual-state copy; line boxes remain component-specific."
+      },
+      "meta": {
+        "displayName": "Secondary metadata",
+        "purpose": "Row metadata and consumed-time values; numeric values are tabular."
+      },
+      "state": {
+        "displayName": "Short player state",
+        "purpose": "Departure Mono phase labels; not decorative eyebrows."
+      }
+    },
+    "shadows": [
+      {
+        "name": "flat-theme",
+        "value": "0 0 #0000",
+        "purpose": "All source shadow-scale steps resolve to no resting shadow. Focus rings remain interaction feedback."
+      }
+    ],
+    "motion": [
+      {
+        "name": "button-hover",
+        "value": "background-color 120ms ease-out",
+        "purpose": "Player button background transition."
+      },
+      {
+        "name": "volume-fade",
+        "value": "opacity 140ms ease-out",
+        "purpose": "Base UI's live opaque Volume surface only; never a native snapshot owner."
+      },
+      {
+        "name": "duration-exit",
+        "value": "120ms",
+        "purpose": "Library/Settings disclosure exit: ease-in, reverse fade, transparent terminal fill."
+      },
+      {
+        "name": "duration-enter",
+        "value": "180ms",
+        "purpose": "Disclosure entry: ease-out after the exit duration."
+      },
+      {
+        "name": "duration-move",
+        "value": "220ms",
+        "purpose": "Native ViewTransition group timing, not transport or clock updates. Reduced motion zeroes native duration and delay and removes control transitions."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "companion-min",
+        "value": "1212px"
+      },
+      {
+        "name": "narrow-max",
+        "value": "760px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Ghost utility button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Transport utility appearance with the actual regular Phosphor Volume icon. Base UI supplies behavior in the app.",
+      "html": "<button class=\"ds-button ds-ghost\" type=\"button\" aria-label=\"Volume\" aria-haspopup=\"dialog\"><svg viewBox=\"0 0 256 256\" fill=\"currentColor\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M155.51,24.81a8,8,0,0,0-8.42.88L77.25,80H32A16,16,0,0,0,16,96v64a16,16,0,0,0,16,16H77.25l69.84,54.31A8,8,0,0,0,160,224V32A8,8,0,0,0,155.51,24.81ZM32,96H72v64H32ZM144,207.64,88,164.09V91.91l56-43.55Zm54-106.08a40,40,0,0,1,0,52.88,8,8,0,0,1-12-10.58,24,24,0,0,0,0-31.72,8,8,0,0,1,12-10.58ZM248,128a79.9,79.9,0,0,1-20.37,53.34,8,8,0,0,1-11.92-10.67,64,64,0,0,0,0-85.33,8,8,0,1,1,11.92-10.67A79.83,79.83,0,0,1,248,128Z\"></path></svg></button>",
+      "css": ".ds-button { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid transparent; border-radius: 0; background: transparent; color: var(--foreground, #171714); font: 500 14px/20px var(--pi-font-sans, InterVariable, Inter, ui-sans-serif, system-ui, sans-serif); padding: 0; cursor: pointer; white-space: nowrap; transition: background-color 120ms ease-out; }\n.ds-button svg { width: 20px; height: 20px; pointer-events: none; }\n.ds-button:hover, .ds-button[aria-expanded=\"true\"] { background: var(--muted, #ecece6); color: var(--foreground, #171714); }\n:host-context(.dark) .ds-ghost:hover { background: color-mix(in oklab, var(--muted, #292925) 50%, transparent); }\n.ds-button:focus-visible { border-color: var(--ring, #a9a9a0); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring, #a9a9a0) 50%, transparent); outline: 2px solid var(--foreground, #171714); outline-offset: 2px; }\n.ds-button:active:not([aria-haspopup]) { transform: translateY(1px); }\n.ds-button:disabled { pointer-events: none; opacity: .5; cursor: default; }\n@media (prefers-reduced-motion: reduce) { .ds-button { transition: none; } }\n.ds-ghost { width: 32px; height: 40px; } @media (max-width: 760px) { .ds-ghost { width: 44px; height: 44px; } }"
+    },
+    {
+      "name": "Outline session action",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Settings and empty-state action, with the player's minimum interaction height.",
+      "html": "<button class=\"ds-button ds-outline\" type=\"button\">Add files</button>",
+      "css": ".ds-button { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid transparent; border-radius: 0; background: transparent; color: var(--foreground, #171714); font: 500 14px/20px var(--pi-font-sans, InterVariable, Inter, ui-sans-serif, system-ui, sans-serif); padding: 0; cursor: pointer; white-space: nowrap; transition: background-color 120ms ease-out; }\n.ds-button svg { width: 20px; height: 20px; pointer-events: none; }\n.ds-button:hover, .ds-button[aria-expanded=\"true\"] { background: var(--muted, #ecece6); color: var(--foreground, #171714); }\n:host-context(.dark) .ds-ghost:hover { background: color-mix(in oklab, var(--muted, #292925) 50%, transparent); }\n.ds-button:focus-visible { border-color: var(--ring, #a9a9a0); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring, #a9a9a0) 50%, transparent); outline: 2px solid var(--foreground, #171714); outline-offset: 2px; }\n.ds-button:active:not([aria-haspopup]) { transform: translateY(1px); }\n.ds-button:disabled { pointer-events: none; opacity: .5; cursor: default; }\n@media (prefers-reduced-motion: reduce) { .ds-button { transition: none; } }\n.ds-outline { background: var(--background, #f4f4f0); border-color: var(--border, #d6d6ce); padding: 0 10px; min-height: 44px; }\n:host-context(.dark) .ds-outline { background: color-mix(in oklab, var(--input, #292925) 30%, transparent); border-color: var(--input, #292925); }\n:host-context(.dark) .ds-outline:hover { background: color-mix(in oklab, var(--input, #292925) 50%, transparent); }"
+    },
+    {
+      "name": "Secondary playback button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Central playback face; narrow geometry includes the source's invisible target extension. Sample does not start audio.",
+      "html": "<button class=\"ds-button ds-secondary\" type=\"button\" aria-label=\"Play\"><svg viewBox=\"0 0 256 256\" fill=\"currentColor\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M232.4,114.49,88.32,26.35a16,16,0,0,0-16.2-.3A15.86,15.86,0,0,0,64,39.87V216.13A15.94,15.94,0,0,0,80,232a16.07,16.07,0,0,0,8.36-2.35L232.4,141.51a15.81,15.81,0,0,0,0-27ZM80,215.94V40l143.83,88Z\"></path></svg></button>",
+      "css": ".ds-button { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid transparent; border-radius: 0; background: transparent; color: var(--foreground, #171714); font: 500 14px/20px var(--pi-font-sans, InterVariable, Inter, ui-sans-serif, system-ui, sans-serif); padding: 0; cursor: pointer; white-space: nowrap; transition: background-color 120ms ease-out; }\n.ds-button svg { width: 20px; height: 20px; pointer-events: none; }\n.ds-button:hover, .ds-button[aria-expanded=\"true\"] { background: var(--muted, #ecece6); color: var(--foreground, #171714); }\n:host-context(.dark) .ds-ghost:hover { background: color-mix(in oklab, var(--muted, #292925) 50%, transparent); }\n.ds-button:focus-visible { border-color: var(--ring, #a9a9a0); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring, #a9a9a0) 50%, transparent); outline: 2px solid var(--foreground, #171714); outline-offset: 2px; }\n.ds-button:active:not([aria-haspopup]) { transform: translateY(1px); }\n.ds-button:disabled { pointer-events: none; opacity: .5; cursor: default; }\n@media (prefers-reduced-motion: reduce) { .ds-button { transition: none; } }\n.ds-secondary { width: 38px; height: 38px; background: var(--secondary, #ecece6); color: var(--secondary-foreground, #363632); }\n.ds-secondary svg { width: 22px; height: 22px; }\n.ds-secondary:hover { background: color-mix(in oklch, var(--secondary, #ecece6), var(--foreground, #171714) 5%); color: var(--secondary-foreground, #363632); }\n@media (max-width: 760px) { .ds-secondary { width: 40px; height: 40px; position: relative; } .ds-secondary::after { content: \"\"; position: absolute; inset: -2px; } }"
+    },
+    {
+      "name": "Appearance choices",
+      "kind": "custom",
+      "refersTo": "appearance-option",
+      "description": "Settings' System/Light/Dark group. Pressed state is shown; application state and Base UI keyboard behavior are not reimplemented.",
+      "html": "<div class=\"ds-appearance\" role=\"group\" aria-label=\"Appearance\"><button type=\"button\" class=\"ds-option\" aria-pressed=\"true\">System</button><button type=\"button\" class=\"ds-option\" aria-pressed=\"false\">Light</button><button type=\"button\" class=\"ds-option\" aria-pressed=\"false\">Dark</button></div>",
+      "css": ".ds-appearance { display: flex; width: fit-content; align-items: center; gap: 8px; }\n.ds-option { display: inline-flex; align-items: center; justify-content: center; min-width: 32px; min-height: 44px; border: 0; border-radius: 0; padding: 0 10px; color: var(--foreground, #171714); background: transparent; font: 500 14px/20px var(--pi-font-sans, InterVariable, Inter, ui-sans-serif, system-ui, sans-serif); cursor: pointer; transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1); }\n.ds-option:hover, .ds-option[aria-pressed=\"true\"] { background: var(--muted, #ecece6); color: var(--foreground, #171714); }\n.ds-option:focus-visible { box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring, #a9a9a0) 50%, transparent); outline: 2px solid var(--foreground, #171714); outline-offset: 2px; }\n.ds-option:disabled { opacity: .5; pointer-events: none; }\n@media (prefers-reduced-motion: reduce) { .ds-option { transition: none; } }"
+    },
+    {
+      "name": "Player surface and identity",
+      "kind": "card",
+      "refersTo": "player-surface",
+      "description": "Source surface/identity excerpt, not a second full player. Identity geometry stays local to this component.",
+      "html": "<section class=\"ds-surface\" aria-label=\"Wave Player\"><header class=\"ds-identity\"><h1>Choose your music</h1><p>Local files. This session only.</p></header><div class=\"ds-empty\"><p>Open local WAV or MP3 files.</p><button class=\"ds-button ds-outline\" type=\"button\">Open files</button></div></section>",
+      "css": ".ds-surface { box-sizing: border-box; width: min(380px, 100%); border: 1px solid var(--border, #d6d6ce); border-radius: 0; background: var(--card, #fffffc); color: var(--card-foreground, #171714); }\n.ds-identity { box-sizing: border-box; padding: 10px 12px 9px; height: 64px; min-width: 0; }\n.ds-identity h1 { font: 500 22px/27px var(--pi-font-sans, InterVariable, Inter, ui-sans-serif, system-ui, sans-serif); letter-spacing: -.025em; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.ds-identity p { font: 12px/17px \"TX-02\", monospace; color: var(--muted-foreground, #6a6a64); margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.ds-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 16px; text-align: center; font: 13px/1.5 var(--pi-font-sans, InterVariable, Inter, ui-sans-serif, system-ui, sans-serif); }\n.ds-empty p { margin: 0; }\n.ds-button { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid transparent; border-radius: 0; background: transparent; color: var(--foreground, #171714); font: 500 14px/20px var(--pi-font-sans, InterVariable, Inter, ui-sans-serif, system-ui, sans-serif); padding: 0; cursor: pointer; white-space: nowrap; transition: background-color 120ms ease-out; }\n.ds-button svg { width: 20px; height: 20px; pointer-events: none; }\n.ds-button:hover, .ds-button[aria-expanded=\"true\"] { background: var(--muted, #ecece6); color: var(--foreground, #171714); }\n:host-context(.dark) .ds-ghost:hover { background: color-mix(in oklab, var(--muted, #292925) 50%, transparent); }\n.ds-button:focus-visible { border-color: var(--ring, #a9a9a0); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring, #a9a9a0) 50%, transparent); outline: 2px solid var(--foreground, #171714); outline-offset: 2px; }\n.ds-button:active:not([aria-haspopup]) { transform: translateY(1px); }\n.ds-button:disabled { pointer-events: none; opacity: .5; cursor: default; }\n@media (prefers-reduced-motion: reduce) { .ds-button { transition: none; } }\n.ds-outline { background: var(--background, #f4f4f0); border-color: var(--border, #d6d6ce); padding: 0 10px; min-height: 44px; }\n:host-context(.dark) .ds-outline { background: color-mix(in oklab, var(--input, #292925) 30%, transparent); border-color: var(--input, #292925); }\n:host-context(.dark) .ds-outline:hover { background: color-mix(in oklab, var(--input, #292925) 50%, transparent); }"
+    },
+    {
+      "name": "Playback-only selected row",
+      "kind": "custom",
+      "refersTo": "playback-row-selected",
+      "description": "Selected unprepared filename row with an independent Play target. Real File identity and playback are app-owned.",
+      "html": "<ul class=\"ds-tracks\"><li class=\"ds-row\" data-selected=\"true\"><button class=\"ds-select\" type=\"button\" aria-pressed=\"true\" aria-label=\"Select quiet.wav\"><span class=\"ds-copy\"><span class=\"ds-filename\" title=\"quiet.wav\">quiet.wav</span><span class=\"ds-meta\">Metadata unavailable</span></span><span class=\"ds-duration\">—</span></button><button class=\"ds-button ds-row-play\" type=\"button\" aria-label=\"Play quiet.wav\"><svg viewBox=\"0 0 256 256\" fill=\"currentColor\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M232.4,114.49,88.32,26.35a16,16,0,0,0-16.2-.3A15.86,15.86,0,0,0,64,39.87V216.13A15.94,15.94,0,0,0,80,232a16.07,16.07,0,0,0,8.36-2.35L232.4,141.51a15.81,15.81,0,0,0,0-27ZM80,215.94V40l143.83,88Z\"></path></svg></button></li></ul>",
+      "css": ".ds-button { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid transparent; border-radius: 0; background: transparent; color: var(--foreground, #171714); font: 500 14px/20px var(--pi-font-sans, InterVariable, Inter, ui-sans-serif, system-ui, sans-serif); padding: 0; cursor: pointer; white-space: nowrap; transition: background-color 120ms ease-out; }\n.ds-button svg { width: 20px; height: 20px; pointer-events: none; }\n.ds-button:hover, .ds-button[aria-expanded=\"true\"] { background: var(--muted, #ecece6); color: var(--foreground, #171714); }\n:host-context(.dark) .ds-ghost:hover { background: color-mix(in oklab, var(--muted, #292925) 50%, transparent); }\n.ds-button:focus-visible { border-color: var(--ring, #a9a9a0); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring, #a9a9a0) 50%, transparent); outline: 2px solid var(--foreground, #171714); outline-offset: 2px; }\n.ds-button:active:not([aria-haspopup]) { transform: translateY(1px); }\n.ds-button:disabled { pointer-events: none; opacity: .5; cursor: default; }\n@media (prefers-reduced-motion: reduce) { .ds-button { transition: none; } }\n.ds-tracks { list-style: none; padding: 0; margin: 0; background: var(--card, #fffffc); color: var(--card-foreground, #171714); }\n.ds-row { box-sizing: border-box; height: 68px; border-bottom: 1px solid var(--border, #d6d6ce); position: relative; }\n.ds-row[data-selected=\"true\"] { background: var(--secondary, #ecece6); }\n.ds-row[data-selected=\"true\"]::after { content: \"\"; position: absolute; inset: 3px; border: 1px solid var(--border, #d6d6ce); pointer-events: none; }\n.ds-select { display: flex; align-items: center; text-align: left; width: 100%; height: 100%; gap: 10px; background: transparent; border: 0; border-radius: 0; color: inherit; padding: 8px 12px 8px 52px; cursor: pointer; }\n.ds-select:focus-visible { outline: 2px solid var(--foreground, #171714); outline-offset: -3px; }\n.ds-copy { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 4px; }\n.ds-filename { font: 12px/18px \"TX-02\", monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.ds-meta { font: 11px/16px \"TX-02\", monospace; color: var(--muted-foreground, #6a6a64); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n.ds-duration { width: 40px; flex: none; text-align: right; font: 11px \"TX-02\", monospace; font-variant-numeric: tabular-nums; }\n.ds-row-play { position: absolute; left: 4px; top: 11px; width: 44px; height: 44px; }\n.ds-row-play svg { width: 18px; height: 18px; }\n@media (hover: hover) and (pointer: fine) and (min-width: 761px) { .ds-row-play { opacity: 0; pointer-events: none; } .ds-row:hover .ds-row-play, .ds-row:focus-within .ds-row-play { opacity: 1; pointer-events: auto; } }"
+    },
+    {
+      "name": "Source waveform pending rail",
+      "kind": "input",
+      "refersTo": "seek-range",
+      "description": "Pending/unavailable native seek appearance only; no synthetic waveform. The production SeekBar overlays actual Rust source min/max bins after completion, with separate consumed and preview cursors. It owns source-frame gestures and acknowledged commit; this sample has no media clock or source PCM.",
+      "html": "<input class=\"ds-seek\" aria-label=\"Position\" type=\"range\" min=\"0\" max=\"100\" value=\"0\" />",
+      "css": ".ds-seek { appearance: none; display: block; width: 100%; height: 40px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; cursor: pointer; touch-action: none; }\n.ds-seek:disabled { cursor: default; opacity: .4; background: transparent; }\n.ds-seek:focus-visible { outline: 2px solid var(--foreground, #171714); outline-offset: 2px; }\n.ds-seek::-webkit-slider-runnable-track { height: 2px; background: var(--muted-foreground, #6a6a64); }\n.ds-seek::-moz-range-track { height: 2px; background: var(--muted-foreground, #6a6a64); }\n.ds-seek::-webkit-slider-thumb { appearance: none; width: 3px; height: 32px; margin-top: -15px; border: 0; border-radius: 0; background: var(--foreground, #171714); }\n.ds-seek::-moz-range-thumb { width: 3px; height: 32px; border: 0; border-radius: 0; background: var(--foreground, #171714); }"
+    },
+    {
+      "name": "Centered playback transport",
+      "kind": "nav",
+      "refersTo": "button-secondary",
+      "description": "Previous/Play/Next appearance excerpt. Utilities sit in independent side columns in the full player; no audio or queue behavior exists in this sample.",
+      "html": "<div class=\"ds-transport\" role=\"group\" aria-label=\"Playback\"><button class=\"ds-button ds-ghost\" type=\"button\" aria-label=\"Previous track\"><svg viewBox=\"0 0 256 256\" fill=\"currentColor\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M199.81,34a16,16,0,0,0-16.24.43L64,109.23V40a8,8,0,0,0-16,0V216a8,8,0,0,0,16,0V146.77l119.57,74.78A15.95,15.95,0,0,0,208,208.12V47.88A15.86,15.86,0,0,0,199.81,34ZM192,208,64.16,128,192,48.07Z\"></path></svg></button><button class=\"ds-button ds-secondary\" type=\"button\" aria-label=\"Play\"><svg viewBox=\"0 0 256 256\" fill=\"currentColor\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M232.4,114.49,88.32,26.35a16,16,0,0,0-16.2-.3A15.86,15.86,0,0,0,64,39.87V216.13A15.94,15.94,0,0,0,80,232a16.07,16.07,0,0,0,8.36-2.35L232.4,141.51a15.81,15.81,0,0,0,0-27ZM80,215.94V40l143.83,88Z\"></path></svg></button><button class=\"ds-button ds-ghost\" type=\"button\" aria-label=\"Next track\"><svg viewBox=\"0 0 256 256\" fill=\"currentColor\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M200,32a8,8,0,0,0-8,8v69.23L72.43,34.45A15.95,15.95,0,0,0,48,47.88V208.12a16,16,0,0,0,24.43,13.43L192,146.77V216a8,8,0,0,0,16,0V40A8,8,0,0,0,200,32ZM64,207.93V48.05l127.84,80Z\"></path></svg></button></div>",
+      "css": ".ds-button { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid transparent; border-radius: 0; background: transparent; color: var(--foreground, #171714); font: 500 14px/20px var(--pi-font-sans, InterVariable, Inter, ui-sans-serif, system-ui, sans-serif); padding: 0; cursor: pointer; white-space: nowrap; transition: background-color 120ms ease-out; }\n.ds-button svg { width: 20px; height: 20px; pointer-events: none; }\n.ds-button:hover, .ds-button[aria-expanded=\"true\"] { background: var(--muted, #ecece6); color: var(--foreground, #171714); }\n:host-context(.dark) .ds-ghost:hover { background: color-mix(in oklab, var(--muted, #292925) 50%, transparent); }\n.ds-button:focus-visible { border-color: var(--ring, #a9a9a0); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring, #a9a9a0) 50%, transparent); outline: 2px solid var(--foreground, #171714); outline-offset: 2px; }\n.ds-button:active:not([aria-haspopup]) { transform: translateY(1px); }\n.ds-button:disabled { pointer-events: none; opacity: .5; cursor: default; }\n@media (prefers-reduced-motion: reduce) { .ds-button { transition: none; } }\n.ds-ghost { width: 32px; height: 40px; } @media (max-width: 760px) { .ds-ghost { width: 44px; height: 44px; } }\n.ds-secondary { width: 38px; height: 38px; background: var(--secondary, #ecece6); color: var(--secondary-foreground, #363632); }\n.ds-secondary svg { width: 22px; height: 22px; }\n.ds-secondary:hover { background: color-mix(in oklch, var(--secondary, #ecece6), var(--foreground, #171714) 5%); color: var(--secondary-foreground, #363632); }\n@media (max-width: 760px) { .ds-secondary { width: 40px; height: 40px; position: relative; } .ds-secondary::after { content: \"\"; position: absolute; inset: -2px; } }\n.ds-transport { display: flex; justify-content: center; align-items: center; gap: 6px; color: var(--card-foreground, #171714); background: var(--card, #fffffc); }\n@media (max-width: 760px) { .ds-transport { gap: 2px; } }"
+    }
+  ],
+  "narrative": {
+    "northStar": "a compact track-first listening object",
+    "overview": "For `/player.html`, this is the user-pinned [#21 interactive prototype](docs/2026-09-13-wave-player-prototype.md), not a generated seed or a new visual world. Its compact, square listening object pairs restrained surfaces with precise identity, honest media state and persistent transport. #22 replaces the historical demo composition only; it does not redesign the lab.\n\nKKB is a technical and creative workshop. The lab should make its work inspectable, using precise\nlabels, visible state and useful controls. Typography, symbol meaning and information hierarchy\nstay stable across light and dark modes. Theme changes come through semantic tokens.",
+    "keyCharacteristics": [
+      "Paired warm neutral modes, ruled divisions and flat resting surfaces.",
+      "Inter identity and instructions, TX-02 technical values, player-only Departure Mono states.",
+      "A centered player with an adjacent or internal library, never displaced transport.",
+      "Honest unavailable media, explicit state and keyboard-reachable controls."
+    ],
+    "rules": [
+      {
+        "name": "The Paired Modes Rule",
+        "body": "Change semantic pairs, not typography, symbol meaning or control placement, when changing appearance.",
+        "section": "colors"
+      },
+      {
+        "name": "The Technical Type Rule",
+        "body": "Use mono for filename rows and values, Inter for the identity heading, instructions and controls, and short player state text rather than decorative eyebrows.",
+        "section": "typography"
+      },
+      {
+        "name": "The Stationary Transport Rule",
+        "body": "Library disclosure changes the companion or visual region only; identity, navigation and transport remain available and the actual playback owner survives browsing, theme and viewport changes.",
+        "section": "layout"
+      },
+      {
+        "name": "The Single Disclosure Owner Rule",
+        "body": "Base UI alone owns Volume's live mount/fade. React 19.3 stable ViewTransition owns appropriate library and Settings disclosures, not transport, clocks, selection or theme updates.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Honest Media Rule",
+        "body": "Unavailable media is explicit; never portray invented artwork, metadata, elapsed time or decorative bars as actual source analysis. The live oscilloscope uses paired signal/surface palettes, solid left/mono and dashed right traces of actual pre-volume rendered output. It is an approximate untagged browser history, not source/speaker sync. Reduced-motion, paused-visual and unavailable explanations preserve independent transport.",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "**Do** keep semantic color pairs and typography roles stable across modes.",
+      "**Do** preserve stationary player transport and the lab's independent instrument composition.",
+      "**Do** keep selection, current playback, focus and errors explicit beyond color or hover alone.",
+      "**Do** retain real fonts, regular SVG icons, honest media states and source-linked evidence."
+    ],
+    "donts": [
+      "**Don't** promote prototype study imagery, synthetic signals or dead future controls into the current player.",
+      "**Don't** turn functional state labels into decorative eyebrows or invent a global display scale.",
+      "**Don't** add ambient shadows, gradients or a second animation owner to the approved player.",
+      "**Don't** treat muted Chromium evidence or sidecar samples as listening, device or accessibility certification."
+    ]
+  }
+}

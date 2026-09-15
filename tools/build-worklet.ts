@@ -40,6 +40,7 @@ removeWorkletUnsafeErrorFormatting(join(generatedDirectory, "kkb_audio.js"));
 
 await build("web/src/worklet-processor.ts");
 await build("web/src/pcm-worker.ts");
+await build("web/src/waveform-worker.ts");
 await build("web/src/main.ts");
 await build("web/src/plan-processor.ts");
 await build("web/src/plan-worker.ts");
@@ -60,6 +61,11 @@ copyFileSync(
   "node_modules/inter-ui/LICENSE.txt",
   join(outputDirectory, "Inter-LICENSE.txt"),
 );
+for (const name of ["DepartureMono-LICENSE.txt", "Phosphor-LICENSE.txt"]) {
+  copyFileSync(join("web/assets/player-prototype", name), join(outputDirectory, name));
+}
+copyFileSync("THIRD_PARTY_NOTICES.md", join(outputDirectory, "THIRD_PARTY_NOTICES.md"));
+copyFileSync("licenses/MPL-2.0.txt", join(outputDirectory, "MPL-2.0.txt"));
 copyFileSync("web/proof.html", join(outputDirectory, "index.html"));
 copyFileSync("web/plan-proof.html", join(outputDirectory, "plan.html"));
 copyFileSync(

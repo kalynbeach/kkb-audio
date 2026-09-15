@@ -1,0 +1,48 @@
+PASS player mute engaged before any real playback
+PASS approved 380 × 532 desktop object
+PASS multi-file admission creates no preparation worker or context
+PASS unprepared durations remain unknown
+PASS desktop companion does not shift persistent anatomy
+PASS 1440px no horizontal overflow
+PASS 1440px 40px functional navigation target
+PASS 1440px stable 68px rows
+PASS 1440px centered player
+PASS explicit WAV row play prepares exactly one worker/context
+PASS real paused WAV keyboard seek acknowledges consumed position
+PASS cancelled seek draft does not move consumed position
+PASS selection leaves active WAV identity untouched
+PASS library exit retains transparent final fill
+PASS persistent desktop geometry stays fixed throughout disclosure
+PASS library close restores utility focus
+PASS library/theme/responsive changes retain actual worker/context and seek node
+PASS 390px no horizontal overflow
+PASS 390px 40px functional navigation target
+PASS 390px stable 68px rows
+PASS 390px centered player
+PASS narrow rows keep 44px playback targets visible
+PASS Volume fades as one live Base UI surface without native snapshot competition
+PASS Volume controls hit-test above navigation
+PASS Volume backing stays opaque
+PASS named Volume thumb supports keyboard adjustment while muted
+PASS Volume exit is monotonic and finishes transparent
+PASS Volume Escape returns focus
+PASS 320px no horizontal overflow
+PASS 320px 40px functional navigation target
+PASS 320px stable 68px rows
+PASS 320px centered player
+PASS real MP3 replacement reaches natural EOS and releases WAV context
+PASS MP3 replay reaches EOS on the same context without auto-advance
+PASS next after EOS prepares at zero without autoplay
+PASS previous while playing explicitly continues intent into finite MP3
+PASS malformed file leaves collection browsable with recovery feedback
+PASS cancel held real worker startup disposes all obsolete work without successor
+PASS inactive removal leaves actual playback running
+PASS active removal closes playback without choosing successor
+PASS Clear releases entries and preserves mute/volume
+PASS no-native-API library fallback remains functional
+PASS reduced-motion removes live control transitions
+PASS emitted direction contract survives build
+PASS actual approved font files load
+Browser console: undefined
+Fixture directory: /var/folders/jf/xv4gdzq90yj1t8yhpx5yp9480000gn/T/kkb22-browser-fixtures-McVImv
+Muted Chromium only; no listening/device/background certification.

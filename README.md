@@ -71,9 +71,9 @@ Run the local proof after `bun run build:worklet`:
 bun run serve:proof
 ```
 
-Open `/player.html` for the usable local-WAV player, `/` for the PCM transport and local WAV proof
+Open `/player.html` for the usable local WAV/MP3 player, `/` for the PCM transport and local WAV proof
 controls, or `/plan.html` for the oscillator plan.
-The deterministic and oscillator proof activations remain muted. **WAV Play emits sound** at compiled
+The deterministic and oscillator proof activations remain muted. **Local-file Play emits sound** at compiled
 gain 0.5; lower system volume first. Load prepares a suspended, disconnected node; Pause freezes media
 and render time without discarding PCM or converter history. WAV status distinguishes source-media
 position, absolute next-consumed PCM position, render frames, epoch readiness, starvation and EOS.
@@ -85,15 +85,78 @@ A private native interactive entry and a safe low-amplitude fixture generator ar
 [WAV reproduction guide](docs/2026-09-08-local-wav-playback-evidence.md#safe-reproduction).
 Normal checks never open audio devices; device-opening tests must be explicitly selected.
 
-## Local WAV player
+## Local WAV/MP3 player
 
 Build with `bun run build:worklet` and serve with `bun run serve:proof`, then open `/player.html`.
 `bun run dev` also serves the player with React hot reload alongside the lab. When the global Bun
 version differs, first run `export PATH="$PWD/node_modules/.bin:$PATH"` to use the pinned Bun 1.4.0.
 
-Choose a nonempty little-endian RIFF PCM16/24 mono/stereo WAV. Playback supports the active context's
-rate and prepared 44100 ↔ 48000 Hz conversion only. Files stay local; unsupported files show an error
-and can be replaced. Loading/replacing never starts audio. Press **Play** explicitly.
+The compact #22 player follows the [approved interactive prototype](docs/2026-09-13-wave-player-prototype.md).
+Use **Open files** in the empty player or **Settings → Add files** to select several WAV/MP3 files.
+The session retains at most **100 File references**, in picker order; unsupported extensions and
+files beyond the limit are counted explicitly. Repeated/same-named files remain distinct entries.
+No file is read or prepared on addition or row selection. Only the active entry is prepared; filename
+is the honest identity, artist/album/artwork remain unavailable, and duration appears only after
+preparation. Reload discards the collection and preferences. Nothing is uploaded or persisted.
+
+Rows select independently of playback. Their **Play** target explicitly prepares and plays; the
+current row pauses/resumes/replays. Previous/next replace at zero preserving playing/paused intent,
+with no wrap or automatic advance. Ordinary preparation/replacement never autoplays. **Settings →
+Remove selected / Clear session** only discard session entries, never original files. Removing an
+inactive entry leaves playback untouched; removing the active entry or Clear cancels/closes it
+without selecting a playback successor. Removed selection moves to the next remaining row, or previous
+at the end. **Close track / Cancel loading** in Settings retains the collection; the visual loading
+state also offers Cancel. Errors leave rows available for another file or retry.
+
+Choose nonempty little-endian RIFF PCM16/24 mono/stereo WAV or supported MP3. Playback supports the
+active context's rate and prepared 44100 ↔ 48000 Hz conversion only. Library/theme/responsive
+changes do not replace the active owner or session. Desktop keeps a centered compact player and
+right companion library at ≥1212px; narrower browsing replaces only the visual region. Settings
+provides Light/Dark/System and a separate Pause visual action. A live Canvas2D oscilloscope (#23)
+observes actual rendered output before listening volume/mute: mono solid, stereo left solid/right
+dashed, never channel-averaged. It is an approximate untagged browser history, not source/speaker
+synchronization. Reduced motion uses a stable baseline; unsupported/failed visuals leave playback
+controls available. See [signal contract and muted evidence](docs/2026-09-13-live-oscilloscope.md).
+The distinct 40px seek timeline shows
+an actual full-track source waveform (#18). A separate cancellable worker scans Rust decoded/trimmed
+PCM after playback is ready; Play and seeking remain available while the overview prepares or fails.
+At most 4096 min/max bins (32 KiB) preserve extrema across channels, including opposite-phase stereo;
+display reduction includes every covered bin. The fixed full-scale overview is unaffected by volume,
+mute, conversion or seeks. No summaries are cached across tracks. See [waveform evidence](docs/2026-09-13-source-waveform.md)
+for mapping, working memory and measured extra decoding cost. The live visual adds no decoder or
+worklet callback work. WAV/MP3 A/B loops (#19/#20) are implemented: open the repeat editor,
+choose one region or the default whole track, then enable separately. Exact fields accept mm:ss.fraction
+or integer source frames followed by `f`; Shift-drag creates a region and labelled handles support
+arrows (1 second, Shift 5). MP3 uses its validated decoded-and-trimmed timeline and a private bounded codec-history anchor. Requested source bounds and realized
+converted period are shown separately; fixed-grid quantization accumulates across iterations. Bounded
+held-head smoothing preserves the realized output period, not every tail sample or arbitrary endpoint
+slopes. Preparing/Failed are explicit; loop underrun fades to silence and re-primes without resetting
+the render clock. Normal wraps do not use public seek or UI polling. Explicit control changes may
+prepare silence. Review repairs cover EOF head draining, acknowledgment-time EOS pause, latest control
+intent and visible visual/capability explanations at the smallest layout. Human listening remains pending; see [MP3 loop evidence](docs/2026-09-14-mp3-loops.md) and [WAV loop evidence](docs/2026-09-14-wav-loops.md#bounded-review-repair-2026-09-14),
+including the small repository-hosted screenshot/runtime/check set.
+
+MP3 support (#17) uses pinned Symphonia 0.6.1 in the shared Rust preparation path,
+not browser decoding. Accepted: MPEG-1 Layer III, 44.1/48 kHz mono/stereo, CBR/VBR
+32–320 kbit/s including CRC-protected frames, validated Xing/Info/LAME, structurally
+bounded VBRI v1, or missing optional metadata. Missing trim means untrimmed decoder
+output, **not** recovered encoder input. **VBRI fallback:** byte/frame counts and
+seek-table values are untrusted advisory data, including inconsistent values;
+full scan/decode alone establishes duration and seeking. VBRI does not recover trim.
+Malformed metadata structure, inconsistent Xing/LAME metadata, truncated/corrupt
+frames, unsupported variants and changing rates/layouts reject. Bounds: 32 MiB encoded,
+1 MiB leading ID3, at most 25,000 packets / 600 seconds **including codec padding**.
+
+Inspection decodes/counts the whole bounded stream before publishing duration, with
+constant PCM storage. Ordinary MP3 seeks reset/decode/discard to reconstruct codec history
+before converter pre-roll; even equal-rate seeks report `AnchorAndDiscard` (or
+`Adjusted` for output-grid rounding), not guessed `Exact`. Preparation/seeking
+can take time and are cancellable; a 30-second worker deadline rejects excessively
+slow work. See [MP3 policy and evidence](docs/2026-09-13-mp3-preparation.md),
+[fixture provenance](tools/fixtures/mp3/README.md) and [decoder notices](THIRD_PARTY_NOTICES.md).
+The native device-free worker/rings use the same reader; the existing opt-in native
+file proof also accepts MP3 without changing its historical test/environment names.
+No physical output was used to validate MP3.
 
 Drag Position to preview; release commits one seek. Escape, pointer cancellation or leaving focus
 cancels the preview. Arrow keys seek five seconds, Page Up/Down thirty seconds, Home/End to the exact
@@ -103,9 +166,10 @@ the consumed source-media cursor, **not measured audible presentation time**.
 
 Listening volume starts at **15% after the compiled 0.5 gain** (initial linear combined gain 0.075).
 Mute remembers the selected level; volume/mute never rebuild playback or move its cursor. Close
-cancels loading/seeking and releases the context/worker. Details remain secondary. No broad browser,
+cancels loading/seeking and releases the context/worker. Playback details and limits live in Settings. No broad browser,
 background, device or click-free-transition guarantee follows from the muted checks; see the
-[player evidence and limitations](docs/2026-09-10-local-wav-player-evidence.md).
+[compact-player evidence](docs/2026-09-13-compact-player.md) and
+[foundational playback limitations](docs/2026-09-10-local-wav-player-evidence.md).
 
 ## Audio-engine learning lab
 

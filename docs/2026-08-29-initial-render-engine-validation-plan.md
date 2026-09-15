@@ -367,14 +367,21 @@ Playback proceeds through small, ordered increments:
    play/pause, seeking, time/duration, volume, and clear loading/error states. Playback—not UI—owns
    worker coordination, converter state, and epochs. Let this integration establish the smallest
    useful playback interface; do not freeze a generic public session API first.
-5. **MP3 trim and seek fixtures, when needed.** Test valid, missing, and malformed trim metadata,
-   decoder anchors, and `Exact`, `AnchorAndDiscard`, or `Adjusted` results.
-6. **FLAC fixtures, when needed.** Test lossless reference output and seeking with and without metadata.
-7. **WAV loops.** Settle nominal-period-preserving seam geometry, short-loop limits, smoothing
-   bounds, UI coordinate, automation, provenance, readiness, and underrun behavior.
-8. **Compressed loops.** Add only where codec, trim, and seek evidence supports the declared result.
+5. **Local MP3 playback (#17).** Deliver the shared bounded Rust reader, reliable decoded/trimmed
+   timeline, native/browser worker integration, picker/recovery and fixture-proven history-restoring
+   seeks. This is a playback capability, not another research-only prerequisite.
+6. **Product design (#21) and player frontend (#22).** Design proceeds independently of MP3.
+   #22 consumes the approved compact player/session-library design and existing WAV, using MP3
+   when available. The research player and silent prototype are not substitutes for design approval.
+7. **Waveform (#18).** Depends on both MP3 (#17) and the player frontend (#22).
+8. **Live visualization (#23).** Separate visual surface; next review after #18, not waveform scope.
+9. **WAV loops (#19), then MP3 loops (#20).** Establish seam/period geometry on WAV before
+   adding codec history/trim. No loop behavior is implied by linear MP3 seek reconstruction.
 
-Remaining codecs, loops, HTTP delivery, and catalog work do not block the initial local-WAV player.
+Current approved implementation/review order: **#18 → #23 → #19 → #20**. This orders delivery;
+it does not make live visualization part of the waveform or authorize loop work here.
+
+FLAC, HTTP delivery and catalog work are not prerequisites for this sequence.
 
 Implementation status, 2026-09-08: the private same-rate local WAV slice accepts PCM16/24 RIFF PCM
 mono/stereo through the existing browser/native transports. Pause acknowledgment freezes consumption
@@ -415,6 +422,24 @@ Focused owner/UI tests, the full device-free Rust/Bun gates and targeted muted b
 pass within the [local-player evidence](2026-09-10-local-wav-player-evidence.md). Independent Standards
 and Spec reviews returned zero findings; parent diff inspection and targeted checks also pass. These
 observations do not certify broad browser/device or audible behavior.
+
+Implementation status, 2026-09-13: #17 adds the private strict MPEG-1 Layer III reader with
+pinned Symphonia 0.6.1 packet decoding, bounded full inspection/counting, validated Xing/Info/LAME
+and VBRI policies, and codec reset/decode/discard through the existing converter read anchor.
+The same native worker/rings and browser worker/Wasm transport now prepare WAV or MP3; React
+remains codec-unaware. Fixture, worker/compiled-callback, memory and muted browser evidence is
+recorded in the [dated MP3 document](2026-09-13-mp3-preparation.md). Independent final review and
+parent acceptance checks passed; #21/#22 and all waveform/loop/visualization features are unchanged.
+
+Implementation status, 2026-09-13 (#18): #21's approved direction and #22's compact player are
+in place. A dedicated cancellable worker now scans active Rust decoded/trimmed PCM into at most
+4096 min/max bins, independently of playback readiness and refill ownership. Source amplitude,
+consumed progress and preview seek use the existing source-frame coordinate. No loop, live visual,
+metadata or collection-cache work is included. [Waveform evidence](2026-09-13-source-waveform.md)
+records isolated checks, memory/work bounds and muted workloads. Independent media/lifecycle review
+passed; the UI review's status-label overlap was repaired and its retained recheck passed. Parent
+accepted the final source after independent checks and identity verification. This authorizes stacked
+publication only; merging, deployment and listening/device certification remain separate.
 
 `PlaybackSession` remains provisional. This player establishes a private consumer, not the eventual
 application migration or another speculative foundation/API layer. “Foundation ready” means this
@@ -489,3 +514,45 @@ expanded merely to make future features appear accommodated.
 - [Rust panic handling](https://doc.rust-lang.org/std/panic/fn.catch_unwind.html)
 - [SharedArrayBuffer security requirements](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer#security_requirements)
 - [RFC 9110: HTTP semantics](https://www.rfc-editor.org/rfc/rfc9110.html)
+
+Implementation status, 2026-09-13 (#23): the approved separate visual now uses Canvas2D and a
+private pre-listening-gain browser analyser tap of actual worklet output. Independent mono/stereo
+traces, three-window persistence, generation/seek invalidation, reduced-motion and visual-only
+fallback are implemented and parent-accepted for stacked PR publication. These are approximate untagged histories, not the canonical
+sample-tagged observation API or a speaker clock. The source waveform, worklet/Rust callback and
+library ownership remain unchanged. [Dated live-oscilloscope evidence](2026-09-13-live-oscilloscope.md)
+records the final parent isolated 147-test check, 39-assertion pre-final-fix browser batch, corrected
+reduced-motion pixel confirmation, bounded real foreground workload and preserved failures.
+Independent reviews passed after the parent corrected their shared failure-caption P2 and obtained
+a focused recheck. Browser evidence predates that caption-only repair. No merge or deployment;
+#19/#20 remain separate; the following #19 implementation status supersedes “unimplemented” for WAV only.
+
+Implementation status, 2026-09-14 (#19): WAV held-head seam smoothing, fixed realized converted-period
+repetition, bounded head preparation, native/browser loop control and player overlay are implemented
+and parent-accepted for stacked PR publication. The parent resolved all six gates, then refined terminal source-failure classification and
+exact acknowledgment-time PCM capture for loop changes. The [canonical loop contract](2026-08-28-kkb-audio-system-architecture.md#loop-contract)
+records these enduring decisions; [dated evidence](2026-09-14-wav-loops.md) records checks, failures,
+resource bounds and remaining listening acceptance. Normal wraps preserve render state; explicit changes may
+prepare silence, and LoopUnderrun extends a failed iteration with bounded fade/re-prime. The fixed
+output period does not promise bounded cumulative source-duration drift. MP3 looping (#20) remains
+unimplemented and unavailable. Muted numerical/runtime checks are not human listening acceptance,
+publication, issue closure, merge or deployment authorization.
+
+#19 bounded review repair (2026-09-14): the original engine/player reviews blocked publication, and
+an additional parent-reproduced owner race was included in the same repair batch. Red-capable
+regressions now cover native EOF-drain head readiness, acknowledgment-time EOS pause, disabled/pending
+native region intent, both held-poll owner timings and initial short-WAV capability feedback.
+Current isolated checks report 80 Rust tests passing per debug/release configuration (2 physical tests
+ignored) and 157 formal Bun tests passing, with Clippy/fixed-memory/allocator/callback gates retained.
+Targeted muted runtime verifies real EOS suspension-before-readiness, latest owner sequences, visible
+single visual captions, 320px nonoverlapping centered controls, 361px sizing and settled light/dark
+compositions. The [repair evidence](2026-09-14-wav-loops.md#bounded-review-repair-2026-09-14) links a bounded
+repository-hosted set and corrects the initial caption/mode overclaims. Both retained rechecks found
+a remaining cancelled-enable intent leak. The parent reproduced seek cancellation and queued-enable
+replacement by Pause, repaired intent retirement, and retained both red/green regressions. The final
+isolated Bun suite passes 159 tests; both retained reviewers passed the focused correction. Parent
+verified 159 final source/build inputs and all 13,738 unchanged daily-output files, then accepted
+stacked PR publication. Muted browser evidence predates that final owner-only correction, explicitly
+qualified in the evidence. #20 and human listening remain separate; no merge/deployment authorization.
+
+Implementation status, 2026-09-14 (#20): shared MP3 loops are implemented and parent-accepted for stacked PR publication. The initial decode-from-start capability gate correctly blocked delivery. Parent subsequently approved one private bounded encoded history anchor after source-derived research and focused CRC/VBRI nonzero-target correction. Carrier/predecessor PCM is discarded; original strict validation and decoded/trimmed coordinates remain authoritative. Normal continuation is position-independent and prepared before Armed, without enlarging the4096-frame head, four1024 slots or fixed16MiB memory. Native84-test debug/release and full160-test Bun checks pass, including actual worker/callback references and a600-second late synthetic interval. Muted actual590-second MP3 late wraps/recovery and converted whole-track/replacement observations are bounded evidence, not listening or host certification. See [MP3 loop implementation/evidence](2026-09-14-mp3-loops.md), including failures, the missed initial field-commit qualification, exact additional encoded-storage contract and both passing independent implementation reviews. Parent independently reran the84-test Rust debug and160-test full Bun suites, verified166 final source/build inputs and three final browser-served artifact hashes, and rehashed13,738 unchanged daily-output files. Human listening and merge approval remain separate. #17/#19 historical evidence remains scoped to its original delivery.

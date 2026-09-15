@@ -1,0 +1,6 @@
+{"dotTop":627,"labelBottom":627,"labelTop":615,"mode":"Light","phase":"pending","position":0,"waveHeight":40,"waveTop":629}
+{"dotTop":599,"labelBottom":599,"labelTop":587,"mode":"Dark","phase":"pending","position":0,"waveHeight":40,"waveTop":601}
+{"dotTop":627,"labelBottom":627,"labelTop":615,"mode":"Light","phase":"failed","position":0,"waveHeight":40,"waveTop":629}
+{"dotTop":599,"labelBottom":599,"labelTop":587,"mode":"Dark","phase":"failed","position":0,"waveHeight":40,"waveTop":601}
+Page errors: {"errors":[],"lifecycle":{"effectiveLaunch":{"browserLaunched":true,"engine":"chrome","launchHash":11150461532353909000},"launched":false,"relaunchedBrowser":false,"restartedBackground":false,"restoreStatus":"not_configured","reused":true,"saveStatus":"not_attempted"}}
+PASS: pending/failed labels do not intersect zero-position cursor head; 40px navigation and usable Play/seek preserved in desktop light and narrow dark. Analysis messages held solely for state geometry; no throughput claim.

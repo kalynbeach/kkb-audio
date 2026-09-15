@@ -1,0 +1,262 @@
+$ bun run build:worklet && bun run typecheck && bun test web/test && bun run check:wasm && bun run check:kernel && bun run check:wav && bun run check:mp3 && bun run check:waveform && bun run check:plan && bun run check:lab && bun run check:lab-ui && bun run check:player-ui && bun run audit:worklet && bun run audit:plan
+$ bun tools/build-worklet.ts
+    Finished `release` profile [optimized] target(s) in 0.04s
+$ bun x tsc --noEmit
+bun test v1.4.0 (34cbb9a40)
+
+web/test/protocol.test.ts:
+(pass) InitializationGate > accepts one explicit ready message [0.12ms]
+(pass) InitializationGate > accepts one coded failed message [0.02ms]
+(pass) InitializationGate > rejects malformed and duplicate initialization messages [0.02ms]
+(pass) InitializationGate > records timeout and processor errors as coded failures [0.01ms]
+(pass) runtime failure protocol > accepts only coded runtime failure messages [0.02ms]
+
+web/test/player-collection.test.ts:
+(pass) bounded admission in picker order retains distinct same-named File references without preparation [0.71ms]
+(pass) selection is independent; ordinary activation never autoplays; row play resumes, pauses and replays [1.24ms]
+(pass) previous/next start at zero preserving intent and selection, bounded with no wrap or auto-advance [0.38ms]
+(pass) inactive removal preserves active playback; active removal closes without successor; clear releases references and preserves gain [0.22ms]
+(pass) close cancels pending explicit autoplay and disposes a late result [1.45ms]
+(pass) clear cancels pending explicit autoplay and disposes a late result [1.29ms]
+(pass) remove cancels pending explicit autoplay and disposes a late result [1.30ms]
+(pass) same-name replacement ignores obsolete completion and late rejection, then errors recover by retry [1.48ms]
+(pass) rapid next during preparation preserves explicit playing intent, not the stale request [1.41ms]
+
+web/test/oscilloscope-render.test.ts:
+(pass) oscilloscope history is exactly three reusable windows / 48 KiB with bounded vertices and paired palettes [1.88ms]
+
+web/test/worklet-transport.test.ts:
+(pass) AudioWorklet PCM transport > terminally fails a malformed transferred block instead of stranding its slot [0.75ms]
+
+web/test/player-prototype-state.test.ts:
+(pass) #21 silent interaction study > row selection leaves paused or playing state, position and loop untouched [0.13ms]
+(pass) #21 silent interaction study > row play starts the requested track from paused or playing without changing selection [0.04ms]
+(pass) #21 silent interaction study > enabling outside a region moves to A without starting playback [0.03ms]
+(pass) #21 silent interaction study > seeking or editing outside an active loop disables it but retains the region [0.03ms]
+(pass) #21 silent interaction study > one-second prototype interval bounds and whole-track reset remain valid [0.01ms]
+(pass) #21 silent interaction study > ready loop wraps, preparation does not masquerade as effective looping, replay starts at zero [0.03ms]
+(pass) #21 silent interaction study > current-track play resumes; pause retains position; ended row play restarts [0.03ms]
+(pass) #21 silent interaction study > error/loading simulation can recover without an automatic play [0.05ms]
+
+web/test/prepare-waveform.test.ts:
+(pass) prepare-waveform deadline settles held compilation and never creates a late worker [0.27ms]
+(pass) prepare-waveform replacement settles held compilation and never creates a late worker [0.05ms]
+
+web/test/pcm-transport.test.ts:
+(pass) PCM transferable protocol > accepts only exact fixed-capacity blocks and admission results [0.05ms]
+(pass) PCM transferable protocol > fixed pool exhausts without replacement and rejects duplicate returns [0.19ms]
+(pass) PCM transferable protocol > MessageChannel transfer detaches each sender and reuses returned ownership [0.12ms]
+(pass) PCM transferable protocol > generated planar samples are deterministic by source frame and channel [0.04ms]
+
+web/test/local-pcm-producer.test.ts:
+(pass) short/exact/partial finite prefill waits for admission, not all four slots or read EOF [0.49ms]
+(pass) admission is not consumption credit; pause/full slots cannot rejection-spin; retry stays ordered [0.53ms]
+(pass) malformed/duplicate ownership replies fail once and stop scheduling [0.08ms]
+(pass) default timer scheduling does not pass the producer as a browser host-function receiver [0.09ms]
+
+web/test/preparation-lifecycle.test.ts:
+(pass) PreparationLifecycle > rejects a concurrent preparation without creating or replacing a proof [0.09ms]
+(pass) PreparationLifecycle > close aborts preparation and disposes an uncancellable late result before reload [0.10ms]
+(pass) PreparationLifecycle > closes the active proof before creating its sequential replacement [0.05ms]
+
+web/test/playback-owner.test.ts:
+(pass) one clamp and nearest-source-frame rule includes both endpoints and half frames [0.04ms]
+(pass) load stays paused; periodic updates use consumed cursor, never render clock or read-ahead [268.23ms]
+(pass) polls coalesce and play waits without overlapping snapshots [3.71ms]
+(pass) polls coalesce and pause waits without overlapping snapshots [2.18ms]
+(pass) polls coalesce and seek waits without overlapping snapshots [3.67ms]
+(pass) seek waits for readiness and preserves paused=%s; replay seeks zero then plays [2.26ms]
+(pass) seek waits for readiness and preserves paused=%s; replay seeks zero then plays [1.46ms]
+(pass) volume and mute retain level and position without lifecycle or command work [0.42ms]
+(pass) late preparation after close is cancelled and disposed without reviving UI [1.54ms]
+(pass) late preparation after replace is cancelled and disposed without reviving UI [1.47ms]
+(pass) late status completion after replace cannot restore old cursor/state [2.04ms]
+(pass) late seek completion after replace cannot restore old cursor/state [1.61ms]
+(pass) late status completion after close cannot restore old cursor/state [1.46ms]
+(pass) late seek completion after close cannot restore old cursor/state [1.40ms]
+(pass) malformed/unsupported preparation and runtime failures recover on a new load [1.26ms]
+(pass) consumed EOS acknowledges suspension; seeking away stays paused until explicit Play [0.81ms]
+(pass) oscilloscope revisions reject old consumers across held seek, replacement, close and visual-only failure [3.14ms]
+
+web/test/oscilloscope-tap.test.ts:
+(pass) tap retains %s independent channels, muted sink and context-time warmup [1.22ms]
+(pass) tap retains %s independent channels, muted sink and context-time warmup [0.10ms]
+(pass) first listening gain before activation=%s preserves tap and single file route [1.38ms]
+(pass) first listening gain before activation=%s preserves tap and single file route [0.14ms]
+(pass) proof-only activate retains its analyser route when listening gain is first set [303.58ms]
+(pass) seek destroys history; paused seek cannot qualify with wall time; resume restarts warmup [5.83ms]
+(pass) analyser setup/read failure never stops playback [0.75ms]
+
+web/test/render-adapter.test.ts:
+(pass) PreparedPlanarAdapter > maps mono Wasm storage using actual non-128 output lengths [0.77ms]
+(pass) PreparedPlanarAdapter > maps stereo into distinct host channels [0.15ms]
+(pass) PreparedPlanarAdapter > unequal stereo arrays cause permanent positive-zero silence [0.42ms]
+(pass) PreparedPlanarAdapter > capacity excess becomes permanent silence without calling Wasm [0.15ms]
+(pass) PreparedPlanarAdapter > memory buffer identity change becomes permanent silence [0.12ms]
+(pass) PreparedPlanarAdapter > maps every non-rendered Wasm status to an unambiguous failure [0.59ms]
+(pass) PreparedPlanarAdapter > thrown exceptions use their own failure code and produce silence [0.26ms]
+
+web/test/source-waveform.test.ts:
+(pass) source-waveform silence, short tracks, channel extrema and partial source bins [2.61ms]
+(pass) source-waveform bounds, invalid chunks and complete-only publication [0.27ms]
+(pass) source-waveform display reduction preserves every impulse, including boundary and partial bins [2.39ms]
+(pass) waveform lifecycle is independent of play, seek, volume; failures never fail playback [0.56ms]
+(pass) waveform same-name replacement and close reject late jobs (rejection=%s) [0.44ms]
+(pass) waveform same-name replacement and close reject late jobs (rejection=%s) [0.11ms]
+
+web/test/plan-main.test.ts:
+(pass) compiled plan activation > rejects silent analyser output and suspends the failed proof [306.25ms]
+(pass) compiled plan activation > rejects a terminal render snapshot and suspends the failed proof [309.91ms]
+
+web/test/plan-adapter.test.ts:
+(pass) compiled plan host adapter > copies prepared mono and stereo views at actual variable frame counts [1.01ms]
+(pass) compiled plan host adapter > reads and drains one observation only when the host asks for a snapshot [0.12ms]
+(pass) compiled plan host adapter > capacity, malformed layout, and detached memory become permanent silence before Wasm [0.32ms]
+(pass) compiled plan host adapter > all failed Wasm statuses and exceptions silence output without retrying [0.34ms]
+
+web/test/main.test.ts:
+(pass) PreparedProof activation > rejects when the proof closes during the observation delay [302.42ms]
+(pass) PreparedProof activation > routes a post-preparation worker failure through runtime cleanup once [0.52ms]
+(pass) PreparedProof activation > routes a worklet transport failure through runtime cleanup with its code [0.13ms]
+(pass) PreparedProof activation > routes snapshot timeout through runtime cleanup before rejecting [1307.12ms]
+(pass) PreparedProof activation > rejects a runtime failure raised during the snapshot request and terminates its worker once [302.76ms]
+(pass) PreparedProof activation > routes a terminal snapshot through runtime cleanup before rejecting [302.11ms]
+(pass) PreparedProof activation > preserves a worklet runtime failure while worker readiness is pending [6.72ms]
+(pass) PreparedProof activation > preserves worker-failed after worker readiness while worklet readiness is pending [2.17ms]
+(pass) PreparedProof activation > preserves error after worker readiness while worklet readiness is pending [1.65ms]
+(pass) PreparedProof activation > routes worker errors through runtime cleanup when prepared [0.71ms]
+(pass) PreparedProof activation > routes worker errors through runtime cleanup when active [303.13ms]
+(pass) local WAV controls suspend at acknowledgment, retain the instance, and never rewind consumed EOS [2.31ms]
+(pass) WAV seeks reject stale completion/observations, preserve pause and cancel on close [1.04ms]
+(pass) a delayed prior-epoch snapshot requests a fresh reply rather than timing out playback [0.42ms]
+(pass) proof-page Status disables conflicting controls but keeps Close available [6.96ms]
+(pass) post-worklet listening gain updates the same node without context or cursor reset [0.32ms]
+
+ 96 pass
+ 0 fail
+ 1119 expect() calls
+Ran 96 tests across 16 files. [3.82s]
+$ bun tools/check-wasm-memory.ts web/dist/kkb_audio_bg.wasm
+{"bytes":16777216,"exportedName":"memory","maximumPages":256,"minimumPages":256,"shared":false}
+$ bun tools/check-worklet-kernel.ts
+{"sampleRates":[44100,48000],"channels":[1,2],"totalFrames":1000,"gain":0.5,"partitionEquality":"exact","partialEpochRejection":true,"starvationAndRecovery":true,"stableMemoryPcmRenderCallsPerConfiguration":10000,"builtProcessorTransferAndRetry":true,"nativeToWasmBitIdentityClaim":false}
+$ bun test tools/check-local-wav.test.ts tools/check-sample-rate.test.ts tools/check-local-pcm-scheduling.test.ts tools/check-wav-seek.test.ts
+bun test v1.4.0 (34cbb9a40)
+
+tools/check-sample-rate.test.ts:
+(pass) actual Wasm prepared conversion: finite lengths, partition equality, bypass and rational media cursor [16.16ms]
+(pass) actual Wasm conversion meets analytic passband and 23kHz rejection thresholds [33.59ms]
+(pass) built WAV worker conversion reaches consumed EOS across pause and starvation with bounded reads [298.80ms]
+
+tools/check-wav-seek.test.ts:
+(pass) actual worker/Wasm seeks: uninterrupted reference, paused reclamation, superseding reads/admissions, EOS and finite ownership [391.38ms]
+
+tools/check-local-wav.test.ts:
+(pass) actual Wasm shared decoder rejects malformed chunk bounds and unsupported WAV [0.82ms]
+(pass) actual decoder → bounded producer → compiled Wasm: finite tails, irregular partitions, channel identity and EOS [10.91ms]
+{"simulatedRate":48000,"totalFrames":480000,"callbacks":3793,"naturalStarvation":0,"injectedStarvationCallbacks":43,"supplyPolls":5080,"rejectedBlocks":0,"maximumPendingTimers":1,"browserDeadlineClaim":false}
+(pass) 48 kHz ten-second simulated host outlasts prefill: bounded credit pacing, starvation recovery and pause preservation [54.29ms]
+(pass) built browser worker reads bounded File slices, rejects unsupported conversion and admits a short tail before ready [8.55ms]
+
+tools/check-local-pcm-scheduling.test.ts:
+(pass) LocalPcmProducer asynchronous supply 44100 → 48000: selected capacity survives a delayed poll [14.24ms]
+(pass) LocalPcmProducer asynchronous supply 48000 → 44100: selected capacity survives a delayed poll [10.80ms]
+(pass) LocalPcmProducer asynchronous supply 48000 → 48000: selected capacity survives a delayed poll [8.25ms]
+(pass) source WAV worker keeps reads bounded independently of selected transport capacity [3.13ms]
+
+ 12 pass
+ 0 fail
+ 354942 expect() calls
+Ran 12 tests across 4 files. [868.00ms]
+$ bun test tools/check-local-mp3.test.ts
+bun test v1.4.0 (34cbb9a40)
+
+tools/check-local-mp3.test.ts:
+(pass) MP3 actual worker/Wasm seeks: uninterrupted reference, paused reclamation, superseding reads/admissions, EOS and finite ownership [3330.05ms]
+(pass) compiled MP3 inspector rejects corrupt/config-changing/truncated metadata and accepts missing optional trim [2.71ms]
+(pass) compiled MP3 VBRI uses scan fallback for advisory declarations but rejects malformed structure/audio [11.44ms]
+
+ 3 pass
+ 0 fail
+ 3232992 expect() calls
+Ran 3 tests across 1 file. [3.35s]
+$ bun test tools/check-source-waveform.test.ts
+bun test v1.4.0 (34cbb9a40)
+
+tools/check-source-waveform.test.ts:
+(pass) source-waveform real Rust/Wasm worker: independent PCM16/24 mono/stereo, rates, short/partial bins [55.77ms]
+(pass) source-waveform real Rust/Wasm MP3 trim and bins match all independent FFmpeg references [107.77ms]
+(pass) source-waveform Rust PCM silence and isolated opposite-phase impulses preserve unclipped source peaks [9.02ms]
+
+ 3 pass
+ 0 fail
+ 114859 expect() calls
+Ran 3 tests across 1 file. [180.00ms]
+$ bun tools/check-worklet-plan.ts
+{"sampleRates":[44100,48000],"channels":[1,2],"totalFrames":1000,"maximumReferenceError":0,"partitionEquality":"exact","observationWindowFrames":64,"stableMemoryRenderCallsPerConfiguration":10000,"invalidDescriptionRejected":true,"capacityFailureTerminal":true,"builtProcessorHandshakeAndFailureSilence":true}
+$ bun test tools/check-lab.test.ts tools/check-lab-canvas.test.ts
+bun test v1.4.0 (34cbb9a40)
+
+tools/check-lab-canvas.test.ts:
+(pass) fractional-width scope bins stay inside the window starting at 0 [3.46ms]
+(pass) fractional-width scope bins stay inside the window starting at 12000 [0.97ms]
+
+tools/check-lab.test.ts:
+(pass) learning lab with actual Wasm > the displayed plan, all taps, and the exact set sample agree [11.26ms]
+(pass) learning lab with actual Wasm > ramp endpoints and all seven tapes are identical across driver partitions [25.69ms]
+(pass) learning lab with actual Wasm > invalid partitions, excessive events, and invalid values are rejected [0.29ms]
+(pass) moving ramps retains their duration and remains inside the tape [0.06ms]
+
+ 6 pass
+ 0 fail
+ 89 expect() calls
+Ran 6 tests across 2 files. [120.00ms]
+$ bun test tools/check-lab-ui.test.tsx
+bun test v1.4.0 (34cbb9a40)
+
+tools/check-lab-ui.test.tsx:
+(pass) React lab worker lifecycle > edits invalidate replies immediately and debounce the latest configuration [219.10ms]
+(pass) React lab worker lifecycle > dragging rejects an outstanding comparison and renders the released position [321.86ms]
+(pass) React lab worker lifecycle > StrictMode leaves one worker and unmount cancels its pending render [193.59ms]
+(pass) React lab worker lifecycle > a worker message failure can be retried with Reset [110.37ms]
+(pass) React lab worker lifecycle > a worker error failure can be retried with Reset [107.95ms]
+(pass) React lab worker lifecycle > page restoration recreates the worker with the current experiment [270.86ms]
+(pass) React lab event editor > negative drafts remain editable and commit on Enter or blur [783.10ms]
+(pass) React lab event editor > selecting another event retains selector focus and resets its numeric drafts [111.66ms]
+
+ 8 pass
+ 0 fail
+ 98 expect() calls
+Ran 8 tests across 1 file. [2.28s]
+$ bun test tools/check-player-ui.test.tsx
+bun test v1.4.0 (34cbb9a40)
+
+tools/check-player-ui.test.tsx:
+(pass) multi-file wav admission never prepares; row selection is independent from explicit play [86.02ms]
+(pass) multi-file mp3 admission never prepares; row selection is independent from explicit play [39.18ms]
+(pass) drag previews separately from consumed time, release commits exactly once and waits for readiness [15.61ms]
+(pass) escape cancels preview without seeking [15.57ms]
+(pass) pointercancel cancels preview without seeking [8.75ms]
+(pass) blur cancels preview without seeking [11.85ms]
+(pass) windowblur cancels preview without seeking [9.67ms]
+(pass) lostcapture cancels preview without seeking [9.12ms]
+(pass) keyboard seeking, endpoint and explicit replay preserve playback intent [56.73ms]
+(pass) accessible volume popup has keyboard control, mute and focus return independent of playback [63.75ms]
+(pass) endpoint keeps keyboard focus; seeking back from Ended requires explicit Play [33.94ms]
+(pass) playing drag preview survives periodic consumed updates and resumes acknowledged playing state [16.30ms]
+(pass) library/Settings/theme/responsive disclosures preserve owner and seek identity, and return focus [91.87ms]
+(pass) same-named entry replacement cancels an uncommitted seek, and session removal/Clear stays recoverable [67.68ms]
+(pass) loading is cancellable from internal library Settings; malformed files remain browsable and retryable [77.40ms]
+(pass) completed source waveform keeps consumed progress separate and reconciles an adjusted seek [15.75ms]
+(pass) Settings Pause visual leaves audio running and its stable canvas visible across status polls [32.52ms]
+(pass) visual failure keeps its explanation after reduced motion is toggled without remounting [7.55ms]
+(pass) reduced motion observed by polling redraws only a baseline even without a media-change event [9.82ms]
+
+ 19 pass
+ 0 fail
+ 143 expect() calls
+Ran 19 tests across 1 file. [814.00ms]
+$ bun tools/audit-worklet.ts web/dist/worklet-processor.js
+{"bytes":37493,"forbiddenPatterns":[],"processorRegistrations":1,"synchronousInstantiation":true,"auditedCallbackBodies":["processor.process","WorkletKernel.render","PreparedPlanarAdapter.process","PreparedPlanarAdapter.#fail","wasmRenderFailure","fillSilence"],"callbackForbiddenPatterns":[]}
+$ bun tools/audit-plan-worklet.ts web/dist/plan-processor.js
+{"bytes":28345,"forbiddenPatterns":[],"processorRegistrations":1,"synchronousInstantiation":true,"auditedCallbackBodies":["processor.process","WorkletPlan.render","PreparedPlanAdapter.process","PreparedPlanAdapter.#fail","planSilence"],"callbackForbiddenPatterns":[]}

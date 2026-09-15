@@ -182,13 +182,21 @@ impl PreparedRateConverter {
     /// absolute realized PCM coordinate; source_frames_read() exposes the read anchor.
     pub fn seek(&mut self, source_frame: u64) -> Result<u64, u32> {
         let target = self.timeline.seek_pcm_frame(source_frame)?;
+        self.seek_output_frame(target)
+    }
+    /// Worker loop-head continuation on the existing absolute output grid. This
+    /// does not introduce a fractional phase or a new conversion timeline.
+    pub fn seek_output_frame(&mut self, target: u64) -> Result<u64, u32> {
+        if target > self.total_pcm_frames() {
+            return Err(INVALID_CONVERSION);
+        }
         self.reset();
         self.pcm_consumed = target;
         if target == self.total_pcm_frames() || self.resampler.is_none() {
             self.source_read = if target == self.total_pcm_frames() {
                 self.timeline.source_frames
             } else {
-                source_frame
+                target
             };
             self.skip_delay = 0;
         } else {

@@ -1,0 +1,25 @@
+PASS player muted before real Play; browser also --mute-audio
+PASS collection admission does not analyse inactive files
+PASS real WAV plays before overview completion
+PASS one real source summary completes
+PASS real pointer draft is separate from consumed cursor and performs no seek
+PASS Escape cancels held pointer
+PASS one release acknowledges source-time seek
+PASS Home reaches exact start
+PASS seek, EOS/replay and volume preserve complete summary
+PASS approved desktop and navigation dimensions
+PASS visible seek focus and separate unavailable visual
+PASS narrow library replaces only visual and retains waveform
+PASS approved desktop and navigation dimensions
+PASS visible seek focus and separate unavailable visual
+PASS narrow library replaces only visual and retains waveform
+PASS reduced motion, mode and library retain analysis
+PASS 600-second actual MP3 workload plays during independent source scan
+PASS MP3 endpoint/replay uses same complete summary
+PASS close terminates representative long scan and clears overview
+PASS replacement terminates obsolete long job; trimmed 44.1k MP3 owns result
+PASS analysis-only failure leaves play/pause and seek available
+PASS all created workers disposed after close
+PASS worklet memory stays fixed and runtime has no failure
+Browser page errors: {"errors":[],"lifecycle":{"effectiveLaunch":{"browserLaunched":true,"engine":"chrome","launchHash":11150461532353909000},"launched":false,"relaunchedBrowser":false,"restartedBackground":false,"restoreStatus":"not_configured","reused":true,"saveStatus":"not_attempted"}}
+Evidence: /tmp/kkb18-browser-final fixtures: /var/folders/jf/xv4gdzq90yj1t8yhpx5yp9480000gn/T/kkb18-waveform-fixtures-i661BY

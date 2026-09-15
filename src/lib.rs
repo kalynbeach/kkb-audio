@@ -171,7 +171,16 @@ mod prepared_pcm;
 mod local_wav;
 
 #[allow(dead_code)]
+mod local_mp3;
+
+#[allow(dead_code)]
+mod local_media;
+
+#[allow(dead_code)]
 mod sample_rate;
+
+#[allow(dead_code)]
+mod media_loop;
 
 // Gate A remains private and does not consume the prepared PCM seam.
 #[allow(dead_code)]

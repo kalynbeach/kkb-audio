@@ -66,20 +66,33 @@ class KkbPreparedKernelProcessor extends AudioWorkletProcessor {
         ) {
           const transportPort = event.data.port;
           transportPort.onmessage = (transportEvent: MessageEvent<unknown>) => {
-            const control = transportEvent.data as { type?: string; epoch?: number; target?: number } | null;
+            const control = transportEvent.data as { type?: string; epoch?: number; target?: number; recovery?: boolean; disabled?: boolean; a?: number; b?: number; left?: number; right?: number; loopChange?: { a: number; b: number; enabled: boolean; edit: boolean } } | null;
+            if (control?.type === "loop-head") {
+              try {
+                if (!Number.isSafeInteger(control.epoch) || BigInt(control.epoch!) !== kernel.epoch()) throw new Error("stale loop head");
+                if (!control.recovery) {
+                  if (!control.disabled && (!Number.isSafeInteger(control.a) || !Number.isSafeInteger(control.b) || !Number.isFinite(control.left) || !Number.isFinite(control.right))) throw new Error("invalid loop head");
+                  kernel.configure_loop(BigInt(control.a ?? 0), BigInt(control.b ?? 0), control.left ?? 0, control.right ?? 0, !control.disabled);
+                }
+              } catch { this.#failRuntime(ProcessorFailure.InvalidTransportMessage); }
+              return;
+            }
             if (control?.type === "begin-seek" || control?.type === "finish-seek") {
               try {
                 if (!Number.isSafeInteger(control.epoch) || !Number.isSafeInteger(control.target) || control.epoch! < 0 || control.target! < 0) throw new Error("invalid seek");
+                const change=control.loopChange;
+                if(change&&(!Number.isSafeInteger(change.a)||!Number.isSafeInteger(change.b)||typeof change.enabled!=="boolean"||typeof change.edit!=="boolean"))throw new Error("invalid loop change");
                 const pcmFrame = control.type === "begin-seek"
-                  ? Number(kernel.begin_seek(BigInt(control.epoch!), BigInt(control.target!)))
+                  ? change ? Number(kernel.begin_loop_change(BigInt(control.epoch!),BigInt(change.a),BigInt(change.b),change.enabled,change.edit)) : control.recovery ? Number(kernel.begin_loop_recovery(BigInt(control.epoch!))) : Number(kernel.begin_seek(BigInt(control.epoch!), BigInt(control.target!)))
                   : Number(kernel.pcm_position());
                 if (control.type === "finish-seek" && !kernel.finish_seek(BigInt(control.epoch!))) throw new Error("stale seek");
-                transportPort.postMessage({ type: "seek-transition", epoch: control.epoch, pcmFrame });
+                transportPort.postMessage({ type: "seek-transition", epoch: control.epoch, pcmFrame, loopEnabled: change ? kernel.loop_change_enabled() : undefined,
+                  pauseRequired: !!change && kernel.loop_change_enabled() && kernel.loop_change_ended() });
               } catch { this.#failRuntime(ProcessorFailure.InvalidTransportMessage); }
               return;
             }
             if (control?.type === "supply") {
-              transportPort.postMessage({ type: "supply", free: [kernel.slot_free(0), kernel.slot_free(1), kernel.slot_free(2), kernel.slot_free(3)] });
+              transportPort.postMessage({ type: "supply", loopUnderruns: Number(kernel.loop_underruns()), free: [kernel.slot_free(0), kernel.slot_free(1), kernel.slot_free(2), kernel.slot_free(3)] });
               return;
             }
             if (!isPcmBlockMessage(transportEvent.data, processorOptions)) {

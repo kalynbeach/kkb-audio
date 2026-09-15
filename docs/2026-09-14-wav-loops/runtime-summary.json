@@ -1,0 +1,1193 @@
+{
+  "scope": "Muted owned Chrome runtime on the repair-worker build, before the final parent owner-intent cleanup. No audible/device/listening acceptance.",
+  "origin": "http://127.0.0.1:4339",
+  "session": "kkb19-repair",
+  "fixtureNotes": "seven.wav: authored PCM16 mono48000Hz7frames; other screenshots use authored PCM16 stereo48000Hz10s. All browser and player outputs muted.",
+  "initialShort": {
+    "loop": {
+      "enabled": false,
+      "error": "Error: Loop needs at least 8 output frames and a 2-frame fade within 5 ms.",
+      "phase": "Disabled",
+      "region": null,
+      "supported": false
+    },
+    "phase": "ended",
+    "triggerDisabled": false,
+    "visibleReason": "Error: Loop needs at least 8 output frames and a 2-frame fade within 5 ms.",
+    "snapshot": {
+      "epoch": 1,
+      "pcmPosition": 7,
+      "renderFrame": 256,
+      "ended": true,
+      "ready": true,
+      "loopIteration": 0,
+      "loopUnderruns": 0,
+      "loopRecovering": false,
+      "loopExtensionFrames": 0,
+      "loopLostFrames": 0,
+      "invalidBlocks": 0,
+      "memoryBytes": 16777216
+    }
+  },
+  "ownerSequences": {
+    "first": {
+      "acceptedBefore": {
+        "a": 48000,
+        "b": 96000,
+        "fade": 240,
+        "pcmA": 48000,
+        "pcmB": 96000,
+        "period": 48000
+      },
+      "after": {
+        "enabled": true,
+        "error": null,
+        "phase": "Armed",
+        "region": {
+          "a": 48000,
+          "b": 96000,
+          "fade": 240,
+          "pcmA": 48000,
+          "pcmB": 96000,
+          "period": 48000
+        },
+        "supported": true
+      },
+      "calls": [
+        [
+          48000,
+          96000,
+          true,
+          false
+        ]
+      ],
+      "paused": true
+    },
+    "second": {
+      "after": {
+        "enabled": true,
+        "error": null,
+        "phase": "Armed",
+        "region": {
+          "a": 2000,
+          "b": 200000,
+          "fade": 240,
+          "pcmA": 2000,
+          "pcmB": 200000,
+          "period": 198000
+        },
+        "supported": true
+      },
+      "calls": [
+        [
+          1000,
+          200000,
+          true,
+          true
+        ],
+        [
+          2000,
+          200000,
+          true,
+          true
+        ]
+      ],
+      "paused": true
+    }
+  },
+  "eos": {
+    "ownerBefore": {
+      "ended": false,
+      "pcm": 48256
+    },
+    "rendererBefore": {
+      "epoch": 6,
+      "pcmPosition": 480000,
+      "renderFrame": 3185152,
+      "ended": true,
+      "ready": true,
+      "loopIteration": 0,
+      "loopUnderruns": 0,
+      "loopRecovering": false,
+      "loopExtensionFrames": 0,
+      "loopLostFrames": 0,
+      "invalidBlocks": 0,
+      "memoryBytes": 16777216
+    },
+    "events": [
+      {
+        "contextPaused": false,
+        "epoch": 7,
+        "type": "loop-ended"
+      },
+      {
+        "contextPaused": true,
+        "epoch": 7,
+        "type": "seek-complete"
+      }
+    ],
+    "after": {
+      "epoch": 7,
+      "pcmPosition": 1000,
+      "renderFrame": 3185664,
+      "ended": false,
+      "ready": true,
+      "loopIteration": 0,
+      "loopUnderruns": 0,
+      "loopRecovering": false,
+      "loopExtensionFrames": 0,
+      "loopLostFrames": 0,
+      "invalidBlocks": 0,
+      "memoryBytes": 16777216
+    },
+    "held150ms": {
+      "epoch": 7,
+      "pcmPosition": 1000,
+      "renderFrame": 3185664,
+      "ended": false,
+      "ready": true,
+      "loopIteration": 0,
+      "loopUnderruns": 0,
+      "loopRecovering": false,
+      "loopExtensionFrames": 0,
+      "loopLostFrames": 0,
+      "invalidBlocks": 0,
+      "memoryBytes": 16777216
+    },
+    "phase": "paused",
+    "loopPhase": "Armed",
+    "paused": true,
+    "muted": true
+  },
+  "normal": {
+    "epoch": 7,
+    "pcmPosition": 2056,
+    "renderFrame": 3198720,
+    "ended": false,
+    "ready": true,
+    "loopIteration": 3,
+    "loopUnderruns": 0,
+    "loopRecovering": false,
+    "loopExtensionFrames": 0,
+    "loopLostFrames": 0,
+    "invalidBlocks": 0,
+    "memoryBytes": 16777216
+  },
+  "underrun": {
+    "epoch": 7,
+    "pcmPosition": 4456,
+    "renderFrame": 3208192,
+    "ended": false,
+    "ready": false,
+    "loopIteration": 4,
+    "loopUnderruns": 1,
+    "loopRecovering": true,
+    "loopExtensionFrames": 3072,
+    "loopLostFrames": 544,
+    "invalidBlocks": 0,
+    "memoryBytes": 16777216
+  },
+  "recovery": {
+    "epoch": 8,
+    "pcmPosition": 1448,
+    "renderFrame": 3222784,
+    "ended": false,
+    "ready": true,
+    "loopIteration": 7,
+    "loopUnderruns": 1,
+    "loopRecovering": false,
+    "loopExtensionFrames": 9216,
+    "loopLostFrames": 544,
+    "invalidBlocks": 0,
+    "memoryBytes": 16777216
+  },
+  "before320": {
+    "card": {
+      "x": 12,
+      "y": 60,
+      "width": 296,
+      "height": 440
+    },
+    "playback": {
+      "x": 112,
+      "y": 449.5,
+      "width": 132,
+      "height": 44
+    },
+    "utility": {
+      "x": 21,
+      "y": 449.5,
+      "width": 91,
+      "height": 44
+    },
+    "centerOffset": 18
+  },
+  "final320": {
+    "dark": false,
+    "settled": true,
+    "centerOffset": 0,
+    "horizontalOverflow": false,
+    "caption": "Paused · Play to observe",
+    "captionVisible": true,
+    "overlayInside": true,
+    "overlayScrollable": true,
+    "surfaces": {
+      ".player-card": {
+        "x": 12,
+        "y": 60,
+        "width": 296,
+        "height": 440
+      },
+      ".player-loop-overlay": {
+        "x": 18,
+        "y": 189,
+        "width": 284,
+        "height": 170
+      },
+      ".player-main-field": {
+        "x": 13,
+        "y": 125,
+        "width": 294,
+        "height": 234
+      },
+      ".player-oscilloscope figcaption": {
+        "x": 30,
+        "y": 137,
+        "width": 260,
+        "height": 16
+      },
+      ".player-playback": {
+        "x": 94,
+        "y": 449.5,
+        "width": 132,
+        "height": 44
+      },
+      ".player-track-header": {
+        "x": 13,
+        "y": 61,
+        "width": 294,
+        "height": 64
+      },
+      ".player-transport": {
+        "x": 13,
+        "y": 443,
+        "width": 294,
+        "height": 56
+      },
+      ".player-waveform": {
+        "x": 25,
+        "y": 373,
+        "width": 270,
+        "height": 40
+      }
+    },
+    "buttons": [
+      {
+        "label": "Volume",
+        "disabled": false,
+        "hit": true,
+        "x": 21,
+        "y": 449.5,
+        "width": 34,
+        "height": 44
+      },
+      {
+        "label": "Loop editor",
+        "disabled": false,
+        "hit": true,
+        "x": 58,
+        "y": 449.5,
+        "width": 34,
+        "height": 44
+      },
+      {
+        "label": "Previous track",
+        "disabled": false,
+        "hit": true,
+        "x": 94,
+        "y": 449.5,
+        "width": 44,
+        "height": 44
+      },
+      {
+        "label": "Play",
+        "disabled": false,
+        "hit": true,
+        "x": 140,
+        "y": 451.5,
+        "width": 40,
+        "height": 40
+      },
+      {
+        "label": "Next track",
+        "disabled": false,
+        "hit": true,
+        "x": 182,
+        "y": 449.5,
+        "width": 44,
+        "height": 44
+      },
+      {
+        "label": "Show library",
+        "disabled": false,
+        "hit": true,
+        "x": 255,
+        "y": 449.5,
+        "width": 44,
+        "height": 44
+      }
+    ]
+  },
+  "aboveBreakpoint361": {
+    "dark": false,
+    "settled": true,
+    "centerOffset": 0,
+    "horizontalOverflow": false,
+    "caption": "Paused · Play to observe",
+    "captionVisible": true,
+    "overlayInside": true,
+    "overlayScrollable": true,
+    "surfaces": {
+      ".player-card": {
+        "x": 12,
+        "y": 60,
+        "width": 337,
+        "height": 440
+      },
+      ".player-loop-overlay": {
+        "x": 18,
+        "y": 189,
+        "width": 325,
+        "height": 170
+      },
+      ".player-main-field": {
+        "x": 13,
+        "y": 125,
+        "width": 335,
+        "height": 234
+      },
+      ".player-oscilloscope figcaption": {
+        "x": 30,
+        "y": 137,
+        "width": 301,
+        "height": 16
+      },
+      ".player-playback": {
+        "x": 114.5,
+        "y": 449.5,
+        "width": 132,
+        "height": 44
+      },
+      ".player-track-header": {
+        "x": 13,
+        "y": 61,
+        "width": 335,
+        "height": 64
+      },
+      ".player-transport": {
+        "x": 13,
+        "y": 443,
+        "width": 335,
+        "height": 56
+      },
+      ".player-waveform": {
+        "x": 25,
+        "y": 373,
+        "width": 311,
+        "height": 40
+      }
+    },
+    "buttons": [
+      {
+        "label": "Volume",
+        "disabled": false,
+        "hit": true,
+        "x": 21,
+        "y": 449.5,
+        "width": 44,
+        "height": 44
+      },
+      {
+        "label": "Loop editor",
+        "disabled": false,
+        "hit": true,
+        "x": 68,
+        "y": 449.5,
+        "width": 44,
+        "height": 44
+      },
+      {
+        "label": "Previous track",
+        "disabled": false,
+        "hit": true,
+        "x": 114.5,
+        "y": 449.5,
+        "width": 44,
+        "height": 44
+      },
+      {
+        "label": "Play",
+        "disabled": false,
+        "hit": true,
+        "x": 160.5,
+        "y": 451.5,
+        "width": 40,
+        "height": 40
+      },
+      {
+        "label": "Next track",
+        "disabled": false,
+        "hit": true,
+        "x": 202.5,
+        "y": 449.5,
+        "width": 44,
+        "height": 44
+      },
+      {
+        "label": "Show library",
+        "disabled": false,
+        "hit": true,
+        "x": 296,
+        "y": 449.5,
+        "width": 44,
+        "height": 44
+      }
+    ]
+  },
+  "focusOrder": [
+    "Volume",
+    "Loop editor",
+    "Previous track",
+    "Play",
+    "Next track",
+    "Show library"
+  ],
+  "captions": {
+    "reducedExpanded": {
+      "dark": false,
+      "settled": true,
+      "centerOffset": 0,
+      "horizontalOverflow": false,
+      "caption": "Reduced motion · live visual off",
+      "captionVisible": true,
+      "overlayInside": true,
+      "overlayScrollable": true,
+      "surfaces": {
+        ".player-card": {
+          "x": 12,
+          "y": 60,
+          "width": 296,
+          "height": 440
+        },
+        ".player-loop-overlay": {
+          "x": 18,
+          "y": 189,
+          "width": 284,
+          "height": 170
+        },
+        ".player-main-field": {
+          "x": 13,
+          "y": 125,
+          "width": 294,
+          "height": 234
+        },
+        ".player-oscilloscope figcaption": {
+          "x": 30,
+          "y": 137,
+          "width": 260,
+          "height": 16
+        },
+        ".player-playback": {
+          "x": 94,
+          "y": 449.5,
+          "width": 132,
+          "height": 44
+        },
+        ".player-track-header": {
+          "x": 13,
+          "y": 61,
+          "width": 294,
+          "height": 64
+        },
+        ".player-transport": {
+          "x": 13,
+          "y": 443,
+          "width": 294,
+          "height": 56
+        },
+        ".player-waveform": {
+          "x": 25,
+          "y": 373,
+          "width": 270,
+          "height": 40
+        }
+      },
+      "buttons": [
+        {
+          "label": "Volume",
+          "disabled": false,
+          "hit": true,
+          "x": 21,
+          "y": 449.5,
+          "width": 34,
+          "height": 44
+        },
+        {
+          "label": "Loop editor",
+          "disabled": false,
+          "hit": true,
+          "x": 58,
+          "y": 449.5,
+          "width": 34,
+          "height": 44
+        },
+        {
+          "label": "Previous track",
+          "disabled": false,
+          "hit": true,
+          "x": 94,
+          "y": 449.5,
+          "width": 44,
+          "height": 44
+        },
+        {
+          "label": "Pause",
+          "disabled": false,
+          "hit": true,
+          "x": 140,
+          "y": 451.5,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "label": "Next track",
+          "disabled": false,
+          "hit": true,
+          "x": 182,
+          "y": 449.5,
+          "width": 44,
+          "height": 44
+        },
+        {
+          "label": "Show library",
+          "disabled": false,
+          "hit": true,
+          "x": 255,
+          "y": 449.5,
+          "width": 44,
+          "height": 44
+        }
+      ]
+    },
+    "reducedCollapsed": {
+      "dark": false,
+      "settled": true,
+      "centerOffset": 0,
+      "horizontalOverflow": false,
+      "caption": "Reduced motion · live visual off",
+      "captionVisible": true,
+      "overlayInside": true,
+      "overlayScrollable": false,
+      "surfaces": {
+        ".player-card": {
+          "x": 12,
+          "y": 60,
+          "width": 296,
+          "height": 440
+        },
+        ".player-loop-overlay": {
+          "x": 18,
+          "y": 277,
+          "width": 284,
+          "height": 82
+        },
+        ".player-main-field": {
+          "x": 13,
+          "y": 125,
+          "width": 294,
+          "height": 234
+        },
+        ".player-oscilloscope figcaption": {
+          "x": 30,
+          "y": 137,
+          "width": 260,
+          "height": 16
+        },
+        ".player-playback": {
+          "x": 94,
+          "y": 449.5,
+          "width": 132,
+          "height": 44
+        },
+        ".player-track-header": {
+          "x": 13,
+          "y": 61,
+          "width": 294,
+          "height": 64
+        },
+        ".player-transport": {
+          "x": 13,
+          "y": 443,
+          "width": 294,
+          "height": 56
+        },
+        ".player-waveform": {
+          "x": 25,
+          "y": 373,
+          "width": 270,
+          "height": 40
+        }
+      },
+      "buttons": [
+        {
+          "label": "Volume",
+          "disabled": false,
+          "hit": true,
+          "x": 21,
+          "y": 449.5,
+          "width": 34,
+          "height": 44
+        },
+        {
+          "label": "Loop editor",
+          "disabled": false,
+          "hit": true,
+          "x": 58,
+          "y": 449.5,
+          "width": 34,
+          "height": 44
+        },
+        {
+          "label": "Previous track",
+          "disabled": false,
+          "hit": true,
+          "x": 94,
+          "y": 449.5,
+          "width": 44,
+          "height": 44
+        },
+        {
+          "label": "Pause",
+          "disabled": false,
+          "hit": true,
+          "x": 140,
+          "y": 451.5,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "label": "Next track",
+          "disabled": false,
+          "hit": true,
+          "x": 182,
+          "y": 449.5,
+          "width": 44,
+          "height": 44
+        },
+        {
+          "label": "Show library",
+          "disabled": false,
+          "hit": true,
+          "x": 255,
+          "y": 449.5,
+          "width": 44,
+          "height": 44
+        }
+      ]
+    },
+    "failureExpanded": {
+      "dark": true,
+      "settled": true,
+      "centerOffset": 0,
+      "horizontalOverflow": false,
+      "caption": "Visual unavailable · playback controls remain available",
+      "captionVisible": true,
+      "overlayInside": true,
+      "overlayScrollable": true,
+      "surfaces": {
+        ".player-card": {
+          "x": 12,
+          "y": 60,
+          "width": 296,
+          "height": 440
+        },
+        ".player-loop-overlay": {
+          "x": 18,
+          "y": 189,
+          "width": 284,
+          "height": 170
+        },
+        ".player-main-field": {
+          "x": 13,
+          "y": 125,
+          "width": 294,
+          "height": 234
+        },
+        ".player-oscilloscope figcaption": {
+          "x": 30,
+          "y": 137,
+          "width": 260,
+          "height": 32
+        },
+        ".player-playback": {
+          "x": 94,
+          "y": 449.5,
+          "width": 132,
+          "height": 44
+        },
+        ".player-track-header": {
+          "x": 13,
+          "y": 61,
+          "width": 294,
+          "height": 64
+        },
+        ".player-transport": {
+          "x": 13,
+          "y": 443,
+          "width": 294,
+          "height": 56
+        },
+        ".player-waveform": {
+          "x": 25,
+          "y": 373,
+          "width": 270,
+          "height": 40
+        }
+      },
+      "buttons": [
+        {
+          "label": "Volume",
+          "disabled": false,
+          "hit": true,
+          "x": 21,
+          "y": 449.5,
+          "width": 34,
+          "height": 44
+        },
+        {
+          "label": "Loop editor",
+          "disabled": false,
+          "hit": true,
+          "x": 58,
+          "y": 449.5,
+          "width": 34,
+          "height": 44
+        },
+        {
+          "label": "Previous track",
+          "disabled": false,
+          "hit": true,
+          "x": 94,
+          "y": 449.5,
+          "width": 44,
+          "height": 44
+        },
+        {
+          "label": "Pause",
+          "disabled": false,
+          "hit": true,
+          "x": 140,
+          "y": 451.5,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "label": "Next track",
+          "disabled": false,
+          "hit": true,
+          "x": 182,
+          "y": 449.5,
+          "width": 44,
+          "height": 44
+        },
+        {
+          "label": "Show library",
+          "disabled": false,
+          "hit": true,
+          "x": 255,
+          "y": 449.5,
+          "width": 44,
+          "height": 44
+        }
+      ]
+    },
+    "failureCollapsed": {
+      "dark": true,
+      "settled": true,
+      "centerOffset": 0,
+      "horizontalOverflow": false,
+      "caption": "Visual unavailable · playback controls remain available",
+      "captionVisible": true,
+      "overlayInside": true,
+      "overlayScrollable": false,
+      "surfaces": {
+        ".player-card": {
+          "x": 12,
+          "y": 60,
+          "width": 296,
+          "height": 440
+        },
+        ".player-loop-overlay": {
+          "x": 18,
+          "y": 277,
+          "width": 284,
+          "height": 82
+        },
+        ".player-main-field": {
+          "x": 13,
+          "y": 125,
+          "width": 294,
+          "height": 234
+        },
+        ".player-oscilloscope figcaption": {
+          "x": 30,
+          "y": 137,
+          "width": 260,
+          "height": 32
+        },
+        ".player-playback": {
+          "x": 94,
+          "y": 449.5,
+          "width": 132,
+          "height": 44
+        },
+        ".player-track-header": {
+          "x": 13,
+          "y": 61,
+          "width": 294,
+          "height": 64
+        },
+        ".player-transport": {
+          "x": 13,
+          "y": 443,
+          "width": 294,
+          "height": 56
+        },
+        ".player-waveform": {
+          "x": 25,
+          "y": 373,
+          "width": 270,
+          "height": 40
+        }
+      },
+      "buttons": [
+        {
+          "label": "Volume",
+          "disabled": false,
+          "hit": true,
+          "x": 21,
+          "y": 449.5,
+          "width": 34,
+          "height": 44
+        },
+        {
+          "label": "Loop editor",
+          "disabled": false,
+          "hit": true,
+          "x": 58,
+          "y": 449.5,
+          "width": 34,
+          "height": 44
+        },
+        {
+          "label": "Previous track",
+          "disabled": false,
+          "hit": true,
+          "x": 94,
+          "y": 449.5,
+          "width": 44,
+          "height": 44
+        },
+        {
+          "label": "Pause",
+          "disabled": false,
+          "hit": true,
+          "x": 140,
+          "y": 451.5,
+          "width": 40,
+          "height": 40
+        },
+        {
+          "label": "Next track",
+          "disabled": false,
+          "hit": true,
+          "x": 182,
+          "y": 449.5,
+          "width": 44,
+          "height": 44
+        },
+        {
+          "label": "Show library",
+          "disabled": false,
+          "hit": true,
+          "x": 255,
+          "y": 449.5,
+          "width": 44,
+          "height": 44
+        }
+      ]
+    },
+    "reducedMotionDuringFailure": true,
+    "playbackPhaseDuringFailure": "playing",
+    "mutedDuringFailure": true
+  },
+  "disclosure": {
+    "open": {
+      ".player-main-field": {
+        "x": 13,
+        "y": 125,
+        "width": 294,
+        "height": 234
+      },
+      ".player-oscilloscope": {
+        "x": 18,
+        "y": 125,
+        "width": 284,
+        "height": 234
+      },
+      ".player-oscilloscope canvas": {
+        "x": 18,
+        "y": 125,
+        "width": 284,
+        "height": 234
+      },
+      ".player-track-header": {
+        "x": 13,
+        "y": 61,
+        "width": 294,
+        "height": 64
+      },
+      ".player-transport": {
+        "x": 13,
+        "y": 443,
+        "width": 294,
+        "height": 56
+      },
+      ".player-waveform": {
+        "x": 25,
+        "y": 373,
+        "width": 270,
+        "height": 40
+      }
+    },
+    "closed": {
+      ".player-main-field": {
+        "x": 13,
+        "y": 125,
+        "width": 294,
+        "height": 234
+      },
+      ".player-oscilloscope": {
+        "x": 18,
+        "y": 125,
+        "width": 284,
+        "height": 234
+      },
+      ".player-oscilloscope canvas": {
+        "x": 18,
+        "y": 125,
+        "width": 284,
+        "height": 234
+      },
+      ".player-track-header": {
+        "x": 13,
+        "y": 61,
+        "width": 294,
+        "height": 64
+      },
+      ".player-transport": {
+        "x": 13,
+        "y": 443,
+        "width": 294,
+        "height": 56
+      },
+      ".player-waveform": {
+        "x": 25,
+        "y": 373,
+        "width": 270,
+        "height": 40
+      }
+    },
+    "waveformUnchanged": true,
+    "epochBefore": 9,
+    "epochAfter": 9,
+    "closedCue": {
+      "active": "true",
+      "title": "Loop enabled · Edit WAV loop"
+    },
+    "reopened": {
+      "boundsUnchanged": true,
+      "canvasIdentity": true,
+      "caption": "Live oscilloscopeL solid / R dashed · before volume",
+      "visible": true
+    }
+  },
+  "companion": {
+    "dark": false,
+    "settled": true,
+    "centerOffset": 0,
+    "horizontalOverflow": false,
+    "caption": "Live oscilloscopeL solid / R dashed · before volume",
+    "captionVisible": true,
+    "overlayInside": true,
+    "overlayScrollable": false,
+    "surfaces": {
+      ".player-card": {
+        "x": 530,
+        "y": 220,
+        "width": 380,
+        "height": 532
+      },
+      ".player-loop-overlay": {
+        "x": 536,
+        "y": 533,
+        "width": 368,
+        "height": 82
+      },
+      ".player-main-field": {
+        "x": 531,
+        "y": 285,
+        "width": 378,
+        "height": 330
+      },
+      ".player-oscilloscope figcaption": {
+        "x": 548,
+        "y": 297,
+        "width": 344,
+        "height": 36
+      },
+      ".player-playback": {
+        "x": 663,
+        "y": 705.5,
+        "width": 114,
+        "height": 40
+      },
+      ".player-track-header": {
+        "x": 531,
+        "y": 221,
+        "width": 378,
+        "height": 64
+      },
+      ".player-transport": {
+        "x": 531,
+        "y": 699,
+        "width": 378,
+        "height": 52
+      },
+      ".player-waveform": {
+        "x": 543,
+        "y": 629,
+        "width": 354,
+        "height": 40
+      }
+    },
+    "buttons": [
+      {
+        "label": "Volume",
+        "disabled": false,
+        "hit": true,
+        "x": 539,
+        "y": 705.5,
+        "width": 32,
+        "height": 40
+      },
+      {
+        "label": "Loop editor",
+        "disabled": false,
+        "hit": true,
+        "x": 574,
+        "y": 705.5,
+        "width": 32,
+        "height": 40
+      },
+      {
+        "label": "Previous track",
+        "disabled": false,
+        "hit": true,
+        "x": 663,
+        "y": 705.5,
+        "width": 32,
+        "height": 40
+      },
+      {
+        "label": "Pause",
+        "disabled": false,
+        "hit": true,
+        "x": 701,
+        "y": 706.5,
+        "width": 38,
+        "height": 38
+      },
+      {
+        "label": "Next track",
+        "disabled": false,
+        "hit": true,
+        "x": 745,
+        "y": 705.5,
+        "width": 32,
+        "height": 40
+      },
+      {
+        "label": "Hide library",
+        "disabled": false,
+        "hit": true,
+        "x": 869,
+        "y": 705.5,
+        "width": 32,
+        "height": 40
+      }
+    ],
+    "loadedMainResources": [
+      "http://127.0.0.1:4339/chunk-0h4rq3y7.css",
+      "http://127.0.0.1:4339/chunk-37chg23r.js"
+    ],
+    "fontFaces": [
+      {
+        "family": "InterVariable",
+        "status": "loaded"
+      },
+      {
+        "family": "InterVariable",
+        "status": "unloaded"
+      },
+      {
+        "family": "TX-02",
+        "status": "loaded"
+      },
+      {
+        "family": "Departure Mono",
+        "status": "loaded"
+      }
+    ]
+  },
+  "method": "Caption check: positive bounds inside visual and above editor, computed visibility visible, settled animations; representative screenshot pixels also inspected. Button centers hit their actual button; rectangles and keyboard focus order recorded. Injected contextlost tests the real visual failure handler, not a physical graphics failure.",
+  "limitation": "First EOS fixture used a20ms delay that was insufficient to establish the condition. Subsequent state-based wait proved renderer EOS newer than owner before testing. Original initial-pass mode/caption screenshots are superseded, not accepted visibility evidence.",
+  "buildArtifactSHA256": {
+    "web/dist/plan-worker.js": "31b24191dccb41791d75315b515919d29932e998538604bd69ec9e6641bfca3a",
+    "web/dist/chunk-37chg23r.js": "751860b207388dc31b6ce703011b3b3728a5a3f61f066f3b06245ee2556eab9c",
+    "web/dist/Phosphor-LICENSE.txt": "6918b72504641180600cbbd4a86b0dfa9dfccf788775694325b71b9a029f6eb4",
+    "web/dist/plan-main.js": "cf1c73e14f489a9ffb005430e64d7aef26f4fba1e306661ebbd06e43e3cef74e",
+    "web/dist/lab-worker.js": "954a5b85a67dc0ea7e4f7953961faaa2d419209e2a82b6d5d19d92464c703d29",
+    "web/dist/index.html": "7af8ead27ab5130bcd352e317a48d9e16fb4a17bd0c0b91a0280d95c2c1f0b69",
+    "web/dist/plan-processor.js": "476a0a7eb31e3f8e930ad127b0149a784deef705be7125af9539d1c5cf918316",
+    "web/dist/worklet-processor.js": "1bc91c01baf225c8ea0f79047a6138d79a9b54135aaecce6f0cd407b62db9d1f",
+    "web/dist/chunk-0h4rq3y7.css": "ec2ba5e1371a94c43307cf23e78f03e0951286e5c90bc17310c048c6530fd33b",
+    "web/dist/kkb_audio_bg.wasm": "1412174a02259b0a35355b31f32ed65349d5dc851bd54045e105798117697e96",
+    "web/dist/MPL-2.0.txt": "4b89d4518bd135ab4ee154a7bce722246b57a98c3d7efc1a09409898160c2bd1",
+    "web/dist/THIRD_PARTY_NOTICES.md": "50520221231f7ea249877710cd39bc92cf63a7f440646c8ba65dd302db2ed8df",
+    "web/dist/Inter-LICENSE.txt": "cc36dd53b88f8c7f138b9708e0c4b598816e4e52c7e252859e67e1e7edbcf117",
+    "web/dist/chunk-b1ffd2e1.js": "2116e65212ea09a354f6e43175b8a6b1284b5ec882a7f4fda237b4c14de5be76",
+    "web/dist/waveform-worker.js": "ced90fab506fdafab8e32d1c87e8daeb58c96bfc933586b9f81660b235b0095f",
+    "web/dist/main.js": "3f546618e3b69f4c3848f4041f525150a4feff9d65a615fc3884423f58e3e6f1",
+    "web/dist/player.html": "98f691428869518f33cca9cb60e7ad0a4409d6ba2c99158da74d29895c11273f",
+    "web/dist/pcm-worker.js": "a5d46f8debfdb3abd5dd167b77ac36cecb2216270c56c111a19762287289e076",
+    "web/dist/plan.html": "f072fd5191f73742eecf0567f488411f1ad73878da817c3b36c3b3f8262f7213",
+    "web/dist/DepartureMono-LICENSE.txt": "b65e42750f3cb65437a97f4dfd781c58f199259949db2341012be60e32500e83",
+    "web/dist/chunk-j424cr8k.css": "ab4066ec2d216938a562cf91da6601e9696425ef6d77b152781572ed5f8d1b51",
+    "web/dist/lab.html": "78c3d113813d5fb50672b02a41d35117436c71480e44a142c78d0dd29ff5a8c0",
+    "web/src/generated/kkb_audio.js": "13cd2fc5296462150087ec3ee7a106d17e6bf0ccb3289e6100bbb7d68c36d1db",
+    "web/src/generated/kkb_audio_bg.wasm": "1412174a02259b0a35355b31f32ed65349d5dc851bd54045e105798117697e96",
+    "web/src/generated/kkb_audio_bg.wasm.d.ts": "fdc036a0fdb37004595a9ea5b128a249f7d17ff9d9a518ebee4bdc9f53b34ff8",
+    "web/src/generated/kkb_audio.d.ts": "900ed2d2ff37bc7f42caeabba7da11ed3846c6c1b9440922471779b2512e4d79"
+  }
+}

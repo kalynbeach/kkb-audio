@@ -1,0 +1,27 @@
+bun test v1.4.0 (34cbb9a40)
+
+tools/check-player-ui.test.tsx:
+(pass) multi-file wav admission never prepares; row selection is independent from explicit play [86.01ms]
+(pass) multi-file mp3 admission never prepares; row selection is independent from explicit play [38.44ms]
+(pass) drag previews separately from consumed time, release commits exactly once and waits for readiness [15.03ms]
+(pass) escape cancels preview without seeking [14.92ms]
+(pass) pointercancel cancels preview without seeking [8.70ms]
+(pass) blur cancels preview without seeking [12.46ms]
+(pass) windowblur cancels preview without seeking [8.76ms]
+(pass) lostcapture cancels preview without seeking [8.76ms]
+(pass) keyboard seeking, endpoint and explicit replay preserve playback intent [54.47ms]
+(pass) accessible volume popup has keyboard control, mute and focus return independent of playback [61.87ms]
+(pass) endpoint keeps keyboard focus; seeking back from Ended requires explicit Play [34.59ms]
+(pass) playing drag preview survives periodic consumed updates and resumes acknowledged playing state [12.60ms]
+(pass) library/Settings/theme/responsive disclosures preserve owner and seek identity, and return focus [97.88ms]
+(pass) same-named entry replacement cancels an uncommitted seek, and session removal/Clear stays recoverable [66.35ms]
+(pass) loading is cancellable from internal library Settings; malformed files remain browsable and retryable [76.39ms]
+(pass) completed source waveform keeps consumed progress separate and reconciles an adjusted seek [15.39ms]
+(pass) Settings Pause visual leaves audio running and its stable canvas visible across status polls [33.13ms]
+(pass) visual failure keeps its explanation after reduced motion is toggled without remounting [7.46ms]
+(pass) reduced motion observed by polling redraws only a baseline even without a media-change event [9.40ms]
+
+ 19 pass
+ 0 fail
+ 143 expect() calls
+Ran 19 tests across 1 file. [813.00ms]

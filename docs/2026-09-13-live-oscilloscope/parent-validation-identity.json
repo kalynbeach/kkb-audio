@@ -1,0 +1,29 @@
+{
+  "branch": "feat/23-live-visualization",
+  "baseline": "8cfa28dc5002b043e40c2a6e77ff424bce64e26f",
+  "copy": "/tmp/kkb-audio-23-validation-WiYfgc",
+  "sourceCopyInputFiles": 158,
+  "sourceCopyMismatches": [],
+  "inputManifest": "parent-validation-inputs.sha256",
+  "inputManifestSHA256": "000021da86540c0505612371e36d5b47a222e08518aacc83fc1c31227c135df6",
+  "finalCheck": {
+    "command": "bun run check",
+    "bun": "1.4.0",
+    "testsPassed": 147,
+    "testsFailed": 0,
+    "log": "parent-final-check.log",
+    "logSHA256": "4ba568b72e1721642b9ab4650eaf02b5cd03ec5dce7607783bf9ae0333a2005f"
+  },
+  "finalBuild": {
+    "files": 26,
+    "manifest": "/tmp/kkb23-parent-build-outputs.sha256",
+    "manifestSHA256": "5ae5eed678c653ec78ae0e311de2504265a8cf6f6a58e28b582697a7b315de13"
+  },
+  "dailyDriver": {
+    "files": 13738,
+    "unchanged": true,
+    "comparison": "path/hash map equality (manifest ordering differs)",
+    "initialManifestSHA256": "9e228882177116d2762f1d9f20de2a18b80593e8859ca2802c6fe797393e786f"
+  },
+  "browserEvidenceScope": "39-assertion broad batch precedes reduced-motion pixel and failure-caption repairs; targeted pixel confirmation precedes caption-only repair. Final caption repair has red/green React UI regression, complete147-test build/check and retained reviewer PASS, not another browser run."
+}
