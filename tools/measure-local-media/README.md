@@ -1,6 +1,7 @@
 # Local media measurements
 
 See the [September 16 measured report](../../docs/2026-09-16-local-media-measurements.md) for the initial results and one proposed follow-up.
+The [waveform scheduling experiment](../../docs/2026-09-16-waveform-scheduling.md) records the before/after matrix and muted rendering comparison for #32.
 
 Run from the repository root with the installed Bun 1.4.0 and LAME encoder:
 
@@ -18,6 +19,8 @@ Six deterministic, authored tone files cover PCM16 mono WAV at 44.1 kHz, PCM24 s
 
 Each file runs three times in fixed order with a fresh context and workers. The first run includes initial browser/JIT effects. There is no discarded warmup, cache flush, percentile claim or performance threshold. Files are fetched and turned into browser `File` objects before timing, so file-selection UI and disk/network loading are excluded.
 
+Each result includes the SHA-256 of the waveform's Float32 extrema, frames per bin, source rate and total source frames. Compare these fields across scheduling runs to verify identical output. The hash runs after the measured operations.
+
 - Preparation runs from `prepareProof` invocation to initial admitted PCM and worklet readiness.
 - Waveform analysis starts immediately afterward, as in `PlaybackOwner`, and runs concurrently with the seek and loop measurements. Completion is reported both from readiness and from the original preparation call.
 - A late seek requests 90% of the source timeline and waits for the production seek promise. A one-second loop at that position then waits for the production loop-arm promise.
@@ -33,3 +36,17 @@ A small probe is prepended to workers in the temporary measurement build. Produc
 The probe counts completed Blob reads, returned bytes, largest read, read wait time, worker yield callbacks and their elapsed wait. Yield time includes scheduling delay; it is not CPU time. It observes the instantiated Wasm memory size. Waveform summary bytes and worklet memory/slot counts are recorded separately. The page records main-thread long tasks when the browser supports them.
 
 These are allocation capacities and I/O/work counters, not total browser RSS, peak JavaScript heap, disk I/O or energy measurements. Generated fixture backing stores and browser copies are outside these counters. Instrumentation adds overhead, and OS scheduling or a background tab can change the timings. Use the same browser and workload for comparisons, retain all repetitions, and inspect phase counters before choosing an optimization.
+
+## Muted rendering comparison
+
+For #32, run the same isolated build with two real supported files, one WAV followed by one MP3:
+
+```sh
+PATH="$PWD/node_modules/.bin:$PATH" bun run measure:media /tmp/media-rendering.json --render /path/to/recording.wav /path/to/recording.mp3
+```
+
+Each file must be between ten seconds and five minutes and at most 128 MiB. This mode replaces the generated matrix with three repetitions of each real file. Files stay on the local machine. Reports use aliases and hashes, without private paths or titles.
+
+The listening gain is zero before playback starts. Waveform analysis begins after `play()` acknowledges a running context. After 150 ms, the harness samples pre-gain signal and render counters, seeks to 90%, and arms a one-second loop. It samples the loop every 100 ms until analysis finishes and at least 1.5 seconds have passed after arming. Each row requires nonzero pre-gain signal and advancing render frames while analysis is pending. Snapshots retain starvation, loop underrun, lost-frame and recovery counters, including samples before and after the seek because epoch changes can reset counters.
+
+These short observations exercise actual rendering and interactions; they do not prove uninterrupted playback, audible seam quality, or performance on other hosts. Run both policies in the same browser with identical files. The generated paused matrix still supplies active-read cancellation checks.
