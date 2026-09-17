@@ -82,6 +82,16 @@ Each generated run passed all eight active-read cancellation cases. Initial befo
 
 Each generated run terminated all 46 created workers and closed all 26 contexts. Each rendering run terminated all 12 workers and closed all six contexts. Cleanup was checked between cases. All seven measurement servers exited and their ports stopped listening; the measurement browser tab was closed.
 
+## Measurement helper follow-up
+
+Review of #34 found that the single overlap sample at 150 ms could miss valid short analyses. The helper now samples immediately and then roughly every 16 ms before the same seek point, awaiting each status reply before polling again. New rendering rows distinguish `renderingOverlap.status: "observed"` from `"inconclusive"`. Inconclusive means analysis completed before advancing frames and nonzero pre-gain signal were observed together while it was pending. Those rows retain waveform measurements and allow the matrix to continue, but cannot support a positive overlap claim. Missing rendering evidence while analysis remains pending and genuine operation failures still fail the run. See the [measurement guide](../tools/measure-local-media/README.md#muted-rendering-comparison) for the report fields.
+
+The seven raw reports above are unchanged and predate this helper fix. Their timing results and stated overlap evidence describe the original sampling procedure. The production waveform scheduler and transport are unchanged by the helper fix.
+
+The follow-up browser check used a ten-second silent WAV and a ten-second tone MP3, three repetitions each, with zero listening gain. All six rows completed as inconclusive and retained waveform measurements. Analysis took 31.8-85.6 ms, the first poll arrived within 0.6 ms of the playing snapshot, and pre-seek samples remained at 150.6-151.8 ms. Signal appeared after analysis in this browser run, so it supplies no positive overlap evidence. All 12 workers terminated, all six contexts closed, and the server exited with its port closed.
+
+TypeScript, the isolated release build and fixed-memory audit passed. All 42 existing targeted waveform, playback, seek and loop tests passed again. Eleven focused tests cover positive overlap, early completion and matrix continuation, delayed replies, sequential polls, missing signal or frame advancement, and analysis, status and deadline failures. Run them with `PATH="$PWD/node_modules/.bin:$PATH" bun test tools/measure-local-media/rendering-overlap.test.ts`.
+
 ## Reproduction
 
 Use the [measurement guide](../tools/measure-local-media/README.md) for the normal paused matrix and the optional `--render WAV MP3` run. To measure the original policy with the new observations, retain this branch's runner and temporarily use `web/src/waveform-worker.ts` from `f38691d`; restore the candidate worker afterward. Keep every run's report. Each command creates a separate temporary build, serves only loopback, and stops its server after saving.

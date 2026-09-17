@@ -1,6 +1,7 @@
 import { prepareProof, type PreparedProof } from "../../web/src/prepared-playback";
 import { prepareWaveform } from "../../web/src/prepare-waveform";
 import type { RenderSnapshot } from "../../web/src/render-adapter";
+import { sampleRenderingOverlap } from "./rendering-overlap";
 
 type Fixture = { name: string; seconds: number | null; rate: number | null; bytes: number; sha256: string; rendering?: boolean };
 type Resources = { reads: number; readBytes: number; maxReadBytes: number; readWaitMs: number; yields: number; yieldWaitMs: number; wasmBytes: number | null };
@@ -80,10 +81,13 @@ async function measure(file: File, fixture: Fixture, repetition: number) {
     const buffers = [new Float32Array(2048), new Float32Array(2048)] as const;
     let analysing = false;
     const sample = async (phase: string) => {
-      const snapshot = await proof!.status();
+      const snapshot = await deadline(proof!.status());
+      check(snapshot.ready && snapshot.failureCode === 0, `Invalid rendering transport: ${JSON.stringify(snapshot)}`);
       const read = proof!.readOscilloscope(buffers);
       const signalPeak = typeof read === "number" ? Math.max(...buffers.flatMap(channel => Array.from(channel, Math.abs))) : 0;
-      renderSamples.push({ phase, atMs: performance.now() - openedAt, analysing, snapshot, signalPeak });
+      const row = { phase, atMs: performance.now() - openedAt, analysing, snapshot, signalPeak };
+      renderSamples.push(row);
+      return row;
     };
     if (fixture.rendering) { await deadline(proof.play()); await sample("playing"); }
     // Match PlaybackOwner: waveform starts once playback preparation completes.
@@ -91,7 +95,10 @@ async function measure(file: File, fixture: Fixture, repetition: number) {
     const waveformTask = timed(() => prepareWaveform(file, proof!.totalFrames!, proof!.sourceRate!, waveformAbort.signal))
       .then(result => { analysing = false; return { ...result, fromOpenMs: performance.now() - openedAt }; });
     void waveformTask.catch(() => { analysing = false; });
-    if (fixture.rendering) { await deadline(new Promise(resolve => setTimeout(resolve, 150))); await sample("before-seek"); }
+    const renderingOverlap = fixture.rendering
+      ? await sampleRenderingOverlap(waveformTask, renderSamples[0]!.snapshot.renderFrame, sample,
+        ms => deadline(new Promise(resolve => setTimeout(resolve, ms))))
+      : undefined;
     const target = Math.floor(proof.totalFrames! * 0.9);
     const seek = await timed(() => proof!.seek(target));
     check(seek.value.requestedFrame === target && Math.abs(seek.value.actualMediaFrame - target) <= 1, "Seek did not reach requested source frame");
@@ -107,7 +114,6 @@ async function measure(file: File, fixture: Fixture, repetition: number) {
         await deadline(new Promise(resolve => setTimeout(resolve, 100)));
       } while (analysing || performance.now() < until);
       await sample("finished");
-      check(renderSamples.some(row => row.phase === "before-seek" && row.analysing && row.snapshot.renderFrame > renderSamples[0]!.snapshot.renderFrame && row.signalPeak > 0), "No rendered signal observed during analysis");
     }
     const snapshot = await proof.status();
     check(snapshot.ready && snapshot.failureCode === 0 && snapshot.memoryBytes === 16777216 && snapshot.slotCount === 4, `Invalid prepared transport: ${JSON.stringify(snapshot)}`);
@@ -120,7 +126,7 @@ async function measure(file: File, fixture: Fixture, repetition: number) {
       seekResult: seek.value, outputRate: proof.ready.sampleRate, preparationResources, seekResources, loopResources,
       waveformResources: resources(waveformWorker), waveformSummaryBytes: waveform.value.extrema.byteLength,
       waveformIdentity: { totalFrames: waveform.value.totalFrames, sourceRate: waveform.value.sourceRate, framesPerBin: waveform.value.framesPerBin, extremaSha256 },
-      renderSamples: fixture.rendering ? renderSamples : undefined,
+      renderingOverlap, renderSamples: fixture.rendering ? renderSamples : undefined,
       workletMemoryBytes: snapshot.memoryBytes, slots: snapshot.slotCount, producer: proof.producerObservation });
   } finally { waveformAbort.abort(); await proof?.close(); }
   cleaned();
