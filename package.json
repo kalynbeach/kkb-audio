@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "bun run build:worklet && bun tools/serve-lab.ts",
     "dev:player-prototype": "bun tools/serve-player-prototype.ts",
+    "measure:media": "bun tools/measure-local-media.ts",
     "build:worklet": "bun tools/build-worklet.ts",
     "test": "bun test web/test",
     "typecheck": "bun x tsc --noEmit",
