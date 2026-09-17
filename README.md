@@ -85,6 +85,10 @@ A private native interactive entry and a safe low-amplitude fixture generator ar
 [WAV reproduction guide](docs/2026-09-08-local-wav-playback-evidence.md#safe-reproduction).
 Normal checks never open audio devices; device-opening tests must be explicitly selected.
 
+For a bounded, paused-browser measurement of WAV/MP3 preparation, late seeking, loop arming,
+waveform completion, cancellation and resources, run `bun run measure:media /tmp/local-media-measurements.json`.
+See the [measurement guide](tools/measure-local-media/README.md). It builds and serves a separate temporary copy.
+
 ## Local WAV/MP3 player
 
 Build with `bun run build:worklet` and serve with `bun run serve:proof`, then open `/player.html`.
