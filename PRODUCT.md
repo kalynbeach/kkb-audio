@@ -14,7 +14,7 @@ web
 
 ## Compact local player
 
-`/player.html` delivers #22's approved track-first listening object alongside the unchanged lab and
+`/developer/classic-player` preserves #22's approved track-first listening object alongside the unchanged lab and
 proofs. Open files or Settings → Add files admits up to 100 WAV/MP3 File references in picker order,
 with explicit unsupported/over-limit counts. Repeated names do not imply identity. Nothing is
 uploaded, persisted, eagerly decoded or cached across the collection. Reload ends the session.
@@ -76,8 +76,8 @@ Muted/device-free checks are not listening, broad browser, device or background 
 
 ## Experimental WebGPU player
 
-`/wave-player.html` composes the same React player, private PlaybackOwner and local
-collection with KKB's WebGPU P31 phosphor XY renderer. `/player.html` remains
+`/player` composes the same React player, private PlaybackOwner and local
+collection with KKB's WebGPU P31 phosphor XY renderer. `/developer/classic-player` remains
 available with its Canvas2D oscilloscope. Transport, source waveform, seeking,
 WAV/MP3 loops and session rules are shared. There is one audio owner and no new
 decode, microphone input, media persistence or upload path.
@@ -112,9 +112,18 @@ engine code and its limits.
 
 ## Operating context
 
-The frontend uses Bun 1.4.0, React and shadcn/ui. Bun serves the React HTML entry with hot reload
-for local development and bundles its production assets. Cargo builds Rust/Wasm; a worker renders
-the engine's recorded samples. The existing PCM and oscillator worklet proof pages remain available.
+The frontend uses Next.js 16.3.5 App Router, React, shadcn/ui, and Bun 1.4.0 tooling.
+The overview at `/` leads to Wave Player at `/player`, the engine lab at `/lab`, and developer
+proofs at `/developer`. PCM transport and compiled-plan proofs have dedicated nested routes.
+The historical player study is explicitly simulated. Every route has a distinct title and shares
+navigation, keyboard focus, and Light/Dark/System appearance. Appearance lasts for the page session.
+Leaving an audio route closes its resources; playback does not persist across routes.
+
+Cargo builds Rust/Wasm. Bun independently bundles worklets and workers into `public/audio-runtime`,
+including the patched wasm-bindgen glue, fixed-memory module and license notices. Next builds the
+pages without compiling worklets through React. Player and lab enter through browser-only boundaries.
+The lab's worker renders the engine's recorded samples. No isolation headers are required by this
+unshared-memory transport. See [the migration](docs/2026-09-20-nextjs-frontend.md).
 
 This repository vendors the research repo's shadcn component implementations and theme. Shared
 control behavior remains in those components; graph composition, browser sessions, workers and

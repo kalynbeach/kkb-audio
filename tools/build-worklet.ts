@@ -6,14 +6,13 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
-import tailwind from "bun-plugin-tailwind";
 
 const EXPECTED_RUST = "rustc 1.98.0";
 const EXPECTED_BUN = "1.4.0";
 const EXPECTED_BINDGEN = "wasm-bindgen 0.2.127";
 const WASM_TARGET = "wasm32-unknown-unknown";
 const generatedDirectory = "web/src/generated";
-const outputDirectory = "web/dist";
+const outputDirectory = "public/audio-runtime";
 
 assertVersion(["rustc", "--version"], EXPECTED_RUST);
 assertVersion(["bun", "--version"], EXPECTED_BUN, true);
@@ -41,22 +40,9 @@ removeWorkletUnsafeErrorFormatting(join(generatedDirectory, "kkb_audio.js"));
 await build("web/src/worklet-processor.ts");
 await build("web/src/pcm-worker.ts");
 await build("web/src/waveform-worker.ts");
-await build("web/src/main.ts");
 await build("web/src/plan-processor.ts");
 await build("web/src/plan-worker.ts");
-await build("web/src/plan-main.ts");
 await build("web/src/lab-worker.ts");
-const lab = await Bun.build({
-  entrypoints: ["web/lab.html", "web/player.html", "web/wave-player.html"],
-  outdir: outputDirectory,
-  target: "browser",
-  minify: true,
-  plugins: [tailwind],
-});
-if (!lab.success) {
-  for (const log of lab.logs) console.error(log);
-  process.exit(1);
-}
 copyFileSync(
   "node_modules/inter-ui/LICENSE.txt",
   join(outputDirectory, "Inter-LICENSE.txt"),
@@ -66,8 +52,6 @@ for (const name of ["DepartureMono-LICENSE.txt", "Phosphor-LICENSE.txt"]) {
 }
 copyFileSync("THIRD_PARTY_NOTICES.md", join(outputDirectory, "THIRD_PARTY_NOTICES.md"));
 copyFileSync("licenses/MPL-2.0.txt", join(outputDirectory, "MPL-2.0.txt"));
-copyFileSync("web/proof.html", join(outputDirectory, "index.html"));
-copyFileSync("web/plan-proof.html", join(outputDirectory, "plan.html"));
 copyFileSync(
   join(generatedDirectory, "kkb_audio_bg.wasm"),
   join(outputDirectory, "kkb_audio_bg.wasm"),

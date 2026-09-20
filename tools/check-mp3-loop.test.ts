@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { LocalMedia, PreparedRateConverter, WorkletKernel, initSync } from "../web/src/generated/kkb_audio.js";
 import { PreparedPlanarAdapter } from "../web/src/render-adapter";
-const module = await WebAssembly.compile(await Bun.file("web/dist/kkb_audio_bg.wasm").arrayBuffer());
+const module = await WebAssembly.compile(await Bun.file("public/audio-runtime/kkb_audio_bg.wasm").arrayBuffer());
 const { memory } = initSync({ module });
 const ceil = (n: bigint, d: bigint) => (n + d - 1n) / d;
 function reference(bytes: Uint8Array, rate: number, tailOnly = false) {
@@ -39,7 +39,7 @@ test("MP3 shared built worker/rings/compiled Wasm loop PCM: independent trim/gri
     const messages: {type:string;epoch?:number;loopRestorePackets?:number}[] = [];
     const host = { onmessage: undefined as ((e:{data:unknown})=>Promise<void>)|undefined, postMessage:(m:typeof messages[number])=>messages.push(m) };
     Object.defineProperty(globalThis,"self",{configurable:true,value:host});
-    await import(`data:text/javascript;base64,${Buffer.from(await Bun.file("web/dist/pcm-worker.js").text()+`\n// ${name}${missing}${ro}`).toString("base64")}`);
+    await import(`data:text/javascript;base64,${Buffer.from(await Bun.file("public/audio-runtime/pcm-worker.js").text()+`\n// ${name}${missing}${ro}`).toString("base64")}`);
     const send=(data:unknown)=>host.onmessage!({data});
     const wait=async(check:()=>boolean,budget=5000)=>{const end=performance.now()+budget;while(!check()){if(messages.some(m=>m.type==="worker-failed")||performance.now()>end)throw Error(`${name}: ${JSON.stringify(messages)}`);await Bun.sleep(1);}};
     let hold=false,failRead=false,release:(()=>void)|undefined;

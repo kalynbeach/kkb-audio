@@ -4,7 +4,7 @@ import { PreparedPlanarAdapter } from "../web/src/render-adapter";
 import { wavFixture } from "./local-wav-fixture";
 import type { PcmBlockMessage } from "../web/src/pcm-protocol";
 
-const module = await WebAssembly.compile(await Bun.file("web/dist/kkb_audio_bg.wasm").arrayBuffer());
+const module = await WebAssembly.compile(await Bun.file("public/audio-runtime/kkb_audio_bg.wasm").arrayBuffer());
 const { memory } = initSync({ module });
 function convert(sourceRate: number, outputRate: number, input: Float32Array[], partition: number[]): Float32Array[] {
   const converter = new PreparedRateConverter(sourceRate, outputRate, input.length, BigInt(input[0]!.length));
@@ -83,7 +83,7 @@ test("built WAV worker conversion reaches consumed EOS across pause and starvati
     const messages: Array<{ type: string; detail?: string; totalFrames?: number; totalPcmFrames?: number; initialAdmittedBlocks?: number }> = [];
     const host = { onmessage: undefined as ((event: { data: unknown }) => Promise<void>) | undefined, postMessage: (message: typeof messages[number]) => messages.push(message) };
     Object.defineProperty(globalThis, "self", { configurable: true, value: host });
-    await import(`data:text/javascript;base64,${Buffer.from((await Bun.file("web/dist/pcm-worker.js").text()) + `\n// conversion ${sourceRate} ${total}`).toString("base64")}`);
+    await import(`data:text/javascript;base64,${Buffer.from((await Bun.file("public/audio-runtime/pcm-worker.js").text()) + `\n// conversion ${sourceRate} ${total}`).toString("base64")}`);
     const bytes = wavFixture(bits, channels, sourceRate, total);
     // Decode integer fixtures independently to compare the built producer against differently chunked conversion.
     const view = new DataView(bytes.buffer, bytes.byteOffset);

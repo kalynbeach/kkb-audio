@@ -401,9 +401,9 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
     return Promise.race([operation, cancelled]).finally(() => signal.removeEventListener("abort", abort));
   };
   const timeoutMilliseconds = options.timeoutMilliseconds ?? 5_000;
-  const wasmUrl = options.wasmUrl ?? "./kkb_audio_bg.wasm";
-  const workerUrl = options.workerUrl ?? "./pcm-worker.js";
-  const workletUrl = options.workletUrl ?? "./worklet-processor.js";
+  const wasmUrl = options.wasmUrl ?? "/audio-runtime/kkb_audio_bg.wasm";
+  const workerUrl = options.workerUrl ?? "/audio-runtime/pcm-worker.js";
+  const workletUrl = options.workletUrl ?? "/audio-runtime/worklet-processor.js";
   let worker: Worker | undefined;
   let prepared: PreparedProof | undefined;
   let startupRuntimeFailure: number | undefined;

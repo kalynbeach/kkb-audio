@@ -13,7 +13,7 @@ import { renderLab } from "../web/src/lab-render.ts";
 beforeAll(async () => {
   const module = await WebAssembly.compile(
     await Bun.file(
-      new URL("../web/dist/kkb_audio_bg.wasm", import.meta.url),
+      new URL("../public/audio-runtime/kkb_audio_bg.wasm", import.meta.url),
     ).arrayBuffer(),
   );
   initSync({ module });

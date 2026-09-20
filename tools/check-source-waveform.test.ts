@@ -3,7 +3,7 @@ import { LocalMedia, initSync } from "../web/src/generated/kkb_audio.js";
 import { wavFixture, expectedWavSample } from "./local-wav-fixture";
 import type { SourceWaveform } from "../web/src/source-waveform";
 
-const module = await WebAssembly.compile(await Bun.file("web/dist/kkb_audio_bg.wasm").arrayBuffer());
+const module = await WebAssembly.compile(await Bun.file("public/audio-runtime/kkb_audio_bg.wasm").arrayBuffer());
 initSync({ module });
 let identity = 0;
 async function scan(bytes: Uint8Array<ArrayBuffer>, mp3: boolean) {
@@ -19,7 +19,7 @@ async function scan(bytes: Uint8Array<ArrayBuffer>, mp3: boolean) {
   const host = { onmessage: undefined as ((event: { data: unknown }) => Promise<void>) | undefined, postMessage: (value: typeof message) => { message = value; } };
   try {
     Object.defineProperty(globalThis, "self", { configurable: true, value: host });
-    await import(`data:text/javascript;base64,${Buffer.from(await Bun.file("web/dist/waveform-worker.js").text() + `\n// scan ${identity++}`).toString("base64")}`);
+    await import(`data:text/javascript;base64,${Buffer.from(await Bun.file("public/audio-runtime/waveform-worker.js").text() + `\n// scan ${identity++}`).toString("base64")}`);
     await host.onmessage!({ data: { module, file: new MeasuredFile([bytes], "same-name"), totalFrames, sourceRate } });
     expect(message?.type).toBe("waveform-complete");
     expect(Math.max(...reads)).toBeLessThanOrEqual(65536);

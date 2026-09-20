@@ -5,7 +5,7 @@ import { LocalPcmProducer } from "../web/src/local-pcm-producer";
 import { wavFixture, expectedWavSample } from "./local-wav-fixture";
 import type { PcmBlockMessage } from "../web/src/pcm-protocol";
 
-const module = await WebAssembly.compile(await Bun.file("web/dist/kkb_audio_bg.wasm").arrayBuffer());
+const module = await WebAssembly.compile(await Bun.file("public/audio-runtime/kkb_audio_bg.wasm").arrayBuffer());
 const exports = initSync({ module });
 const flush = async () => { for (let i = 0; i < 32; i++) await Promise.resolve(); };
 function parse(bytes: Uint8Array): LocalWav {
@@ -148,7 +148,7 @@ test("built browser worker reads bounded File slices, rejects unsupported conver
     const messages: Array<{ type: string; detail?: string; initialAdmittedBlocks?: number }> = [];
     const host = { onmessage: undefined as ((event: { data: unknown }) => Promise<void>) | undefined, postMessage: (message: typeof messages[number]) => messages.push(message) };
     Object.defineProperty(globalThis, "self", { configurable: true, value: host });
-    await import(`data:text/javascript;base64,${Buffer.from((await Bun.file("web/dist/pcm-worker.js").text()) + `\n// case ${mismatch}`).toString("base64")}`);
+    await import(`data:text/javascript;base64,${Buffer.from((await Bun.file("public/audio-runtime/pcm-worker.js").text()) + `\n// case ${mismatch}`).toString("base64")}`);
     await host.onmessage!({ data: { type: "inspect", file: new TrackedFile([wavFixture(24, 2, 48000, 257)], "short.wav"), module, sampleRate: mismatch ? 32000 : 48000 } });
     if (mismatch) { expect(messages[0]?.type).toBe("worker-failed"); expect(messages[0]?.detail).toContain("71"); continue; }
     expect(messages[0]?.type).toBe("metadata");

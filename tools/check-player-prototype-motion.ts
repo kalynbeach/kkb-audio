@@ -1,8 +1,8 @@
 export {};
 
-// Run against the isolated prototype server, never the audio lab/player.
+// Run against the simulated study route on a local Next.js server.
 // Uses real Chromium snapshots: DOM-only test renderers cannot catch an exit flash.
-const origin = process.env.PROTOTYPE_URL ?? "http://127.0.0.1:4199/";
+const origin = process.env.PROTOTYPE_URL ?? "http://127.0.0.1:3000/developer/player-study";
 const url = new URL(origin);
 if (!["127.0.0.1", "localhost"].includes(url.hostname)) throw new Error("Use the local prototype server.");
 const session = `player-prototype-motion-${process.pid}`;
@@ -18,7 +18,9 @@ function settled() { browser("wait", "--fn", "window.motionProbe.started && wind
 
 try {
   for (const [width, height] of [[1440, 1000], [390, 844]]) {
-    browser("open", `${url.origin}/?mode=light&view=library`);
+    url.searchParams.set("view", "library");
+    browser("open", url.href);
+    browser("select", "select[aria-label=\"Appearance\"]", "light");
     browser("set", "viewport", String(width), String(height));
     browser("eval", `(() => {
       const probe = window.motionProbe = {started:false, done:false, frames:[], geometry:[], layers:[], baseline:null};

@@ -1,6 +1,6 @@
 // Device-free worst-duration stepping/reconstruction probe. No whole-track PCM.
 import { LocalMedia, initSync } from "../web/src/generated/kkb_audio.js";
-const module = await WebAssembly.compile(await Bun.file("web/dist/kkb_audio_bg.wasm").arrayBuffer());
+const module = await WebAssembly.compile(await Bun.file("public/audio-runtime/kkb_audio_bg.wasm").arrayBuffer());
 const { memory } = initSync({ module });
 const source = new Uint8Array(await Bun.file("tools/fixtures/mp3/cbr-48000-2.mp3").arrayBuffer());
 // Repeating the first independently decodable audio frame is explicitly synthetic,

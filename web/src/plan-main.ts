@@ -1,7 +1,7 @@
 import { PreparationLifecycle } from "./preparation-lifecycle";
 import type { PlanSnapshot } from "./plan-adapter";
 
-type PlanOptions = { channelCount?: 1 | 2; invalidVersion?: boolean };
+type PlanOptions = { channelCount?: 1 | 2; invalidVersion?: boolean; signal?: AbortSignal };
 type PlanReady = { type: "ready"; maximumFrames: number; memoryBytes: number; sampleRate: number; channelCount: number };
 type PlanMessage = PlanReady | { type: "failed"; code: number } | { type: "snapshot"; snapshot: PlanSnapshot };
 
@@ -103,13 +103,17 @@ export class PreparedPlanProof {
 export async function preparePlanProof(options: PlanOptions = {}): Promise<PreparedPlanProof> {
   const context = new AudioContext();
   let worker: Worker | undefined;
+  const abort = () => { worker?.terminate(); if (context.state !== "closed") void context.close(); };
+  options.signal?.addEventListener("abort", abort, { once: true });
   try {
+    options.signal?.throwIfAborted();
     if (context.state !== "suspended") await context.suspend();
-    const response = await fetch("./kkb_audio_bg.wasm", { cache: "no-store" });
+    const response = await fetch("/audio-runtime/kkb_audio_bg.wasm", { cache: "no-store", signal: options.signal });
     if (!response.ok) throw new Error("plan Wasm fetch failed");
     const module = await WebAssembly.compile(await response.arrayBuffer());
+    options.signal?.throwIfAborted();
     const channelCount = options.channelCount ?? 2;
-    worker = new Worker("./plan-worker.js", { type: "module" });
+    worker = new Worker("/audio-runtime/plan-worker.js", { type: "module" });
     const compiler = worker;
     const description = await new Promise<Uint32Array>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error("plan compilation timed out")), 5_000);
@@ -123,10 +127,12 @@ export async function preparePlanProof(options: PlanOptions = {}): Promise<Prepa
       };
       compiler.postMessage({ module, sampleRate: context.sampleRate, channelCount });
     });
+    options.signal?.throwIfAborted();
     worker.terminate();
     worker = undefined;
     if (options.invalidVersion) description[0] = 0xffff_ffff;
-    await context.audioWorklet.addModule("./plan-processor.js");
+    await context.audioWorklet.addModule("/audio-runtime/plan-processor.js");
+    options.signal?.throwIfAborted();
     const node = new AudioWorkletNode(context, "kkb-compiled-plan", {
       numberOfInputs: 0,
       numberOfOutputs: 1,
@@ -145,13 +151,14 @@ export async function preparePlanProof(options: PlanOptions = {}): Promise<Prepa
         else reject(message.type === "failed" ? new PlanPreparationError(message.code) : new Error("unexpected plan preparation message"));
       };
     });
+    options.signal?.throwIfAborted();
     if (context.state !== "suspended") throw new Error("plan activated before ready");
     return new PreparedPlanProof(context, node, ready);
   } catch (error) {
     worker?.terminate();
-    await context.close();
+    if (context.state !== "closed") await context.close();
     throw error;
-  }
+  } finally { options.signal?.removeEventListener("abort", abort); }
 }
 
 export async function runPlanProof(options: PlanOptions = {}) {
@@ -163,54 +170,64 @@ export async function runPlanProof(options: PlanOptions = {}) {
 declare global {
   interface Window { planProof: { prepare: typeof preparePlanProof; run: typeof runPlanProof } }
 }
-window.planProof = { prepare: preparePlanProof, run: runPlanProof };
+export function mountPlanProof(root: Pick<Document, "querySelector">) {
+  const events = new AbortController();
+  const listen = (target: HTMLElement | null, event: string, handler: () => void) => target?.addEventListener(event, handler, { signal: events.signal });
+  window.planProof = { prepare: preparePlanProof, run: runPlanProof };
 
-const lifecycle = new PreparationLifecycle<PreparedPlanProof>();
-const prepare = document.querySelector<HTMLButtonElement>("#prepare");
-const activate = document.querySelector<HTMLButtonElement>("#activate");
-const invalid = document.querySelector<HTMLButtonElement>("#invalid");
-const close = document.querySelector<HTMLButtonElement>("#close");
-const output = document.querySelector<HTMLElement>("#result");
-function show(value: unknown): void { if (output !== null) output.textContent = JSON.stringify(value, null, 2); }
-function busy(disabled: boolean): void {
-  for (const button of [prepare, invalid, close]) if (button !== null) button.disabled = disabled;
-}
-
-prepare?.addEventListener("click", async () => {
-  const preparation = lifecycle.tryReplace(() => preparePlanProof());
-  if (preparation === undefined) return;
-  busy(true);
-  if (activate !== null) activate.disabled = true;
-  show({ state: "preparing" });
-  try {
-    const proof = await preparation;
-    show({ state: "ready", ...proof.ready });
-    if (activate !== null) activate.disabled = false;
-  } catch (error) { show({ state: "failed", error: String(error) }); }
-  finally { busy(false); }
-});
-activate?.addEventListener("click", async () => {
-  activate.disabled = true;
-  busy(true);
-  try { show({ state: "active", ...await lifecycle.active?.activate() }); }
-  catch (error) { show({ state: "failed", error: String(error) }); }
-  finally { busy(false); }
-});
-invalid?.addEventListener("click", async () => {
-  const operation = lifecycle.tryExclusive(async () => {
-    const proof = await preparePlanProof({ invalidVersion: true });
-    await proof.close();
-  });
-  if (operation === undefined) return;
-  busy(true);
-  try { await operation; show({ state: "failed", error: "invalid version was accepted" }); }
-  catch (error) {
-    show({ state: error instanceof PlanPreparationError && error.code === 60 ? "rejected" : "failed", error: String(error) });
+  const lifecycle = new PreparationLifecycle<PreparedPlanProof>();
+  const prepare = root.querySelector<HTMLButtonElement>("#prepare");
+  const activate = root.querySelector<HTMLButtonElement>("#activate");
+  const invalid = root.querySelector<HTMLButtonElement>("#invalid");
+  const close = root.querySelector<HTMLButtonElement>("#close");
+  const output = root.querySelector<HTMLElement>("#result");
+  function show(value: unknown): void { if (output !== null && !events.signal.aborted) output.textContent = JSON.stringify(value, null, 2); }
+  function busy(disabled: boolean): void {
+    if (events.signal.aborted) return;
+    for (const button of [prepare, invalid, close]) if (button !== null) button.disabled = disabled;
   }
-  finally { busy(false); }
-});
-close?.addEventListener("click", async () => {
-  await lifecycle.closeActive();
-  if (activate !== null) activate.disabled = true;
-  show({ state: "closed" });
-});
+
+  listen(prepare, "click", async () => {
+    const preparation = lifecycle.tryReplace(signal => preparePlanProof({ signal }));
+    if (preparation === undefined) return;
+    busy(true);
+    if (activate !== null) activate.disabled = true;
+    show({ state: "preparing" });
+    try {
+      const proof = await preparation;
+      show({ state: "ready", ...proof.ready });
+      if (activate !== null) activate.disabled = false;
+    } catch (error) { show({ state: "failed", error: String(error) }); }
+    finally { busy(false); }
+  });
+  listen(activate, "click", async () => {
+    if (activate) activate.disabled = true;
+    busy(true);
+    try { show({ state: "active", ...await lifecycle.active?.activate() }); }
+    catch (error) { show({ state: "failed", error: String(error) }); }
+    finally { busy(false); }
+  });
+  listen(invalid, "click", async () => {
+    const operation = lifecycle.tryExclusive(async () => {
+      const proof = await preparePlanProof({ invalidVersion: true, signal: events.signal });
+      await proof.close();
+    });
+    if (operation === undefined) return;
+    busy(true);
+    try { await operation; show({ state: "failed", error: "invalid version was accepted" }); }
+    catch (error) {
+      show({ state: error instanceof PlanPreparationError && error.code === 60 ? "rejected" : "failed", error: String(error) });
+    }
+    finally { busy(false); }
+  });
+  listen(close, "click", async () => {
+    await lifecycle.closeActive();
+    if (activate !== null) activate.disabled = true;
+    show({ state: "closed" });
+  });
+
+  if (activate) activate.disabled = true;
+  busy(false);
+  show({ state: "idle" });
+  return () => { events.abort(); void lifecycle.closeActive(); };
+}

@@ -6,7 +6,7 @@ import { FakePlayback, deferred } from "../web/test/playback-fixture";
 import type { PlaybackScope } from "../web/src/wave-scope/playback-scope";
 import type { OscilloscopeBuffers, OscilloscopeRead } from "../web/src/oscilloscope-tap";
 
-GlobalRegistrator.register({ url: "http://localhost/wave-player.html" });
+GlobalRegistrator.register({ url: "http://localhost/player" });
 let callbacks = new Map<number, FrameRequestCallback>();
 let nextFrame = 0;
 let motion = new EventTarget() as MediaQueryList;

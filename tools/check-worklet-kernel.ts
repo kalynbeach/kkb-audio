@@ -3,7 +3,7 @@ import { WorkletKernel, initSync } from "../web/src/generated/kkb_audio.js";
 import { FixedTransferPool } from "../web/src/pcm-worker-pool";
 import { isAdmissionResultMessage, type PcmBlockMessage } from "../web/src/pcm-protocol";
 
-const module = await WebAssembly.compile(await Bun.file("web/dist/kkb_audio_bg.wasm").arrayBuffer());
+const module = await WebAssembly.compile(await Bun.file("public/audio-runtime/kkb_audio_bg.wasm").arrayBuffer());
 const exports = initSync({ module });
 const maximumFrames = 1_024;
 const slotFrames = 257;
@@ -114,7 +114,7 @@ Object.defineProperties(globalThis, {
     assert.equal(name, "kkb-prepared-kernel"); registered = constructor;
   } },
 });
-await import(new URL("../web/dist/worklet-processor.js", import.meta.url).href);
+await import(new URL("../public/audio-runtime/worklet-processor.js", import.meta.url).href);
 assert.ok(registered);
 const config = { channelCount: 2, sampleRate: 48_000, sourceId: 3, epoch: 1, slotCount: 4, slotFrames: 256 } as const;
 const processor = new registered({ processorOptions: { ...config, maximumFrames, module } });

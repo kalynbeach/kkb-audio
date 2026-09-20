@@ -5,7 +5,7 @@ import { PreparedPlanarAdapter } from "../web/src/render-adapter";
 import { LOCAL_PCM_SLOT_FRAMES, type PcmBlockMessage } from "../web/src/pcm-protocol";
 import { wavFixture } from "./local-wav-fixture";
 
-const module = await WebAssembly.compile(await Bun.file("web/dist/kkb_audio_bg.wasm").arrayBuffer());
+const module = await WebAssembly.compile(await Bun.file("public/audio-runtime/kkb_audio_bg.wasm").arrayBuffer());
 const { memory } = initSync({ module });
 const flush = async () => { for (let i = 0; i < 32; i++) await Promise.resolve(); };
 

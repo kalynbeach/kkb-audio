@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { WorkletPlan, compile_plan_proof, initSync } from "../web/src/generated/kkb_audio.js";
 
-const module = await WebAssembly.compile(await Bun.file("web/dist/kkb_audio_bg.wasm").arrayBuffer());
+const module = await WebAssembly.compile(await Bun.file("public/audio-runtime/kkb_audio_bg.wasm").arrayBuffer());
 const exports = initSync({ module });
 const totalFrames = 1_000;
 let maximumReferenceError = 0;
@@ -136,7 +136,7 @@ Object.defineProperties(globalThis, {
     registered = constructor;
   } },
 });
-await import(new URL("../web/dist/plan-processor.js", import.meta.url).href);
+await import(new URL("../public/audio-runtime/plan-processor.js", import.meta.url).href);
 assert.ok(registered !== undefined);
 const ProcessorClass = registered as ProcessorConstructor;
 const validDescription = compile_plan_proof(48_000, 2);

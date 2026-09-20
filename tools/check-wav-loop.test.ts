@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { LocalWav, PreparedRateConverter, WorkletKernel, initSync } from "../web/src/generated/kkb_audio.js";
 import { PreparedPlanarAdapter } from "../web/src/render-adapter";
 import { wavFixture } from "./local-wav-fixture";
-const module=await WebAssembly.compile(await Bun.file("web/dist/kkb_audio_bg.wasm").arrayBuffer());
+const module=await WebAssembly.compile(await Bun.file("public/audio-runtime/kkb_audio_bg.wasm").arrayBuffer());
 const {memory}=initSync({module});
 type WorkerEvent = { type: string; epoch?: number; loopEnabled?: boolean; detail?: string };
 function reference(bytes:Uint8Array,rate:number):Float32Array[]{
@@ -19,7 +19,7 @@ test("WAV loops actual built worker/Wasm: references, tiny multiple-wrap slots, 
     const messages:WorkerEvent[]=[];
     const host={onmessage:undefined as ((e:{data:unknown})=>Promise<void>)|undefined,postMessage:(m:WorkerEvent)=>messages.push(m)};
     Object.defineProperty(globalThis,"self",{configurable:true,value:host});
-    await import(`data:text/javascript;base64,${Buffer.from(await Bun.file("web/dist/pcm-worker.js").text()+`\n// wavloop${sr}${ro}`).toString("base64")}`);
+    await import(`data:text/javascript;base64,${Buffer.from(await Bun.file("public/audio-runtime/pcm-worker.js").text()+`\n// wavloop${sr}${ro}`).toString("base64")}`);
     const send=(data:unknown)=>host.onmessage!({data});
     const wait=async(condition:()=>boolean)=>{const end=performance.now()+4000;while(!condition()){if(messages.some(m=>m.type==="worker-failed")||performance.now()>end)throw Error(JSON.stringify(messages));await Bun.sleep(1);}};
     const bytes=wavFixture(24,2,sr,19007);const expected=reference(bytes,ro);

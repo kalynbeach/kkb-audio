@@ -1,3 +1,4 @@
+import { useAppearance } from "../../app/appearance";
 import { startTransition, ViewTransition, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType, type ReactNode } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Dialog } from "@base-ui/react/dialog";
@@ -23,6 +24,7 @@ const phaseLabels: Record<PlaybackState["phase"], string> = {
 
 export type PlayerVisualProps = { owner: PlaybackOwner; paused: boolean; editing?: boolean; obscured?: boolean };
 
+// The route owns the session and releases its playback resources on unmount.
 export function PlayerApp({ owner: suppliedOwner, Visual = PlayerOscilloscope, visualDetails, createStudy }: {
   owner?: PlaybackOwner;
   Visual?: ComponentType<PlayerVisualProps>;
@@ -37,7 +39,7 @@ export function PlayerApp({ owner: suppliedOwner, Visual = PlayerOscilloscope, v
   const [loopEditing, setLoopEditing] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [visualPaused, setVisualPaused] = useState(false);
-  const [mode, setMode] = useState<"system" | "light" | "dark">("system");
+  const { mode, setMode } = useAppearance();
   const [narrow, setNarrow] = useState(() => matchMedia("(max-width: 1211px)").matches);
   const fileInput = useRef<HTMLInputElement>(null);
   const libraryToggle = useRef<HTMLButtonElement>(null);
@@ -56,12 +58,6 @@ export function PlayerApp({ owner: suppliedOwner, Visual = PlayerOscilloscope, v
     query.addEventListener("change", change);
     return () => query.removeEventListener("change", change);
   }, []);
-  useEffect(() => {
-    const query = matchMedia("(prefers-color-scheme: dark)");
-    const apply = () => document.documentElement.classList.toggle("dark", mode === "dark" || (mode === "system" && query.matches));
-    apply(); query.addEventListener("change", apply);
-    return () => query.removeEventListener("change", apply);
-  }, [mode]);
   useEffect(() => { if (libraryOpen) libraryHeading.current?.focus(); }, [libraryOpen, narrow]);
   const openLibrary = () => startTransition(() => setLibraryOpen(true));
   const closeLibrary = () => { startTransition(() => setLibraryOpen(false)); libraryToggle.current?.focus(); };
@@ -172,7 +168,6 @@ export function PlayerApp({ owner: suppliedOwner, Visual = PlayerOscilloscope, v
     <footer className="player-review-footer">
       {state.error ? <p role="alert" className="player-error">{state.error}. Play another file from the library, or retry this one.</p> : null}
       <p role="status">{session.notice || "Local WAV & MP3 · This session only"}</p>
-      <p>{visualDetails ? <><a href="/player.html">Classic player</a> / </> : <><a href="/wave-player.html">WebGPU experiment</a> / </>}<a href="/lab.html">Learning lab</a> / <a href="/index.html">Engine proof</a></p>
     </footer>
   </>;
 }

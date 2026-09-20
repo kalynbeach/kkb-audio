@@ -4,7 +4,7 @@ import { PlaybackOwner } from "../web/src/playback-owner";
 import { FakeMediaLoopPlayback } from "../web/test/media-loop-fixture";
 import { FakePlayback, deferred } from "../web/test/playback-fixture";
 
-GlobalRegistrator.register({ url: "http://localhost/player.html" });
+GlobalRegistrator.register({ url: "http://localhost/player" });
 HTMLElement.prototype.setPointerCapture = () => {};
 // UI fixtures do not fetch/build real Wasm; compiled-worker coverage lives separately.
 const unavailableWaveform = async () => { throw new Error("Fixture waveform unavailable"); };
