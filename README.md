@@ -75,7 +75,7 @@ bun run build
 bun run start --port 3000
 ```
 
-Open `http://127.0.0.1:3000`. The overview links to `/player`, `/lab`, and `/developer`.
+Open `http://localhost:3000`. The overview links to `/player`, `/lab`, and `/developer`.
 The PCM and compiled-plan proofs live at `/developer/pcm` and `/developer/plan`.
 The historical simulated prototype remains at `/developer/player-study`.
 Leaving a player, lab, or proof route releases its audio resources. Appearance is shared across
@@ -201,7 +201,7 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
-Open `http://127.0.0.1:3000/lab`. `bun run dev --port 3000` builds the audio runtime and starts Next.
+Open `http://localhost:3000/lab`. `bun run dev --port 3000` builds the audio runtime and starts Next.
 React and CSS edits update live. Restart after Rust, worker, or build-tool changes.
 Use `bun run build` and `bun run start --port 3000` to inspect production output.
 

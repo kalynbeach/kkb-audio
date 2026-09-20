@@ -19,7 +19,7 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
-Open `http://127.0.0.1:3000/lab`. This builds Rust/Wasm and independent worker assets, then starts
+Open `http://localhost:3000/lab`. This builds Rust/Wasm and independent worker assets, then starts
 Next.js. Use `bun run dev --port 3000` to choose a port. React/CSS changes update live; restart
 after Rust, worker or build-tool edits. Use `bun run build` then `bun run start --port 3000` for
 production. Proof pages live under `/developer`. The [September 20 migration](2026-09-20-nextjs-frontend.md)

@@ -2,7 +2,7 @@ export {};
 
 // Run against the simulated study route on a local Next.js server.
 // Uses real Chromium snapshots: DOM-only test renderers cannot catch an exit flash.
-const origin = process.env.PROTOTYPE_URL ?? "http://127.0.0.1:3000/developer/player-study";
+const origin = process.env.PROTOTYPE_URL ?? "http://localhost:3000/developer/player-study";
 const url = new URL(origin);
 if (!["127.0.0.1", "localhost"].includes(url.hostname)) throw new Error("Use the local prototype server.");
 const session = `player-prototype-motion-${process.pid}`;
