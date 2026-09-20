@@ -148,3 +148,22 @@ The font is byte-identical to that upstream WOFF2 (SHA256
 `5b4fed1daa90708aa9c6ee1190abca9dc22164a1c1def0020386e46b61038cfb`).
 The prior prototype notice accidentally copied the website MIT license; the
 distributed `DepartureMono-LICENSE.txt` now contains the actual font OFL.
+
+## KKB WebGPU oscilloscope
+
+The experimental Wave Player vendors the P31 phosphor renderer from Kalyn Beach's
+`kalynbeach/kkb` repository at commit `a396ec27cf2f1aa57bddb75c04d04cd3ec6d8464`.
+Source: `packages/audio/src/oscilloscope` at that revision.
+
+- `renderer/shaders/{trace,fade,composite}.ts` are copied with provenance comments.
+- `renderer/pipeline.ts`, `renderer/uniforms.ts`, and `modes/xy.ts` are adapted in
+  `web/src/wave-scope` for explicit playback input, bounded resources, failure
+  reporting, persistence clearing, and complete disposal.
+- The local preset and React observer are authored for this experiment. No
+  microphone, oscillator source, or cross-repository runtime dependency is copied.
+
+The source repository and audio package declare no redistribution license. This
+same-owner integration is made under Kalyn's explicit direction; this notice does
+not grant a public license to the renderer. It preserves source attribution and
+does not change the repository's distribution boundary. The source repository's
+font licenses do not apply to this renderer.

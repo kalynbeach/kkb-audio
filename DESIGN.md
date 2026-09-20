@@ -110,6 +110,10 @@ components:
 
 For `/player.html`, this is the user-pinned [#21 interactive prototype](docs/2026-09-13-wave-player-prototype.md), not a generated seed or a new visual world. Its compact, square listening object pairs restrained surfaces with precise identity, honest media state and persistent transport. #22 replaces the historical demo composition only; it does not redesign the lab.
 
+The experimental `/wave-player.html` extends the same player with a WebGPU XY scope.
+Its dark phosphor field is a local exception described under Components; the shared
+typography, controls, waveform, loop editor, transport and library retain these rules.
+
 KKB is a technical and creative workshop. The lab should make its work inspectable, using precise
 labels, visible state and useful controls. Typography, symbol meaning and information hierarchy
 stay stable across light and dark modes. Theme changes come through semantic tokens.
@@ -287,9 +291,34 @@ Read [the timing/storage contract and evidence](docs/2026-09-13-live-oscilloscop
 approximate untagged rendered histories, not a source/speaker clock. No geometry, font, library,
 Volume or disclosure animation owner changes are part of #23.
 
+### Experimental WebGPU XY scope
+
+The [experimental entry point](web/wave-player.html) reuses the compact React player
+and [player stylesheet](web/player.css). Its [scope styles](web/wave-player.css) keep
+a dark field in both page themes, with P31 green signal and persistence confined
+to that field. This exception does not change the Canvas2D palette or add glow to
+the surrounding controls. The [instance preset](web/src/wave-scope/preset.ts) is
+proposed, pending Kalyn's confirmation; its gain, bloom and trail settings remain
+local source values, not shared tokens or listener options.
+
+The XY trace shows actual rendered output before listening volume and mute. Left
+drives X, right drives Y, and mono drives both axes. Equal physical axis scale and
+fixed visual gain preserve proportions across viewports without normalizing each
+track. Persistence retains actual observations. The optional synthetic study is
+explicitly labelled in-memory WAV media admitted through the normal engine path;
+it never supplies a generated fallback visual.
+
+TX-02 captions remain outside the canvas on dark backing, with readable state and
+axis labels in either theme. Opening the loop editor moves the caption above it.
+Audio pause retains the last observation; seek clears it. Resize, theme and dialog
+changes can present retained history once without reading audio. Reduced motion,
+hidden views and Pause visual clear history and stop observation. Unavailable
+WebGPU keeps the explanation and playback controls usable. See the [implementation
+and visual evidence](docs/2026-09-20-wave-player.md).
+
 ### Honest states and Settings
 
-Unavailable metadata, artwork and duration are stated, never invented. Unknown time uses an em dash; a genuinely prepared sub-second duration may read `0:00`. Prepared playback uses the actual #23 oscilloscope, never the prototype study image or synthetic signal; unsupported/failed rendering retains “Visual unavailable” with independent playback controls. Empty state gives instructions and Open files without a decorative eyebrow. PREPARING/UNAVAILABLE are meaningful feedback, not a reusable kicker style.
+Unavailable metadata, artwork and duration are stated, never invented. Unknown time uses an em dash; a genuinely prepared sub-second duration may read `0:00`. Prepared playback uses the actual #23 oscilloscope or experimental WebGPU output observation, never the prototype study image or a generated fallback signal; unsupported/failed rendering retains “Visual unavailable” with independent playback controls. Empty state gives instructions and Open files without a decorative eyebrow. PREPARING/UNAVAILABLE are meaningful feedback, not a reusable kicker style.
 
 Errors stay visible outside the visual/library swap and keep alert semantics. Settings holds Add files, Remove selected, Clear session and Close track/Cancel loading; the loading visual also offers Cancel. Original files remain untouched. Keep codec limits and session policy in [PRODUCT.md](PRODUCT.md) and the dated evidence, not in visual tokens.
 
@@ -327,7 +356,7 @@ changes engine behavior. Browser verification and its limits are recorded in the
 - **Do** retain real fonts, regular SVG icons, honest media states and source-linked evidence.
 
 ### Don't:
-- **Don't** promote prototype study imagery, synthetic signals or dead future controls into the current player.
+- **Don't** use prototype study imagery or generated fallback signals as playback observation, or add dead future controls to the player.
 - **Don't** turn functional state labels into decorative eyebrows or invent a global display scale.
 - **Don't** add ambient shadows, gradients or a second animation owner to the approved player.
 - **Don't** treat muted Chromium evidence or sidecar samples as listening, device or accessibility certification.

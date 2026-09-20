@@ -396,3 +396,17 @@ test("loop disclosure preserves the single failed visual caption and closed enab
     expect(caption.textContent).toContain("Visual unavailable");
   }finally{await act(()=>owner.close());HTMLCanvasElement.prototype.getContext=original;}
 });
+
+test("an open loop editor remains dismissible after closing the track", async () => {
+  const playback = new FakeMediaLoopPlayback();
+  const owner = new PlaybackOwner(async () => playback, unavailableWaveform);
+  const view = render(<PlayerApp owner={owner} />);
+  await act(() => owner.load(new File([], "loop.wav")));
+  await userEvent.setup().click(view.getByRole("button", { name: "Loop editor" }));
+  await act(() => owner.close());
+  const toggle = view.getByRole("button", { name: "Loop editor" });
+  expect(toggle.hasAttribute("disabled")).toBe(false);
+  await userEvent.setup().click(toggle);
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  expect(view.queryByText("Loops unavailable.")).toBeNull();
+});

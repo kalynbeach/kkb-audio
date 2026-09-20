@@ -74,6 +74,35 @@ MP3 loop continuation uses a bounded private encoded anchor on the decoded-and-t
 Muted/device-free checks are not listening, broad browser, device or background certification; see
 [implementation evidence](docs/2026-09-13-compact-player.md).
 
+## Experimental WebGPU player
+
+`/wave-player.html` composes the same React player, private PlaybackOwner and local
+collection with KKB's WebGPU P31 phosphor XY renderer. `/player.html` remains
+available with its Canvas2D oscilloscope. Transport, source waveform, seeking,
+WAV/MP3 loops and session rules are shared. There is one audio owner and no new
+decode, microphone input, media persistence or upload path.
+
+The visual reads the existing 2048-sample worklet-output tap at at most 30 Hz,
+before listening gain/mute. Left drives X and right drives Y; mono drives both
+axes. The authored preset applies a fixed 0.86 visual gain with equal physical
+axis scale across aspect ratios, no per-track normalization. GPU persistence
+fades actual observations. This approximate trailing history has no source-frame
+or speaker synchronization. Pause freezes the image; seek, replacement, close,
+hidden views, reduced motion and visual suspension discard its history.
+
+One P31 green preset lives in the instance source, with Kalyn owning its direction.
+It is the proposed initial treatment, pending owner confirmation; listeners have
+no visual configuration. Its dark phosphor field is consistent across page themes.
+Missing WebGPU, device loss and render errors leave playback controls functional.
+GPU resources belong to the visual and are disposed on unmount, including cancelled
+asynchronous setup. Texture dimensions are capped at 2048 with DPR at most 2.
+
+The optional, explicitly labelled synthetic study creates a 30-second PCM16 stereo
+WAV in memory and adds it to the ordinary collection. It never autoplays and is
+decoded by the same Rust/Wasm path. It is demonstration media, never a replacement
+for a local track's observed samples. See the [implementation and case-study
+handoff](docs/2026-09-20-wave-player.md) for verification boundaries.
+
 ## Users and purpose
 
 KKB is Kalyn Beach's technical and creative workshop. This lab helps Kalyn and invited reviewers

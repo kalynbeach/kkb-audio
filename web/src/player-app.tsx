@@ -1,4 +1,4 @@
-import { startTransition, ViewTransition, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { startTransition, ViewTransition, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ComponentType, type ReactNode } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Dialog } from "@base-ui/react/dialog";
 import { Button } from "./components/ui/button";
@@ -21,7 +21,14 @@ const phaseLabels: Record<PlaybackState["phase"], string> = {
   playing: "Playing", seeking: "Seeking…", ended: "Ended", error: "Unavailable",
 };
 
-export function PlayerApp({ owner: suppliedOwner }: { owner?: PlaybackOwner }) {
+export type PlayerVisualProps = { owner: PlaybackOwner; paused: boolean; editing?: boolean; obscured?: boolean };
+
+export function PlayerApp({ owner: suppliedOwner, Visual = PlayerOscilloscope, visualDetails, createStudy }: {
+  owner?: PlaybackOwner;
+  Visual?: ComponentType<PlayerVisualProps>;
+  visualDetails?: ReactNode;
+  createStudy?: () => File;
+}) {
   const [owner] = useState(() => suppliedOwner ?? new PlaybackOwner());
   const [collection] = useState(() => new PlayerCollection(owner));
   const state = useSyncExternalStore(owner.subscribe, owner.getState);
@@ -59,6 +66,10 @@ export function PlayerApp({ owner: suppliedOwner }: { owner?: PlaybackOwner }) {
   const openLibrary = () => startTransition(() => setLibraryOpen(true));
   const closeLibrary = () => { startTransition(() => setLibraryOpen(false)); libraryToggle.current?.focus(); };
   const closeTrack = () => { void collection.close(); libraryToggle.current?.focus(); };
+  const addFiles = (files: File[]) => {
+    collection.add(files);
+    startTransition(() => { setSettingsOpen(false); setLibraryOpen(true); });
+  };
   const library = <section id="player-library" className="player-library" aria-labelledby="library-heading" onKeyDown={event => {
     if (event.key === "Escape") { event.stopPropagation(); closeLibrary(); }
   }}>
@@ -80,10 +91,9 @@ export function PlayerApp({ owner: suppliedOwner }: { owner?: PlaybackOwner }) {
         const files = Array.from(event.currentTarget.files ?? []);
         event.currentTarget.value = "";
         if (!files.length) return;
-        collection.add(files);
-        startTransition(() => { setSettingsOpen(false); setLibraryOpen(true); });
+        addFiles(files);
       }} />
-    <header className="player-app-header"><span>Wave Player <span className="player-pixel">/ LOCAL</span></span>
+    <header className="player-app-header"><span>Wave Player <span className="player-pixel">{visualDetails ? "/ EXPERIMENT" : "/ LOCAL"}</span></span>
       <Dialog.Root open={settingsOpen} onOpenChange={open => startTransition(() => setSettingsOpen(open))}>
         <Dialog.Trigger render={<Button variant="ghost" size="icon" aria-label="Settings" title="Settings" />}>{GearSixIcon}</Dialog.Trigger>
         <Dialog.Portal keepMounted>{settingsOpen ? <ViewTransition default="none" enter="fade-in" exit="fade-out"><Dialog.Backdrop className="player-scrim" /><Dialog.Popup className="player-settings">
@@ -107,7 +117,7 @@ export function PlayerApp({ owner: suppliedOwner }: { owner?: PlaybackOwner }) {
             <p>WAV PCM16/24 or MPEG-1 Layer III MP3, mono/stereo. MP3: 44.1/48 kHz, up to 32 MiB and 10 minutes. Same-rate or 44.1 ↔ 48 kHz conversion. Other encodings and conversions are rejected.</p>
             <p>Only the active file is prepared. Row Play explicitly starts audio; adding or selecting never does. Previous/next preserve playing or paused intent. No track wrap or auto-advance. A/B loops use decoded source coordinates for WAV and MP3. The waveform is source amplitude, independent of listening volume; at most 4096 time bins combine channel extrema, reduced without dropping peaks. It is an overview, not sample-level detail.</p>
             <p>Position follows consumed source media, not measured speaker output. Seeking may briefly output silence; click-free transitions and background playback are not guaranteed. Volume starts at 15%, after fixed 50% engine gain.</p>
-            <p>The live oscilloscope shows an approximate trailing 2048-sample browser window, not source-tagged or speaker-synchronized data. Mono has one trace; stereo has solid left and dashed right traces, with three-window persistence. Seeking clears history and waits for fresh rendering. Silence is a flat line.</p>
+            {visualDetails ?? <p>The live oscilloscope shows an approximate trailing 2048-sample browser window, not source-tagged or speaker-synchronized data. Mono has one trace; stereo has solid left and dashed right traces, with three-window persistence. Seeking clears history and waits for fresh rendering. Silence is a flat line.</p>}
             <p>No preferences are saved. Reduced motion disables live visual motion and skips disclosure animations. Visual failure leaves transport available.</p>
           </details>
         </Dialog.Popup></ViewTransition> : null}</Dialog.Portal>
@@ -127,8 +137,9 @@ export function PlayerApp({ owner: suppliedOwner }: { owner?: PlaybackOwner }) {
                 {state.phase !== "empty" ? <span className="player-pixel">{state.phase === "loading" ? "PREPARING" : "UNAVAILABLE"}</span> : null}
                 <p>{state.phase === "loading" ? "Preparing this track…" : state.phase === "error" ? "This file could not be played." : session.entries.length ? "Play a track from your library." : "Open local WAV or MP3 files."}</p>
                 {state.phase === "loading" ? <Button variant="outline" onClick={closeTrack}>Cancel loading</Button> : state.phase === "empty" ? <Button variant="outline" onClick={() => fileInput.current?.click()}>Open files</Button> : null}
+                {state.phase === "empty" && !session.entries.length && createStudy ? <><Button variant="ghost" onClick={() => addFiles([createStudy()])}>Add synthetic study</Button><p className="player-study-note">A generated WAV for trying the player.</p></> : null}
                 {state.phase !== "loading" && session.entries.length ? <Button variant="outline" onClick={openLibrary}>Browse library</Button> : null}
-              </div> : <PlayerOscilloscope owner={owner} paused={visualPaused} editing={loopEditing} />}
+              </div> : <Visual owner={owner} paused={visualPaused} editing={loopEditing} obscured={settingsOpen} />}
             </div>
           </ViewTransition>
             {loopEditing ? <ViewTransition default="none" enter="loop-layer" exit="loop-layer"><PlayerLoopEditor state={state} owner={owner}/></ViewTransition> : null}
@@ -145,7 +156,7 @@ export function PlayerApp({ owner: suppliedOwner }: { owner?: PlaybackOwner }) {
                 <Slider value={[Math.round(state.volume * 100)]} min={0} max={100} step={1} aria-labelledby="volume-label" onValueChange={values => owner.setVolume((Array.isArray(values) ? values[0]! : values) / 100)} />
                 <output aria-label="Volume level">{Math.round(state.volume * 100)}%</output>
               </Popover.Popup></Popover.Positioner></Popover.Portal>
-            </Popover.Root><Button variant="ghost" size="icon" aria-label="Loop editor" title={state.loop.error ?? (state.loop.supported ? state.loop.enabled ? "Loop enabled · Edit loop" : "Loop off · Edit loop" : "Loop unavailable")} data-active={state.loop.enabled} aria-expanded={loopEditing} disabled={!available || (!state.loop.supported && !state.loop.error && !loopEditing)} onClick={()=>startTransition(()=>setLoopEditing(!loopEditing))}>{RepeatIcon}</Button></div>
+            </Popover.Root><Button variant="ghost" size="icon" aria-label="Loop editor" title={state.loop.error ?? (state.loop.supported ? state.loop.enabled ? "Loop enabled · Edit loop" : "Loop off · Edit loop" : "Loop unavailable")} data-active={state.loop.enabled} aria-expanded={loopEditing} disabled={!loopEditing && (!available || (!state.loop.supported && !state.loop.error))} onClick={()=>startTransition(()=>setLoopEditing(!loopEditing))}>{RepeatIcon}</Button></div>
             <div className="player-playback">
               <Button variant="ghost" size="icon" aria-label="Previous track" disabled={activeIndex <= 0 || (state.busy && state.phase !== "loading")} onClick={() => { void collection.move(-1); }}>{SkipBackIcon}</Button>
               <Button variant="secondary" size="icon-lg" className="player-play" aria-label={state.phase === "playing" ? "Pause" : state.phase === "ended" ? "Replay" : "Play"} disabled={!available || state.busy}
@@ -161,7 +172,7 @@ export function PlayerApp({ owner: suppliedOwner }: { owner?: PlaybackOwner }) {
     <footer className="player-review-footer">
       {state.error ? <p role="alert" className="player-error">{state.error}. Play another file from the library, or retry this one.</p> : null}
       <p role="status">{session.notice || "Local WAV & MP3 · This session only"}</p>
-      <p><a href="/lab.html">Learning lab</a> / <a href="/index.html">Engine proof</a></p>
+      <p>{visualDetails ? <><a href="/player.html">Classic player</a> / </> : <><a href="/wave-player.html">WebGPU experiment</a> / </>}<a href="/lab.html">Learning lab</a> / <a href="/index.html">Engine proof</a></p>
     </footer>
   </>;
 }
