@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AppearanceControl } from "../web/src/appearance";
 
-const links = [["/", "Overview"], ["/player", "Wave Player"], ["/lab", "Lab"], ["/developer", "Developer"]] as const;
+const links = [["/", "Overview"], ["/player", "Wave Player"], ["/catalog", "Catalog"], ["/lab", "Lab"], ["/developer", "Developer"]] as const;
 export function Navigation() {
   const path = usePathname();
   return <header className="site-header">

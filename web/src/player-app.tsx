@@ -10,7 +10,7 @@ import { PlaybackOwner, sourceFrameAtSeconds, type PlaybackState } from "./playb
 import { PlayerLoopEditor } from "./player-loop-editor";
 import { PlayerOscilloscope } from "./player-oscilloscope";
 import { waveformPath } from "./source-waveform";
-import { PlayerCollection, SESSION_LIMIT, type SessionEntry } from "./player-collection";
+import { PlayerCollection, SESSION_LIMIT, type SessionEntry, type PlayerInitialTrack } from "./player-collection";
 import { RepeatIcon, ArrowLeftIcon, GearSixIcon, PauseIcon, PlayIcon, QueueIcon, SkipBackIcon, SkipForwardIcon, SpeakerHighIcon, SpeakerSlashIcon, XIcon } from "./player-icons";
 
 export function mediaTime(seconds: number): string {
@@ -25,14 +25,17 @@ const phaseLabels: Record<PlaybackState["phase"], string> = {
 export type PlayerVisualProps = { owner: PlaybackOwner; paused: boolean; editing?: boolean; obscured?: boolean };
 
 // The route owns the session and releases its playback resources on unmount.
-export function PlayerApp({ owner: suppliedOwner, Visual = PlayerOscilloscope, visualDetails, createStudy }: {
+export function PlayerApp({ owner: suppliedOwner, initialTracks = [], Visual = PlayerOscilloscope, visualDetails, createStudy }: {
   owner?: PlaybackOwner;
+  /** Read once on mount. The first track prepares paused through the ordinary collection. */
+  initialTracks?: readonly PlayerInitialTrack[];
   Visual?: ComponentType<PlayerVisualProps>;
   visualDetails?: ReactNode;
   createStudy?: () => File;
 }) {
   const [owner] = useState(() => suppliedOwner ?? new PlaybackOwner());
-  const [collection] = useState(() => new PlayerCollection(owner));
+  const [collection] = useState(() => new PlayerCollection(owner, initialTracks));
+  const [initialEntry] = useState(() => collection.getState().entries[0]?.id);
   const state = useSyncExternalStore(owner.subscribe, owner.getState);
   const session = useSyncExternalStore(collection.subscribe, collection.getState);
   const [libraryOpen, setLibraryOpen] = useState(false);
@@ -50,8 +53,9 @@ export function PlayerApp({ owner: suppliedOwner, Visual = PlayerOscilloscope, v
 
   useEffect(() => {
     const unsubscribe = owner.subscribe(collection.captureMetadata);
+    if (initialEntry) void collection.activate(initialEntry);
     return () => { unsubscribe(); void collection.close(); };
-  }, [owner, collection]);
+  }, [owner, collection, initialEntry]);
   useEffect(() => {
     const query = matchMedia("(max-width: 1211px)");
     const change = () => setNarrow(query.matches);
@@ -123,8 +127,8 @@ export function PlayerApp({ owner: suppliedOwner, Visual = PlayerOscilloscope, v
       <div className="player-composition">
         <section className="player-card" aria-label="Wave Player">
           <header className="player-track-header">
-            <h1 title={active?.file.name}>{active?.file.name || "Choose your music"}</h1>
-            <p>{active ? "Metadata unavailable" : "Local files. This session only."}</p>
+            <h1 title={active?.title}>{active?.title || "Choose your music"}</h1>
+            <p>{active ? active.title !== active.file.name ? active.file.name : "Metadata unavailable" : "Local files. This session only."}</p>
           </header>
           <div className="player-visual-area">
           <ViewTransition key={narrow && libraryOpen ? "library" : "visual"} default="none" enter="fade-in" exit="fade-out">
@@ -178,12 +182,12 @@ function TrackRow({ entry, selected, current, state, onSelect, onPlay }: {
   const playing = current && state.phase === "playing";
   const metadata = entry.error ? "Unavailable · Play to retry" : current && state.phase === "loading" ? "Preparing…" : "Metadata unavailable";
   return <li className="player-track-row" data-selected={selected} data-current={current}>
-    <button className="player-track-select" type="button" onClick={onSelect} aria-pressed={selected} aria-current={current ? "true" : undefined} aria-label={`Select ${entry.file.name}`} aria-describedby={`${entry.id}-meta`}>
-      <span className="player-track-copy"><span className="player-track-title" data-filename="true" title={entry.file.name}>{entry.file.name}</span><span id={`${entry.id}-meta`} className="player-track-meta" title={metadata}>{metadata}</span></span>
+    <button className="player-track-select" type="button" onClick={onSelect} aria-pressed={selected} aria-current={current ? "true" : undefined} aria-label={`Select ${entry.title}`} aria-describedby={`${entry.id}-meta`}>
+      <span className="player-track-copy"><span className="player-track-title" data-filename="true" title={entry.title}>{entry.title}</span><span id={`${entry.id}-meta`} className="player-track-meta" title={metadata}>{metadata}</span></span>
       <span className="player-track-duration">{entry.duration === null ? "—" : mediaTime(entry.duration)}</span>
     </button>
     {current ? <span className="player-track-cue" aria-hidden="true">{playing ? SpeakerHighIcon : <span className="player-current-dot" />}</span> : null}
-    <Button variant="ghost" size="icon" className="player-track-play" aria-label={`${playing ? "Pause" : current && state.phase === "ended" ? "Replay" : "Play"} ${entry.file.name}`} aria-describedby={`${entry.id}-meta`} disabled={current && state.busy} onClick={onPlay}>{playing ? PauseIcon : PlayIcon}</Button>
+    <Button variant="ghost" size="icon" className="player-track-play" aria-label={`${playing ? "Pause" : current && state.phase === "ended" ? "Replay" : "Play"} ${entry.title}`} aria-describedby={`${entry.id}-meta`} disabled={current && state.busy} onClick={onPlay}>{playing ? PauseIcon : PlayIcon}</Button>
   </li>;
 }
 function SeekBar({ state, unavailable, disabled, onSeek, editing, onRegion }: {

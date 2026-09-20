@@ -21,6 +21,30 @@ const { PlayerApp } = await import("../web/src/player-app");
 afterEach(cleanup);
 afterAll(() => GlobalRegistrator.unregister());
 
+test("catalog initialization prepares paused in order; separate player transports and unmount remain independent", async () => {
+  const firstPlayback = new FakePlayback();
+  const secondPlayback = new FakePlayback();
+  const firstOwner = new PlaybackOwner(async () => firstPlayback, unavailableWaveform);
+  const secondOwner = new PlaybackOwner(async () => secondPlayback, unavailableWaveform);
+  const first = render(<PlayerApp owner={firstOwner} initialTracks={[{ file: new File(["a"], "same.wav"), title: "First title" }, { file: new File(["b"], "same.wav"), title: "Second title" }]} />);
+  const second = render(<PlayerApp owner={secondOwner} initialTracks={[{ file: new File(["c"], "other.wav"), title: "Other instance" }]} />);
+  await waitFor(() => expect(firstOwner.getState().phase).toBe("paused"));
+  await waitFor(() => expect(secondOwner.getState().phase).toBe("paused"));
+  expect(firstPlayback.calls).not.toContain("play"); expect(secondPlayback.calls).not.toContain("play");
+  expect(first.container.querySelector("h1")?.textContent).toBe("First title");
+  await act(() => firstOwner.play());
+  expect(firstOwner.getState().phase).toBe("playing"); expect(secondOwner.getState().phase).toBe("paused");
+  const next = first.container.querySelector<HTMLButtonElement>('button[aria-label="Next track"]')!;
+  await act(() => next.click());
+  await waitFor(() => expect(first.container.querySelector("h1")?.textContent).toBe("Second title"));
+  expect(secondOwner.getState().phase).toBe("paused");
+  first.unmount();
+  await waitFor(() => expect(firstOwner.getState().phase).toBe("empty"));
+  expect(secondPlayback.closeCount).toBe(0);
+  second.unmount();
+  await waitFor(() => expect(secondPlayback.closeCount).toBe(1));
+});
+
 test("WAV loop disclosure, exact frame fields, keyboard handles and terminal retry clarity",async()=>{
   const playback=new FakeMediaLoopPlayback();const owner=new PlaybackOwner(async()=>playback,unavailableWaveform);
   const view=render(<PlayerApp owner={owner}/>);await act(()=>owner.load(new File([],"loop.wav")));

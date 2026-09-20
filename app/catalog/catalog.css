@@ -1,0 +1,53 @@
+.catalog-page { max-width: 1120px; margin: 0 auto; padding: 48px 32px; }
+.catalog-heading h1 { font-size: clamp(30px, 4vw, 48px); font-weight: 500; letter-spacing: -.03em; line-height: 1.15; }
+.catalog-heading h1 span { font-size: 14px; color: var(--muted-foreground); letter-spacing: 0; }
+.catalog-heading > p { font-size: 14px; line-height: 1.5; margin-top: 12px; }
+.catalog-local-note { max-width: 75ch; color: var(--muted-foreground); font-size: 13px; line-height: 1.7; margin-top: 20px; }
+.catalog-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 28px; }
+.catalog-controls > span { font-size: 12px; color: var(--muted-foreground); }
+.catalog-page button { cursor: pointer; }
+.catalog-page button:disabled { cursor: default; }
+.catalog-feedback { min-height: 68px; padding: 16px 0; font-size: 13px; line-height: 1.6; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.catalog-feedback [role=alert] { color: var(--foreground); font-weight: 600; }
+.catalog-list-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 10px; padding: 16px 0; border-bottom: 1px solid var(--border); }
+.catalog-list-heading h2 { font-size: 22px; font-weight: 500; letter-spacing: -.02em; }
+.catalog-list-heading h2 span { font-size: 12px; font-family: var(--font-mono); color: var(--muted-foreground); margin-left: 10px; }
+.catalog-list-heading > span { font-size: 12px; color: var(--muted-foreground); }
+.catalog-list { list-style: none; margin: 0; padding: 0; }
+.catalog-row { display: grid; grid-template-columns: 60px minmax(0, 1fr) 112px 120px; align-items: start; gap: 16px; padding: 20px 0; border-bottom: 1px solid var(--border); }
+.catalog-select { display: flex; align-items: center; gap: 12px; min-height: 36px; font: 12px var(--font-mono); color: var(--muted-foreground); }
+.catalog-select input { width: 18px; height: 18px; accent-color: var(--foreground); }
+.catalog-identity { min-width: 0; }
+.catalog-identity input { width: 100%; font-size: 14px; font-weight: 500; background: var(--background); }
+.catalog-file-hint { margin-top: 8px; overflow-wrap: anywhere; font: 12px/1.5 var(--font-mono); color: var(--muted-foreground); }
+.catalog-file-hint span { white-space: nowrap; }
+.catalog-details { margin-top: 8px; font-size: 12px; color: var(--muted-foreground); }
+.catalog-details summary { cursor: pointer; width: fit-content; padding: 4px 0; }
+.catalog-details summary span { font-family: var(--font-mono); margin-left: 8px; }
+.catalog-details dl { margin-top: 12px; }
+.catalog-details dt { font-size: 11px; margin-top: 10px; }
+.catalog-details dd { font: 11px/1.6 var(--font-mono); overflow-wrap: anywhere; color: var(--foreground); }
+.catalog-binding { display: flex; flex-direction: column; align-items: start; gap: 10px; font-size: 12px; padding-top: 7px; }
+.catalog-row-actions { display: flex; }
+.catalog-open { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; padding: 24px 0; }
+.catalog-open p { font-size: 14px; font-weight: 500; }
+.catalog-open span { font-size: 12px; color: var(--muted-foreground); }
+.catalog-empty { padding: 42px 24px; background: var(--secondary); }
+.catalog-empty h3 { font-size: 22px; font-weight: 500; }
+.catalog-empty p { max-width: 60ch; margin: 10px 0 20px; font-size: 14px; line-height: 1.7; color: var(--muted-foreground); }
+.catalog-limits { border-top: 1px solid var(--border); padding-top: 20px; font-size: 12px; color: var(--muted-foreground); }
+.catalog-limits summary { cursor: pointer; width: fit-content; }
+.catalog-limits p { max-width: 75ch; line-height: 1.7; margin-top: 16px; }
+.catalog-player-heading { display: flex; flex-wrap: wrap; gap: 16px 24px; align-items: center; padding: 24px clamp(16px, 3.5vw, 64px); border-bottom: 1px solid var(--border); }
+.catalog-player-heading h1 { font-size: 22px; font-weight: 500; letter-spacing: -.02em; }
+.catalog-player-heading p { font-size: 12px; color: var(--muted-foreground); margin-top: 6px; }
+@media (max-width: 760px) {
+  .catalog-page { padding: 32px 16px; }
+  .catalog-row { grid-template-columns: 38px minmax(0, 1fr); gap: 10px 12px; }
+  .catalog-select { gap: 6px; }
+  .catalog-binding { grid-column: 2; flex-direction: row; align-items: center; padding-top: 0; }
+  .catalog-row-actions { grid-column: 2; }
+  .catalog-controls > span { width: 100%; }
+  .catalog-open { align-items: start; }
+  .catalog-empty { padding: 30px 20px; }
+}

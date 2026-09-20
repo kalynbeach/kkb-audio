@@ -9,6 +9,7 @@ export default function Overview() {
       <div className="entry-instrument" aria-hidden="true"><AudioLines size={100} strokeWidth={0.8}/><div><span>Local files</span><Play size={24}/><span>WAV / MP3</span></div></div>
     </Link>
     <div className="overview-lower">
+      <Link href="/catalog" className="route-entry"><h2>WaveCatalog <ArrowUpRight aria-hidden="true" /></h2><p>Arrange a small local playlist. Edit titles, keep exact file identities, and export a portable manifest.</p><span>Open catalog <ArrowRight size={18} aria-hidden="true" /></span></Link>
       <Link href="/lab" className="route-entry"><h2>Audio engine lab <ArrowUpRight aria-hidden="true" /></h2><p>Trace a signal through the graph. Inspect rendered samples and compare execution across block sizes.</p><span>Explore the lab <ArrowRight size={18} aria-hidden="true" /></span></Link>
       <Link href="/developer" className="route-entry"><h2>Developer proofs <ArrowUpRight aria-hidden="true" /></h2><p>Exercise worklet preparation, PCM transport, and compiled plans with explicit diagnostic controls.</p><span>Open developer tools <ArrowRight size={18} aria-hidden="true" /></span></Link>
     </div>

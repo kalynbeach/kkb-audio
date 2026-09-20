@@ -18,7 +18,7 @@
     "audit:plan": "bun tools/audit-plan-worklet.ts public/audio-runtime/plan-processor.js",
     "audit:worklet": "bun tools/audit-worklet.ts public/audio-runtime/worklet-processor.js",
     "check:lab": "bun test tools/check-lab.test.ts tools/check-lab-canvas.test.ts",
-    "check:player-ui": "bun test tools/check-player-ui.test.tsx tools/check-wave-player-scope.test.ts",
+    "check:player-ui": "bun test tools/check-player-ui.test.tsx tools/check-wave-player-scope.test.ts && bun test tools/check-catalog-ui.test.tsx",
     "check:lab-ui": "bun test tools/check-lab-ui.test.tsx",
     "check": "bun run build:worklet && bun run typecheck && bun test web/test && bun run check:wasm && bun run check:kernel && bun run check:wav && bun run check:mp3 && bun run check:waveform && bun run check:plan && bun run check:lab && bun run check:lab-ui && bun run check:player-ui && bun run audit:worklet && bun run audit:plan",
     "build": "bun run build:worklet && bun --bun next build",

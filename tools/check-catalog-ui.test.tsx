@@ -1,0 +1,43 @@
+import { afterAll, afterEach, expect, test } from "bun:test";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { addCatalogFiles, CATALOG_STORAGE_KEY, emptyCatalog, exportManifest } from "../web/src/catalog";
+
+const LocalFile = File;
+GlobalRegistrator.register({ url: "http://localhost/catalog" });
+const { cleanup, fireEvent, render, waitFor } = await import("@testing-library/react");
+const { CatalogApp } = await import("../web/src/catalog-app");
+afterEach(() => { cleanup(); sessionStorage.clear(); });
+afterAll(() => GlobalRegistrator.unregister());
+
+test("reload restores only metadata; invalid import is atomic and exact-byte rebind recovers missing files", async () => {
+  const a = new LocalFile(["abc"], "same.wav");
+  const b = new LocalFile(["def"], "same.wav");
+  const { manifest } = await addCatalogFiles(emptyCatalog(), new Map(), [a, b]);
+  sessionStorage.setItem(CATALOG_STORAGE_KEY, exportManifest(manifest));
+  const view = render(<CatalogApp />);
+  const open = () => view.getByRole("button", { name: "Open selection in player" }) as HTMLButtonElement;
+  expect(view.getByText("2 missing files")).toBeTruthy();
+  expect(open().disabled).toBe(true);
+  fireEvent.change(view.getByLabelText("Import catalog manifest"), { target: { files: [new LocalFile(['{"version":99}'], "bad.json")] } });
+  await waitFor(() => expect(view.getByRole("alert").textContent).toContain("Invalid manifest"));
+  expect(sessionStorage.getItem(CATALOG_STORAGE_KEY)).toBe(exportManifest(manifest));
+  fireEvent.click(view.getAllByRole("button", { name: "Reselect file" })[0]!);
+  fireEvent.change(view.getByLabelText("Reselect matching file"), { target: { files: [b] } });
+  await waitFor(() => expect(view.getByRole("alert").textContent).toContain("does not match"));
+  expect(open().disabled).toBe(true);
+  fireEvent.click(view.getAllByRole("button", { name: "Reselect file" })[0]!);
+  fireEvent.change(view.getByLabelText("Reselect matching file"), { target: { files: [new LocalFile(["abc"], "renamed.wav")] } });
+  await waitFor(() => expect(view.getByText("1 missing file")).toBeTruthy());
+  expect(open().disabled).toBe(true);
+  fireEvent.click(view.getAllByRole("checkbox")[1]!);
+  expect(open().disabled).toBe(false);
+  const input = view.getByLabelText("Title for asset 1");
+  fireEvent.change(input, { target: { value: "Edited title" } }); fireEvent.blur(input);
+  fireEvent.click(view.getByRole("button", { name: "Move Edited title down" }));
+  await waitFor(() => expect(sessionStorage.getItem(CATALOG_STORAGE_KEY)).toContain("Edited title"));
+  const saved = JSON.parse(sessionStorage.getItem(CATALOG_STORAGE_KEY)!);
+  expect(saved.assets.map((asset: { id: string }) => asset.id)).toEqual([manifest.assets[1]!.id, manifest.assets[0]!.id]);
+  fireEvent.change(view.getByLabelText("Import catalog manifest"), { target: { files: [new LocalFile([JSON.stringify(saved)], "saved.json")] } });
+  await waitFor(() => expect(view.getByText("2 missing files")).toBeTruthy());
+  expect(open().disabled).toBe(true);
+});
