@@ -4,7 +4,7 @@ import { fillDeterministic } from "./pcm-worker-pool";
 import { LocalPcmProducer } from "./local-pcm-producer";
 
 // Bound reads independently of transport capacity without fragmenting refills
-// into many serial File operations (at most 6 KiB for PCM24 stereo).
+// into many serial File operations (at most 8 KiB for float32 stereo).
 const WAV_READ_FRAMES = 1024;
 
 let producer: LocalPcmProducer | undefined;
@@ -140,7 +140,7 @@ async function runSeeks(): Promise<void> {
   } catch (error) { fail(error); }
   finally { seeking = false; }
 }
-const fail = (error: unknown) => self.postMessage({ type: "worker-failed", code: 70, detail: typeof error === "number" ? error === 72 ? "Unsupported or malformed MP3 (72): expected bounded MPEG-1 Layer III mono/stereo 44100/48000 Hz with consistent frames and metadata." : error === 71 ? "Unsupported sample-rate conversion (71): expected same rate or 44100 ↔ 48000 Hz." : "Unsupported or malformed WAV: expected nonempty little-endian RIFF PCM16/24 mono/stereo with consistent chunk bounds." : String(error) });
+const fail = (error: unknown) => self.postMessage({ type: "worker-failed", code: 70, detail: typeof error === "number" ? error === 72 ? "Unsupported or malformed MP3 (72): expected bounded MPEG-1 Layer III mono/stereo 44100/48000 Hz with consistent frames and metadata." : error === 74 ? "Nonfinite PCM or conversion range exceeded (74): conversion requires sample magnitudes at most 1e30. Samples are never normalized or clipped." : error === 71 ? "Unsupported sample-rate conversion (71): expected same rate or 44100 ↔ 48000 Hz." : "Unsupported or malformed WAV: expected nonempty little-endian RIFF PCM16/24 or IEEE float32 mono/stereo with finite samples and consistent chunk bounds." : String(error) });
 self.onmessage = async (event: MessageEvent) => {
   try {
     const value = event.data;

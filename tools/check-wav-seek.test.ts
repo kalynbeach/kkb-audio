@@ -29,7 +29,7 @@ function reference(bytes: Uint8Array, rate: number): Float32Array[] {
 
 test("actual worker/Wasm seeks: uninterrupted reference, paused reclamation, superseding reads/admissions, EOS and finite ownership", async () => {
   const originalSelf = globalThis.self;
-  for (const [sourceRate, outputRate, bits, channels] of [[44100, 48000, 24, 2], [48000, 44100, 16, 1], [48000, 48000, 24, 2]] as const) {
+  for (const [sourceRate, outputRate, bits, channels] of [[44100, 48000, 24, 2], [48000, 44100, 16, 1], [48000, 48000, 24, 2], [44100, 48000, 32, 2], [48000, 44100, 32, 1], [48000, 48000, 32, 2]] as const) {
     for (const total of [1, 17, 10003]) {
       let releaseRead: (() => void) | undefined;
       let holdRead = false;
@@ -47,7 +47,7 @@ test("actual worker/Wasm seeks: uninterrupted reference, paused reclamation, sup
       const messages: WorkerMessage[] = [];
       const host = { onmessage: undefined as ((event: { data: unknown }) => Promise<void>) | undefined, postMessage: (message: WorkerMessage) => messages.push(message) };
       Object.defineProperty(globalThis, "self", { configurable: true, value: host });
-      await import(`data:text/javascript;base64,${Buffer.from((await Bun.file("public/audio-runtime/pcm-worker.js").text()) + `\n// seek ${sourceRate} ${outputRate} ${total}`).toString("base64")}`);
+      await import(`data:text/javascript;base64,${Buffer.from((await Bun.file("public/audio-runtime/pcm-worker.js").text()) + `\n// seek ${sourceRate} ${outputRate} ${total} ${bits}`).toString("base64")}`);
       const send = (data: unknown) => host.onmessage!({ data });
       const wait = async (condition: () => boolean) => {
         const deadline = performance.now() + 3000;
@@ -145,7 +145,7 @@ test("actual worker/Wasm seeks: uninterrupted reference, paused reclamation, sup
         await seek(total);
         expect([0, 1, 2, 3].every(slot => kernel.slot_free(slot))).toBe(true);
         expect(inFlight.size).toBe(0);
-        expect(Math.max(...reads)).toBeLessThanOrEqual(6144);
+        expect(Math.max(...reads)).toBeLessThanOrEqual(1024 * channels * bits / 8);
         expect(memory.buffer.byteLength).toBe(16777216);
       } finally {
         releaseRead?.(); releaseAdmission?.();

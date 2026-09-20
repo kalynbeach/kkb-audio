@@ -5,6 +5,11 @@ use rubato::{Fft, FixedSync, Resampler};
 use wasm_bindgen::prelude::*;
 
 const INVALID_CONVERSION: u32 = 71;
+const NONFINITE_PCM: u32 = 74;
+// The pinned FFT uses unnormalized transforms of at most 2560 samples. Reserve
+// more than 28 bits of headroom for both transforms, complex products and overlap.
+// Same-rate bypass has no amplitude ceiling beyond finite float32.
+const MAX_CONVERSION_SAMPLE: f32 = 1.0e30;
 
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
@@ -69,6 +74,7 @@ pub struct PreparedRateConverter {
     skip_delay: usize,
     output_offset: usize,
     output_end: usize,
+    failed: bool,
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
@@ -117,6 +123,7 @@ impl PreparedRateConverter {
             skip_delay,
             output_offset: 0,
             output_end: 0,
+            failed: false,
         })
     }
     pub fn total_pcm_frames(&self) -> u64 {
@@ -126,7 +133,7 @@ impl PreparedRateConverter {
         self.source_read
     }
     pub fn input_frames_needed(&self) -> usize {
-        if self.available_frames() != 0 {
+        if self.failed || self.available_frames() != 0 {
             return 0;
         }
         (self.timeline.source_frames - self.source_read)
@@ -140,8 +147,18 @@ impl PreparedRateConverter {
             plane[self.output_offset..].as_ptr()
         })
     }
-    /// Accept one bounded planar decode window, independent of converter chunk boundaries.
+    /// Accept one planar decode window, independent of converter chunk boundaries.
+    /// Conversion rejects magnitudes above 1e30 before entering the float32 FFT;
+    /// its dependency can panic on overflow, so checking output alone is too late.
     pub fn push(&mut self, planar: &[f32]) -> Result<(), u32> {
+        if self.failed
+            || planar.iter().any(|sample| {
+                !sample.is_finite()
+                    || (self.resampler.is_some() && sample.abs() > MAX_CONVERSION_SAMPLE)
+            })
+        {
+            return Err(NONFINITE_PCM);
+        }
         let channels = self.input.len();
         let frames = planar.len() / channels;
         if frames == 0
@@ -165,6 +182,9 @@ impl PreparedRateConverter {
         Ok(())
     }
     pub fn consume(&mut self, frames: usize) -> Result<(), u32> {
+        if self.failed {
+            return Err(NONFINITE_PCM);
+        }
         if frames > self.available_frames() {
             return Err(INVALID_CONVERSION);
         }
@@ -223,6 +243,7 @@ impl PreparedRateConverter {
         self.pcm_consumed = 0;
         self.output_offset = 0;
         self.output_end = 0;
+        self.failed = false;
         self.skip_delay = self.resampler.as_ref().map_or(0, Resampler::output_delay);
     }
 }
@@ -250,6 +271,23 @@ impl PreparedRateConverter {
             for (output, input) in self.output.iter_mut().zip(&self.input) {
                 output.copy_from_slice(input);
             }
+        }
+        // Finite float32 input can overflow the FFT. Check the entire chunk,
+        // including delay/tail samples, before making any output available.
+        // Failed conversion is terminal until reset/seek clears filter history.
+        if self
+            .output
+            .iter()
+            .flatten()
+            .any(|sample| !sample.is_finite())
+        {
+            self.failed = true;
+            self.output_offset = 0;
+            self.output_end = 0;
+            for plane in &mut self.output {
+                plane.fill(0.0);
+            }
+            return Err(NONFINITE_PCM);
         }
         let output_frames = if self.resampler.is_none() {
             self.input_filled

@@ -123,7 +123,7 @@ without selecting a playback successor. Removed selection moves to the next rema
 at the end. **Close track / Cancel loading** in Settings retains the collection; the visual loading
 state also offers Cancel. Errors leave rows available for another file or retry.
 
-Choose nonempty little-endian RIFF PCM16/24 mono/stereo WAV or supported MP3. Playback supports the
+Choose nonempty little-endian RIFF PCM16/24 or IEEE float32 mono/stereo WAV, or supported MP3. Playback supports the
 active context's rate and prepared 44100 ↔ 48000 Hz conversion only. Library/theme/responsive
 changes do not replace the active owner or session. Desktop keeps a centered compact player and
 right companion library at ≥1212px; narrower browsing replaces only the visual region. Settings
@@ -153,6 +153,24 @@ the render clock. Normal wraps do not use public seek or UI polling. Explicit co
 prepare silence. Review repairs cover EOF head draining, acknowledgment-time EOS pause, latest control
 intent and visible visual/capability explanations at the smallest layout. Human listening remains pending; see [MP3 loop evidence](docs/2026-09-14-mp3-loops.md) and [WAV loop evidence](docs/2026-09-14-wav-loops.md#bounded-review-repair-2026-09-14),
 including the small repository-hosted screenshot/runtime/check set.
+
+IEEE float32 WAV uses RIFF format tag 3 with 32-bit little-endian samples. The shared
+reader preserves finite values, including signed zero and values outside `[-1, 1]`,
+without normalization or clipping. NaN/Inf reject the entire decode block. Decode
+windows contain at most 1024 frames, up to 8192 bytes for stereo float32. Unknown
+RIFF chunks, including `JUNK` before `fmt`, follow the existing bounds/padding checks.
+PCM32, float64, WAVE_FORMAT_EXTENSIBLE and RF64 remain unsupported.
+
+Same-rate preparation preserves every finite float32 value. Cross-rate conversion
+requires `|sample| <= 1e30` to reserve headroom for the pinned float32 FFT; larger
+values reject before entering it. Conversion also rejects nonfinite output before
+publishing a chunk. Numeric failures report code 74. The compiled gain remains 0.5;
+this is not normalization. Native integer output rejects an entire callback if its
+rendered samples fall outside `[-1, 1)` instead of silently clipping or overflowing,
+and reports output-range failure code 6. Float output preserves finite rendered values.
+Browser/device output can still clip at its physical limits. The waveform summary
+retains source extrema above full scale; its fixed-scale drawing clips visually.
+Validation of later decode blocks happens as they are read, not during WAV header inspection.
 
 MP3 support (#17) uses pinned Symphonia 0.6.1 in the shared Rust preparation path,
 not browser decoding. Accepted: MPEG-1 Layer III, 44.1/48 kHz mono/stereo, CBR/VBR

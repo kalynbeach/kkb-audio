@@ -75,6 +75,7 @@ test("built WAV worker conversion reaches consumed EOS across pause and starvati
   for (const [sourceRate, outputRate, bits, channels, total] of [
     [44100, 48000, 16, 1, 1], [48000, 44100, 24, 2, 17],
     [44100, 48000, 24, 2, 10003], [48000, 44100, 16, 1, 10003],
+    [44100, 48000, 32, 2, 10003], [48000, 44100, 32, 1, 10003],
   ] as const) {
     const reads: number[] = [];
     class TrackedFile extends File {
@@ -83,13 +84,13 @@ test("built WAV worker conversion reaches consumed EOS across pause and starvati
     const messages: Array<{ type: string; detail?: string; totalFrames?: number; totalPcmFrames?: number; initialAdmittedBlocks?: number }> = [];
     const host = { onmessage: undefined as ((event: { data: unknown }) => Promise<void>) | undefined, postMessage: (message: typeof messages[number]) => messages.push(message) };
     Object.defineProperty(globalThis, "self", { configurable: true, value: host });
-    await import(`data:text/javascript;base64,${Buffer.from((await Bun.file("public/audio-runtime/pcm-worker.js").text()) + `\n// conversion ${sourceRate} ${total}`).toString("base64")}`);
+    await import(`data:text/javascript;base64,${Buffer.from((await Bun.file("public/audio-runtime/pcm-worker.js").text()) + `\n// conversion ${sourceRate} ${total} ${bits}`).toString("base64")}`);
     const bytes = wavFixture(bits, channels, sourceRate, total);
-    // Decode integer fixtures independently to compare the built producer against differently chunked conversion.
+    // Decode wire samples independently to compare against differently chunked conversion.
     const view = new DataView(bytes.buffer, bytes.byteOffset);
     const input = Array.from({ length: channels }, (_, channel) => Float32Array.from({ length: total }, (_, frame) => {
       const offset = 44 + (frame * channels + channel) * (bits / 8);
-      return bits === 16 ? view.getInt16(offset, true) / 32768 : ((view.getUint8(offset) | view.getUint8(offset + 1) << 8 | view.getInt8(offset + 2) << 16) / 8388608);
+      return bits === 32 ? view.getFloat32(offset, true) : bits === 16 ? view.getInt16(offset, true) / 32768 : ((view.getUint8(offset) | view.getUint8(offset + 1) << 8 | view.getInt8(offset + 2) << 16) / 8388608);
     }));
     const expected = convert(sourceRate, outputRate, input, [1, 17, 239]);
     await host.onmessage!({ data: { type: "inspect", file: new TrackedFile([bytes], "conversion.wav"), module, sampleRate: outputRate } });
@@ -136,7 +137,7 @@ test("built WAV worker conversion reaches consumed EOS across pause and starvati
       }
       expect(position).toBe(expected[0]!.length); expect(kernel.source_position()).toBe(BigInt(total));
       if (total > 1024) expect(recovered).toBe(true);
-      expect(Math.max(...reads)).toBeLessThanOrEqual(6144);
+      expect(Math.max(...reads)).toBeLessThanOrEqual(1024 * channels * bits / 8);
       expect(memory.buffer.byteLength).toBe(16777216);
       expect(messages.some(message => message.type === "worker-failed")).toBe(false);
     } finally {

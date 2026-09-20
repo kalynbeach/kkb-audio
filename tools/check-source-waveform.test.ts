@@ -40,8 +40,8 @@ function compare(summary: SourceWaveform, channels: number, sample: (frame: numb
     expect(Math.abs(summary.extrema[2 * bin + 1]! - high)).toBeLessThanOrEqual(tolerance);
   }
 }
-test("source-waveform real Rust/Wasm worker: independent PCM16/24 mono/stereo, rates, short/partial bins", async () => {
-  for (const bits of [16, 24] as const) for (const channels of [1, 2] as const) for (const rate of [44100, 48000]) for (const frames of [1, 17, 8194]) {
+test("source-waveform real Rust/Wasm worker: independent PCM16/24 and float32 mono/stereo, rates, short/partial bins", async () => {
+  for (const bits of [16, 24, 32] as const) for (const channels of [1, 2] as const) for (const rate of [44100, 48000]) for (const frames of [1, 17, 8194]) {
     const { summary } = await scan(wavFixture(bits, channels, rate, frames), false);
     expect(summary.totalFrames).toBe(frames); expect(summary.sourceRate).toBe(rate);
     compare(summary, channels, (f, c) => expectedWavSample(bits, f, c) * 2);

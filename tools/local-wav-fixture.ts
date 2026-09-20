@@ -1,12 +1,12 @@
 // Test/reproduction fixture generation only; playback never reads a whole file.
-export function wavFixture(bits: 16 | 24, channels: 1 | 2, sampleRate: number, frames: number, audible = false): Uint8Array<ArrayBuffer> {
+export function wavFixture(bits: 16 | 24 | 32, channels: 1 | 2, sampleRate: number, frames: number, audible = false): Uint8Array<ArrayBuffer> {
   const width = bits / 8;
   const dataBytes = frames * channels * width;
   const bytes = new Uint8Array(44 + dataBytes + (dataBytes & 1));
   const view = new DataView(bytes.buffer);
   const text = (offset: number, value: string) => { for (let i = 0; i < value.length; i++) bytes[offset + i] = value.charCodeAt(i); };
   text(0, "RIFF"); view.setUint32(4, bytes.length - 8, true); text(8, "WAVEfmt ");
-  view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, channels, true);
+  view.setUint32(16, 16, true); view.setUint16(20, bits === 32 ? 3 : 1, true); view.setUint16(22, channels, true);
   view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate * channels * width, true);
   view.setUint16(32, channels * width, true); view.setUint16(34, bits, true); text(36, "data"); view.setUint32(40, dataBytes, true);
   const scale = 2 ** (bits - 1);
@@ -15,11 +15,16 @@ export function wavFixture(bits: 16 | 24, channels: 1 | 2, sampleRate: number, f
       ? Math.round(Math.sin(2 * Math.PI * (channel === 0 ? 220 : 330) * frame / sampleRate) * 0.02 * scale)
       : [-scale, scale - 1, -1, 0, scale / 2][(frame + channel * 2) % 5]!;
     const start = 44 + (frame * channels + channel) * width;
+    if (bits === 32) {
+      view.setFloat32(start, audible ? integer / scale : expectedWavSample(bits, frame, channel) * 2, true);
+      continue;
+    }
     for (let byte = 0; byte < width; byte++) bytes[start + byte] = (integer >> (byte * 8)) & 255;
   }
   return bytes;
 }
-export function expectedWavSample(bits: 16 | 24, frame: number, channel: number): number {
+export function expectedWavSample(bits: 16 | 24 | 32, frame: number, channel: number): number {
+  if (bits === 32) return [-1.5, 1.25, -0, 0, 0.5][(frame + channel * 2) % 5]! * 0.5;
   const scale = 2 ** (bits - 1);
   return [-scale, scale - 1, -1, 0, scale / 2][(frame + channel * 2) % 5]! / scale * 0.5;
 }

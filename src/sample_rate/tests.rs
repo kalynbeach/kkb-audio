@@ -1,5 +1,44 @@
 use super::*;
 
+#[test]
+fn finite_float_extremes_bypass_exactly_but_unsafe_fft_input_is_rejected_atomically() {
+    let input = vec![vec![f32::MAX, f32::MIN, -0.0, 1.5]];
+    let output = convert(48000, 48000, &input, &[1, 3]);
+    assert_eq!(
+        output[0].iter().map(|x| x.to_bits()).collect::<Vec<_>>(),
+        input[0].iter().map(|x| x.to_bits()).collect::<Vec<_>>()
+    );
+    for (source, target) in [(44100, 48000), (48000, 44100)] {
+        let mut converter = PreparedRateConverter::new(source, target, 2, 5000).unwrap();
+        for value in [f32::NAN, f32::INFINITY, f32::NEG_INFINITY] {
+            assert_eq!(converter.push(&[value, 0.0]), Err(NONFINITE_PCM));
+            assert_eq!(converter.source_frames_read(), 0);
+        }
+        let count = converter.input_frames_needed();
+        assert_eq!(
+            converter.push(&vec![f32::MAX; count * 2]),
+            Err(NONFINITE_PCM)
+        );
+        assert_eq!(converter.available_frames(), 0);
+        assert_eq!(converter.input_frames_needed(), count);
+        assert_eq!(converter.source_frames_read(), 0);
+        let input = vec![vec![1.5; 5000], vec![-2.25; 5000]];
+        let output = drive(&mut converter, &input, &[1024]);
+        assert!(output.iter().flatten().all(|x| x.is_finite()));
+        assert!((output[0][2000] - 1.5).abs() < 0.001);
+        assert!((output[1][2000] + 2.25).abs() < 0.001);
+        converter.reset();
+        let input = vec![
+            vec![MAX_CONVERSION_SAMPLE; 5000],
+            vec![-MAX_CONVERSION_SAMPLE; 5000],
+        ];
+        let output = drive(&mut converter, &input, &[1024]);
+        assert!(output.iter().flatten().all(|x| x.is_finite()));
+        assert!((output[0][2000] / MAX_CONVERSION_SAMPLE - 1.0).abs() < 0.001);
+        assert!((output[1][2000] / MAX_CONVERSION_SAMPLE + 1.0).abs() < 0.001);
+    }
+}
+
 pub(crate) fn convert(
     source_rate: u32,
     output_rate: u32,

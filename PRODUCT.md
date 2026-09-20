@@ -37,9 +37,11 @@ changes preserve the owner and playback. Volume is a slim anchored disclosure; m
 initially 15% after compiled gain 0.5. Seeking previews before a single commit; cancellation abandons
 the draft. Ended is terminal and paused; seeking back stays paused until Play, Replay returns to zero.
 
-Supported: nonempty little-endian RIFF PCM16/24 WAV or MPEG-1 Layer III MP3, mono/stereo, same-rate or
+Supported: nonempty little-endian RIFF PCM16/24 or IEEE float32 WAV, or MPEG-1 Layer III MP3, mono/stereo, same-rate or
 44.1 ↔ 48 kHz conversion. MP3 is bounded to 32 MiB and ten minutes including codec padding; full policy
-is in [MP3 evidence](docs/2026-09-13-mp3-preparation.md). Errors recover through another row or retry.
+is in [MP3 evidence](docs/2026-09-13-mp3-preparation.md). Float WAV preserves finite samples without normalization;
+NaN/Inf and conversion magnitudes above 1e30 reject. See the [numerical contract](README.md#local-wavmp3-player).
+Errors recover through another row or retry.
 The full-track source waveform (#18) scans only the active file in an independent cancellable Rust/Wasm
 worker after playback readiness. Playback/seek remain functional during preparation or analysis failure.
 At most 4096 time bins (32 KiB) retain channel min/max extrema, not signed averages; display columns
