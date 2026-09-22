@@ -5,3 +5,4 @@
 /next-env.d.ts
 /*.tsbuildinfo
 /web/src/generated
+/web/dist/
