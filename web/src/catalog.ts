@@ -97,9 +97,10 @@ export async function addCatalogFiles(manifest: CatalogManifest, bindings: FileB
   const assets = [...manifest.assets];
   const nextBindings = new Map(bindings);
   for (const file of files) {
+    const title = boundedText(file.name.trim().slice(0, 200), 200, "title");
     const revision = await identifyFile(file, signal);
     const id = crypto.randomUUID();
-    assets.push({ id, title: file.name.slice(0, 200), revision });
+    assets.push({ id, title, revision });
     nextBindings.set(id, file);
   }
   return { manifest: { ...manifest, assets }, bindings: nextBindings };

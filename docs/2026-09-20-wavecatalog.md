@@ -7,7 +7,9 @@ The account-backed production catalog in that architecture remains future work.
 ## Behavior
 
 - Add selected WAV/MP3 files, edit titles, choose tracks, and move rows with labelled
-  up/down buttons. Duplicate filenames and duplicate bytes can represent separate assets.
+  up/down buttons. Initial titles trim filename whitespace before the 200-character
+  limit and pass manifest title validation; filename hints remain unchanged.
+  Duplicate filenames and duplicate bytes can represent separate assets.
 - Export `wavecatalog-v1.json`. Import validates the entire manifest before replacing
   the catalog, preserves IDs/titles/order, and clears all File bindings.
 - Metadata survives reload in this tab's `sessionStorage`. File access never does.
@@ -80,6 +82,20 @@ the browser reported no warnings or errors. The final light desktop and dark 320
 captures contain only synthetic media. The visual finish review returned `ship`
 after correcting filename typography and first-viewport captures. Both temporary
 servers exited and ports 3186 and 3187 were verified closed.
+
+### PR #38 review fixes
+
+Catalog selection now uses the shared Checkbox with a native button and associated
+row-number label. Focused tests cover label clicks, Space-key toggling, disabled
+selection during admission, and title roundtrips for whitespace-prefixed and long
+filenames. All 68 targeted catalog, collection, playback-owner, player UI and scope
+tests passed with Bun 1.4.0, as did TypeScript and the UI detector.
+
+A task-local Next.js dev server and Chromium verified keyboard and label toggling,
+manifest download, and metadata restoration after reload using synthetic byte
+fixtures. Desktop light and 320px dark layouts were checked without horizontal
+overflow. Next.js reported no compilation or runtime errors. These checks did not
+exercise audio playback. The browser and task server were closed afterward.
 
 ![Synthetic catalog in light theme](2026-09-20-wavecatalog/catalog-light-desktop.png)
 ![Synthetic catalog at 320px in dark theme](2026-09-20-wavecatalog/catalog-dark-320.png)

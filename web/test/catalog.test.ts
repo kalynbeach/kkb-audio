@@ -25,6 +25,14 @@ test("duplicate filenames and even duplicate bytes remain distinct assets; title
   expect(() => catalogTracks(imported, new Map(), new Set([imported.assets[0]!.id]))).toThrow("missing file");
 });
 
+test("filename-derived titles stay nonblank and bounded without changing filename hints", async () => {
+  const names = [" ".repeat(200) + ".wav", " ".repeat(200) + "song.mp3", "a".repeat(251) + ".wav"];
+  const { manifest } = await addCatalogFiles(emptyCatalog(), new Map(), names.map(name => file("abc", name)));
+  expect(manifest.assets.map(asset => asset.title)).toEqual([".wav", "song.mp3", "a".repeat(200)]);
+  expect(manifest.assets.map(asset => asset.revision.filename)).toEqual(names);
+  expect(parseManifest(exportManifest(manifest))).toEqual(manifest);
+});
+
 test("rebind requires matching bytes and size, accepts renamed bytes, never rewrites revision", async () => {
   const { manifest } = await addCatalogFiles(emptyCatalog(), new Map(), [file()]);
   const asset = manifest.assets[0]!;

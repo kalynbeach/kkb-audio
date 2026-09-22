@@ -16,7 +16,6 @@
 .catalog-list { list-style: none; margin: 0; padding: 0; }
 .catalog-row { display: grid; grid-template-columns: 60px minmax(0, 1fr) 112px 120px; align-items: start; gap: 16px; padding: 20px 0; border-bottom: 1px solid var(--border); }
 .catalog-select { display: flex; align-items: center; gap: 12px; min-height: 36px; font: 12px var(--font-mono); color: var(--muted-foreground); }
-.catalog-select input { width: 18px; height: 18px; accent-color: var(--foreground); }
 .catalog-identity { min-width: 0; }
 .catalog-identity input { width: 100%; font-size: 14px; font-weight: 500; background: var(--background); }
 .catalog-file-hint { margin-top: 8px; overflow-wrap: anywhere; font: 12px/1.5 var(--font-mono); color: var(--muted-foreground); }

@@ -5,9 +5,35 @@ import { addCatalogFiles, CATALOG_STORAGE_KEY, emptyCatalog, exportManifest } fr
 const LocalFile = File;
 GlobalRegistrator.register({ url: "http://localhost/catalog" });
 const { cleanup, fireEvent, render, waitFor } = await import("@testing-library/react");
+const { default: userEvent } = await import("@testing-library/user-event");
 const { CatalogApp } = await import("../web/src/catalog-app");
 afterEach(() => { cleanup(); sessionStorage.clear(); });
 afterAll(() => GlobalRegistrator.unregister());
+
+test("selection supports label clicks and keyboard input, and stays disabled during admission", async () => {
+  const { manifest } = await addCatalogFiles(emptyCatalog(), new Map(), [new LocalFile(["abc"], "first.wav")]);
+  sessionStorage.setItem(CATALOG_STORAGE_KEY, exportManifest(manifest));
+  const view = render(<CatalogApp />);
+  const user = userEvent.setup();
+  const checkbox = view.getByRole("checkbox", { name: "Include first.wav" });
+  await user.click(view.getByText("01"));
+  expect(checkbox.getAttribute("aria-checked")).toBe("false");
+  expect(view.getByText("0 selected")).toBeTruthy();
+  checkbox.focus();
+  await user.keyboard("[Space]");
+  expect(checkbox.getAttribute("aria-checked")).toBe("true");
+
+  let finish!: (bytes: ArrayBuffer) => void;
+  class HeldFile extends LocalFile { override arrayBuffer() { return new Promise<ArrayBuffer>(resolve => { finish = resolve; }); } }
+  fireEvent.change(view.getByLabelText("Add catalog files"), { target: { files: [new HeldFile(["def"], "second.wav")] } });
+  expect(checkbox.matches(":disabled")).toBe(true);
+  await user.click(checkbox);
+  await user.keyboard("[Space]");
+  expect(checkbox.getAttribute("aria-checked")).toBe("true");
+  finish(new TextEncoder().encode("def").buffer);
+  await waitFor(() => expect(view.getByText("2 selected · 1 need files")).toBeTruthy());
+  expect(checkbox.matches(":disabled")).toBe(false);
+});
 
 test("reload restores only metadata; invalid import is atomic and exact-byte rebind recovers missing files", async () => {
   const a = new LocalFile(["abc"], "same.wav");
@@ -29,7 +55,7 @@ test("reload restores only metadata; invalid import is atomic and exact-byte reb
   fireEvent.change(view.getByLabelText("Reselect matching file"), { target: { files: [new LocalFile(["abc"], "renamed.wav")] } });
   await waitFor(() => expect(view.getByText("1 missing file")).toBeTruthy());
   expect(open().disabled).toBe(true);
-  fireEvent.click(view.getAllByRole("checkbox")[1]!);
+  await userEvent.setup().click(view.getAllByRole("checkbox")[1]!);
   expect(open().disabled).toBe(false);
   const input = view.getByLabelText("Title for asset 1");
   fireEvent.change(input, { target: { value: "Edited title" } }); fireEvent.blur(input);

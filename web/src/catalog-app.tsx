@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowLeft, Download, FolderPlus, Upload, X } from "lucide-react";
 import { Button } from "./components/ui/button";
+import { Checkbox } from "./components/ui/checkbox";
 import { Input } from "./components/ui/input";
 import { WavePlayerApp } from "./wave-player-app";
 import type { PlayerInitialTrack } from "./player-collection";
@@ -137,9 +138,9 @@ export function CatalogApp() {
       <legend className="sr-only">Playlist</legend>
       <div className="catalog-list-heading"><h2>Playlist <span>{manifest.assets.length} / {CATALOG_LIMIT}</span></h2><span>{missingCount ? `${missingCount} missing ${missingCount === 1 ? "file" : "files"}` : manifest.assets.length ? "All files bound for this session" : "No files selected"}</span></div>
       {manifest.assets.length ? <ol className="catalog-list">{manifest.assets.map((asset, index) => <li key={asset.id} className="catalog-row">
-        <label className="catalog-select"><input type="checkbox" checked={selected.has(asset.id)} aria-label={`Include ${asset.title}`} onChange={event => {
-          setSelected(current => { const next = new Set(current); if (event.target.checked) next.add(asset.id); else next.delete(asset.id); return next; });
-        }} /><span>{String(index + 1).padStart(2, "0")}</span></label>
+        <div className="catalog-select"><Checkbox nativeButton render={<button />} id={`include-${asset.id}`} checked={selected.has(asset.id)} disabled={busy} aria-label={`Include ${asset.title}`} onCheckedChange={checked => {
+          setSelected(current => { const next = new Set(current); if (checked) next.add(asset.id); else next.delete(asset.id); return next; });
+        }} /><label htmlFor={`include-${asset.id}`}>{String(index + 1).padStart(2, "0")}</label></div>
         <div className="catalog-identity"><label htmlFor={`title-${asset.id}`} className="sr-only">Title for asset {index + 1}</label>
           <Input id={`title-${asset.id}`} key={`${asset.id}-${asset.title}`} defaultValue={asset.title} maxLength={200} onBlur={event => {
             const title = event.currentTarget.value.trim().replace(/[\u0000-\u001f\u007f]/g, "");
