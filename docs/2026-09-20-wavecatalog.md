@@ -38,10 +38,12 @@ IDs, conflicting lengths for one digest, invalid names/titles, and invalid sizes
 are rejected. Exact duplicate revisions with distinct asset IDs are valid.
 
 Admission checks extension and size; the existing Rust/Wasm player validates audio
-on opening. This branch uses PCM16/24 WAV and MPEG-1 Layer III MP3 support from #36,
-with its existing channel/rate/duration constraints. The separate float32 work is
-not a dependency. No auth, backend, upload, cloud storage, directory scan, or new
-playback implementation is introduced.
+on opening. Stack #39 combines PCM16/24 and IEEE float32 WAV support with MPEG-1
+Layer III MP3, retaining the existing channel/rate/duration constraints. PR #37
+follows the catalog in the stack and extends the shared reader; catalog identity
+and binding need no format-specific changes. See the [float32 numerical
+contract](../README.md#local-wavmp3-player). No auth, backend, upload, cloud storage,
+directory scan, or new playback implementation is introduced.
 
 ## Design
 
@@ -96,6 +98,37 @@ manifest download, and metadata restoration after reload using synthetic byte
 fixtures. Desktop light and 320px dark layouts were checked without horizontal
 overflow. Next.js reported no compilation or runtime errors. These checks did not
 exercise audio playback. The browser and task server were closed afterward.
+
+### Stack #39 float32 integration, 2026-09-24
+
+PR #37 was rebased above catalog head `4374d93`. Its float32 changes applied
+without conflicts. An isolated copy matched all 449 tracked files before final
+production verification. The combined tree passed 196 Bun tests, type checking,
+actual-Wasm checks, both worklet audits, 88 native tests with two device tests
+ignored, Rust formatting, and native/Wasm Clippy. Final copy edits also passed
+TypeScript and an uninstrumented Next production build.
+
+Codex Browser exercised synthetic 48 kHz and 44.1 kHz stereo IEEE float32 WAVs
+through catalog admission and paused opening. Muted playback, paused seeking,
+track replacement, and two-second loops passed. The 48 kHz loop reached iteration
+7 and the 44.1-to-48 kHz loop reached iteration 3, both with zero reported loop
+underruns. A temporary development-only probe observed zero live AudioContexts
+and workers after returning to the catalog and after navigating away during
+playback. The probe was removed before the final production build.
+
+Importing an authored manifest with the displayed identities cleared all file
+bindings. Same-length changed bytes failed rebind; renamed original bytes passed
+and reopened paused. The export button reported success, but Browser's download
+notification timed out, so downloaded-file verification is not claimed here.
+Production Browser checks confirmed explicit muted float32 playback, advancing
+media time, live XY status, and metadata-only restoration after reload. The PCM
+proof displayed its updated float32 support text. Next compilation/runtime
+diagnostics and Browser warning/error logs were clear. Task servers on ports
+3193 and 3194 stopped, and the ports no longer listened.
+
+These checks do not establish audible quality or broad device support. P31 visual
+acceptance and human listening remain pending. Stack registration does not merge
+or deploy these changes; Kalyn retains the merge decision.
 
 ![Synthetic catalog in light theme](2026-09-20-wavecatalog/catalog-light-desktop.png)
 ![Synthetic catalog at 320px in dark theme](2026-09-20-wavecatalog/catalog-dark-320.png)

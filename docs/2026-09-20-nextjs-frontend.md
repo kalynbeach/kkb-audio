@@ -104,5 +104,7 @@ was aligned with the shared header/footer. Captures contain only generated audio
 - [Wave Player, mobile light](2026-09-20-nextjs-frontend/player-mobile-light.png)
 
 Muted runtime output is not an audible listening assessment, a speaker-latency measurement or broad
-browser/device acceptance. Float32 WAV remains unsupported. This migration does not change the P31
-preset's pending visual acceptance. No merge, deployment or daily-preview update is included.
+browser/device acceptance. These migration checks predate the float32 WAV support added by
+[PR #37](https://github.com/kalynbeach/kkb-audio/pull/37), now above WaveCatalog in Stack #39.
+This migration does not change the P31 preset's pending visual acceptance. No merge, deployment
+or daily-preview update is included.
