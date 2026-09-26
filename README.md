@@ -165,10 +165,10 @@ Same-rate preparation preserves every finite float32 value. Cross-rate conversio
 requires `|sample| <= 1e30` to reserve headroom for the pinned float32 FFT; larger
 values reject before entering it. Conversion also rejects nonfinite output before
 publishing a chunk. Numeric failures report code 74. The compiled gain remains 0.5;
-this is not normalization. Native integer output rejects an entire callback if its
-rendered samples fall outside `[-1, 1)` instead of silently clipping or overflowing,
-and reports output-range failure code 6. Float output preserves finite rendered values.
-Browser/device output can still clip at its physical limits. The waveform summary
+this is not normalization. Native integer output clips rendered samples to `[-1, 1)`
+before conversion, matching browser output clipping. Float output preserves finite
+rendered values; device output can still clip at its physical limits. Nonfinite rendered
+output rejects the callback and reports output failure code 6. The waveform summary
 retains source extrema above full scale; its fixed-scale drawing clips visually.
 Validation of later decode blocks happens as they are read, not during WAV header inspection.
 
