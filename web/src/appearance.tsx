@@ -10,7 +10,10 @@ export function useAppearance() {
   const mode = useSyncExternalStore(subscribe, () => appearance, () => "system" as const);
   const systemDark = useSyncExternalStore(systemSubscribe, () => matchMedia("(prefers-color-scheme: dark)").matches, () => false);
   const dark = mode === "dark" || (mode === "system" && systemDark);
-  useEffect(() => { document.documentElement.classList.toggle("dark", dark); }, [dark]);
+  // Read the live query so a hydration-time server snapshot never clears the class set by the layout script.
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", mode === "dark" || (mode === "system" && matchMedia("(prefers-color-scheme: dark)").matches));
+  }, [mode, systemDark]);
   return { mode, dark, setMode };
 }
 export function AppearanceControl() {

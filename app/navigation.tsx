@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AppearanceControl } from "./appearance";
+import { AppearanceControl } from "../web/src/appearance";
 
 const links = [["/", "Overview"], ["/player", "Wave Player"], ["/lab", "Lab"], ["/developer", "Developer"]] as const;
 export function Navigation() {

@@ -1,4 +1,4 @@
-import { useAppearance } from "../../app/appearance";
+import { useAppearance } from "./appearance";
 import { startTransition, ViewTransition, useEffect, useReducer, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Dialog } from "@base-ui/react/dialog";

@@ -1,4 +1,4 @@
-import { useAppearance } from "../../app/appearance";
+import { useAppearance } from "./appearance";
 import {
   useEffect,
   useEffectEvent,
