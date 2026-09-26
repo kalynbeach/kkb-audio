@@ -87,6 +87,8 @@ export function observePlaybackScope(canvas: HTMLCanvasElement, owner: ScopeOwne
       : current === "ended" ? "Ended · no live signal" : current === "seeking" ? "Seeking · waiting for fresh signal…" : "No live signal");
   };
   const visibility = () => { if (!disposed && !failed) { clear(); update(); } };
+  // Visual pause stops reads but keeps the GPU device for resume.
+  const setPaused = (next: boolean) => { if (next !== paused) { paused = next; visibility(); } };
   const repaint = () => {
     if (!eligible() || !scope || !channels || !dirty || owner.getState().phase !== "paused") return;
     try {
@@ -113,20 +115,22 @@ export function observePlaybackScope(canvas: HTMLCanvasElement, owner: ScopeOwne
     scope?.destroy(); scope = undefined;
     owner.releaseOscilloscope(); canvas.hidden = true;
   };
-  return { dispose, repaint };
+  return { dispose, repaint, setPaused };
 }
 
 export function WavePlayerScope({ owner, paused, editing = false, obscured = false }: PlayerVisualProps) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const observer = useRef<ReturnType<typeof observePlaybackScope> | null>(null);
+  const initiallyPaused = useRef(paused);
   const [state, setState] = useState<ScopeStatus>({ label: "Play to observe", channels: null });
   useEffect(() => {
-    const view = observePlaybackScope(canvas.current!, owner, paused, next => {
+    const view = observePlaybackScope(canvas.current!, owner, initiallyPaused.current, next => {
       setState(previous => previous.label === next.label && previous.channels === next.channels ? previous : next);
     });
     observer.current = view;
     return () => { observer.current = null; view.dispose(); };
-  }, [owner, paused]);
+  }, [owner]);
+  useEffect(() => { initiallyPaused.current = paused; observer.current?.setPaused(paused); }, [paused]);
   useEffect(() => {
     if (obscured) return;
     let cancelled = false;

@@ -85,6 +85,18 @@ test("hidden and reduced motion stop reads; visibility resumes without starting 
   step(300); expect(playback.reads).toBe(reads + 1); expect(playback.calls.filter(call => call === "play")).toHaveLength(1);
 });
 
+test("visual pause stops reads and resumes on the same renderer", async () => {
+  const fixture = await setup(); const { owner, playback, canvas, renderer, counts, report } = fixture;
+  let creates = 0;
+  const view = observePlaybackScope(canvas, owner, false, report, async () => { creates++; return renderer; });
+  cleanups.push(view.dispose);
+  await Promise.resolve(); step(0); const reads = playback.reads;
+  view.setPaused(true); step(100);
+  expect(playback.reads).toBe(reads); expect(canvas.hidden).toBe(true); expect(fixture.label()).toContain("Visual paused");
+  view.setPaused(false); step(200);
+  expect(playback.reads).toBe(reads + 1); expect(creates).toBe(1); expect(counts.destroy).toBe(0);
+});
+
 test("warming observations respect the same 30 Hz read bound", async () => {
   const { owner, playback, canvas, renderer, counts, report } = await setup();
   playback.result = "warming";
