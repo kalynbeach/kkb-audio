@@ -73,7 +73,10 @@ export function CatalogApp() {
     heading.current?.focus();
   }
   function download() {
-    const url = URL.createObjectURL(new Blob([exportManifest(manifest)], { type: "application/json" }));
+    let text: string;
+    try { text = exportManifest(manifest); }
+    catch (error) { setError(error instanceof Error ? error.message : "Could not export the manifest."); return; }
+    const url = URL.createObjectURL(new Blob([text], { type: "application/json" }));
     const link = document.createElement("a"); link.href = url; link.download = "wavecatalog-v1.json";
     link.click();
     // Keep the URL alive until the browser has accepted the download.

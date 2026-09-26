@@ -20,10 +20,10 @@ function record(value: unknown, keys: string[]): Record<string, unknown> {
   }
   return value as Record<string, unknown>;
 }
+const validText = (value: unknown, max: number): value is string =>
+  typeof value === "string" && !!value.trim() && value.length <= max && !/[\u0000-\u001f\u007f]/.test(value);
 function boundedText(value: unknown, max: number, field: string): string {
-  if (typeof value !== "string" || !value.trim() || value.length > max || /[\u0000-\u001f\u007f]/.test(value)) {
-    throw new Error(`Invalid ${field} in manifest.`);
-  }
+  if (!validText(value, max)) throw new Error(`Invalid ${field} in manifest.`);
   return value;
 }
 function supportedName(name: string) { return /\.(wav|mp3)$/i.test(name); }
@@ -72,7 +72,7 @@ export function exportManifest(manifest: CatalogManifest): string {
 }
 
 function validateFile(file: File) {
-  boundedText(file.name, 255, "filename");
+  if (!validText(file.name, 255)) throw new Error("Choose a file whose name has 1 to 255 characters and no control characters.");
   if (!supportedName(file.name)) throw new Error(`Choose a WAV or MP3 file: ${file.name}`);
   if (!file.size || file.size > FILE_BYTE_LIMIT) throw new Error(`${file.name} must contain 1 byte to 32 MiB.`);
 }

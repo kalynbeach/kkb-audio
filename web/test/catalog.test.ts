@@ -33,6 +33,12 @@ test("filename-derived titles stay nonblank and bounded without changing filenam
   expect(parseManifest(exportManifest(manifest))).toEqual(manifest);
 });
 
+test("picked files with unusable names report a file error, not a manifest error", async () => {
+  for (const name of ["bad\u0001.wav", "a".repeat(252) + ".wav"]) {
+    await expect(identifyFile(file("abc", name))).rejects.toThrow("Choose a file whose name has 1 to 255 characters");
+  }
+});
+
 test("rebind requires matching bytes and size, accepts renamed bytes, never rewrites revision", async () => {
   const { manifest } = await addCatalogFiles(emptyCatalog(), new Map(), [file()]);
   const asset = manifest.assets[0]!;
