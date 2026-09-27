@@ -1,0 +1,299 @@
+[
+  {
+    "case": "production-player-navigation",
+    "resources": {
+      "contexts": [
+        "closed"
+      ],
+      "workers": [
+        {
+          "url": "/audio-runtime/pcm-worker.js",
+          "terminated": true
+        },
+        {
+          "url": "/audio-runtime/waveform-worker.js",
+          "terminated": true
+        }
+      ],
+      "devices": [
+        {
+          "destroyed": true
+        }
+      ],
+      "runtime": [
+        "http://127.0.0.1:4317/audio-runtime/kkb_audio_bg.wasm",
+        "http://127.0.0.1:4317/audio-runtime/pcm-worker.js",
+        "http://127.0.0.1:4317/audio-runtime/kkb_audio_bg.wasm",
+        "http://127.0.0.1:4317/audio-runtime/waveform-worker.js"
+      ]
+    }
+  },
+  {
+    "case": "production-plan",
+    "result": {
+      "state": "active",
+      "analyserObservedSignal": true,
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36",
+      "contextSampleRate": 48000,
+      "contextRenderQuantumSize": 128,
+      "compiler": "worker",
+      "initialization": {
+        "type": "ready",
+        "maximumFrames": 1024,
+        "memoryBytes": 16777216,
+        "sampleRate": 48000,
+        "channelCount": 2
+      },
+      "snapshot": {
+        "failureCode": 0,
+        "lastFrameCount": 128,
+        "memoryBytes": 16777216,
+        "processCount": 112,
+        "nextFrame": "14336",
+        "observation": {
+          "startFrame": "14272",
+          "endFrame": "14336",
+          "sequence": "224",
+          "dropped": "223",
+          "peak": 0.6287331581115723,
+          "rms": 0.2767691930799753,
+          "location": 60
+        }
+      }
+    }
+  },
+  {
+    "case": "production-invalid-plan",
+    "result": {
+      "state": "rejected",
+      "error": "Error: plan preparation failed: 60"
+    }
+  },
+  {
+    "case": "production-no-webgpu",
+    "status": "Visual unavailable · audio unchanged",
+    "resources": {
+      "contexts": [
+        "suspended"
+      ],
+      "workers": [
+        {
+          "url": "/audio-runtime/pcm-worker.js",
+          "terminated": false
+        },
+        {
+          "url": "/audio-runtime/waveform-worker.js",
+          "terminated": true
+        }
+      ],
+      "devices": [],
+      "runtime": [
+        "http://127.0.0.1:4317/audio-runtime/kkb_audio_bg.wasm",
+        "http://127.0.0.1:4317/audio-runtime/pcm-worker.js",
+        "http://127.0.0.1:4317/audio-runtime/kkb_audio_bg.wasm",
+        "http://127.0.0.1:4317/audio-runtime/waveform-worker.js"
+      ]
+    }
+  },
+  {
+    "case": "production-controlled-reduced-motion",
+    "status": "Reduced motion · live visual off",
+    "resources": {
+      "contexts": [
+        "suspended"
+      ],
+      "workers": [
+        {
+          "url": "/audio-runtime/pcm-worker.js",
+          "terminated": false
+        },
+        {
+          "url": "/audio-runtime/waveform-worker.js",
+          "terminated": true
+        }
+      ],
+      "devices": [],
+      "runtime": [
+        "http://127.0.0.1:4317/audio-runtime/kkb_audio_bg.wasm",
+        "http://127.0.0.1:4317/audio-runtime/pcm-worker.js",
+        "http://127.0.0.1:4317/audio-runtime/kkb_audio_bg.wasm",
+        "http://127.0.0.1:4317/audio-runtime/waveform-worker.js"
+      ]
+    }
+  },
+  {
+    "case": "production-next-synthetic-pcm16.wav",
+    "time": "0:00\nSeeking…\n0:20"
+  },
+  {
+    "case": "production-next-synthetic-pcm24.wav",
+    "time": "0:00\nSeeking…\n0:20"
+  },
+  {
+    "case": "production-next-synthetic.mp3",
+    "time": "0:00\nSeeking…\n0:20"
+  },
+  {
+    "case": "production-mp3-loop",
+    "time": "0:05\nPlaying\n0:20"
+  },
+  {
+    "case": "production-float32-rejected",
+    "error": "Unsupported or malformed WAV: expected nonempty little-endian RIFF PCM16/24 mono/stereo with consistent chunk bounds.. Play another file from the library, or retry this one."
+  },
+  {
+    "check": "development-before-hot-reload",
+    "resources": {
+      "contexts": [
+        "running"
+      ],
+      "workers": [
+        {
+          "url": "/audio-runtime/pcm-worker.js",
+          "terminated": false
+        },
+        {
+          "url": "/audio-runtime/waveform-worker.js",
+          "terminated": false
+        }
+      ],
+      "devices": [
+        {
+          "destroyed": false
+        }
+      ],
+      "runtime": [
+        "http://127.0.0.1:4316/audio-runtime/kkb_audio_bg.wasm",
+        "http://127.0.0.1:4316/audio-runtime/pcm-worker.js",
+        "http://127.0.0.1:4316/audio-runtime/kkb_audio_bg.wasm",
+        "http://127.0.0.1:4316/audio-runtime/waveform-worker.js"
+      ]
+    }
+  },
+  {
+    "check": "development-confirmed-fast-refresh",
+    "resources": {
+      "contexts": [
+        "running"
+      ],
+      "workers": [
+        {
+          "url": "/audio-runtime/pcm-worker.js",
+          "terminated": false
+        },
+        {
+          "url": "/audio-runtime/waveform-worker.js",
+          "terminated": true
+        }
+      ],
+      "devices": [
+        {
+          "destroyed": false
+        }
+      ],
+      "runtime": [
+        "http://127.0.0.1:4316/audio-runtime/kkb_audio_bg.wasm",
+        "http://127.0.0.1:4316/audio-runtime/pcm-worker.js",
+        "http://127.0.0.1:4316/audio-runtime/kkb_audio_bg.wasm",
+        "http://127.0.0.1:4316/audio-runtime/waveform-worker.js"
+      ]
+    }
+  },
+  {
+    "check": "development-navigation-after-fast-refresh",
+    "resources": {
+      "contexts": [
+        "closed"
+      ],
+      "workers": [
+        {
+          "url": "/audio-runtime/pcm-worker.js",
+          "terminated": true
+        },
+        {
+          "url": "/audio-runtime/waveform-worker.js",
+          "terminated": true
+        }
+      ],
+      "devices": [
+        {
+          "destroyed": true
+        }
+      ],
+      "runtime": [
+        "http://127.0.0.1:4316/audio-runtime/kkb_audio_bg.wasm",
+        "http://127.0.0.1:4316/audio-runtime/pcm-worker.js",
+        "http://127.0.0.1:4316/audio-runtime/kkb_audio_bg.wasm",
+        "http://127.0.0.1:4316/audio-runtime/waveform-worker.js"
+      ]
+    }
+  },
+  {
+    "check": "production-pcm-muted",
+    "result": {
+      "state": "active",
+      "analyserObservedSignal": true,
+      "channelCount": 2,
+      "contextRenderQuantumSize": 128,
+      "contextSampleRate": 48000,
+      "initialization": {
+        "type": "ready",
+        "memoryBytes": 16777216,
+        "memoryPages": 256,
+        "maximumFrames": 1024,
+        "sampleRate": 48000,
+        "slotCount": 4
+      },
+      "workerInitialAdmittedBlocks": 4,
+      "snapshot": {
+        "loopExtensionFrames": 0,
+        "loopLostFrames": 0,
+        "loopIteration": 0,
+        "loopUnderruns": 0,
+        "loopRecovering": false,
+        "loopSeamFrames": 0,
+        "loopFirstIteration": 0,
+        "epoch": 1,
+        "presentationTime": null,
+        "ready": true,
+        "sourcePosition": 14592,
+        "pcmPosition": 14592,
+        "renderFrame": 14592,
+        "ended": false,
+        "failureCode": 0,
+        "invalidBlockCount": 0,
+        "lastFrameCount": 128,
+        "memoryBytes": 16777216,
+        "processCount": 114,
+        "slotCount": 4,
+        "staleBlockCount": 0,
+        "starvationCount": 0
+      }
+    }
+  },
+  {
+    "check": "production-pcm-leave-after-failure",
+    "resources": {
+      "contexts": [
+        "closed",
+        "closed"
+      ],
+      "workers": [
+        {
+          "url": "/audio-runtime/pcm-worker.js",
+          "terminated": true
+        },
+        {
+          "url": "/audio-runtime/pcm-worker.js",
+          "terminated": true
+        }
+      ],
+      "devices": [],
+      "runtime": [
+        "http://127.0.0.1:4317/audio-runtime/kkb_audio_bg.wasm",
+        "http://127.0.0.1:4317/audio-runtime/pcm-worker.js",
+        "http://127.0.0.1:4317/audio-runtime/kkb_audio_bg.wasm"
+      ]
+    }
+  }
+]

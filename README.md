@@ -41,7 +41,7 @@ silence on the same continuous render clock. Repeated seeks supersede obsolete w
 reads/admissions; endpoint seeks and seeking after EOS are supported. Presentation time is explicitly
 unavailable, not inferred from consumption. The bounded load/play/pause/resume/seek/starvation/EOS/
 close/reload gate is documented in the [seeking/lifecycle evidence](docs/2026-09-10-wav-seeking-lifecycle-evidence.md).
-Issue #15 adds the first usable local-WAV player at `/player.html`: select/replace, play/pause,
+Issue #15 adds the first usable local-WAV player at `/player`: select/replace, play/pause,
 preview-and-commit seek, replay, volume/mute and close/cancel. A private playback owner reuses this
 foundation; it is not a public package API or the eventual separate `wave-player` application.
 See the [player implementation and evidence](docs/2026-09-10-local-wav-player-evidence.md).
@@ -65,14 +65,26 @@ cargo clippy --target wasm32-unknown-unknown --all-targets --all-features -- -D 
 bun run check
 ```
 
-Run the local proof after `bun run build:worklet`:
+Run the Next.js 16.3.5 app with the pinned Bun runtime:
 
 ```sh
-bun run serve:proof
+export PATH="$PWD/node_modules/.bin:$PATH"
+bun run dev --port 3000
+# Production, after stopping the development server:
+bun run build
+bun run start --port 3000
 ```
 
-Open `/player.html` for the usable local WAV/MP3 player, `/` for the PCM transport and local WAV proof
-controls, or `/plan.html` for the oscillator plan.
+Open `http://localhost:3000`. The overview links to `/player`, `/lab`, and `/developer`.
+The PCM and compiled-plan proofs live at `/developer/pcm` and `/developer/plan`.
+The historical simulated prototype remains at `/developer/player-study`.
+Leaving a player, lab, or proof route releases its audio resources. Appearance is shared across
+routes for this page session; reload returns to System.
+
+`build:worklet` only builds Rust/Wasm and independent worker/worklet bundles into
+`public/audio-runtime`. Next builds and serves the pages. Rebuild the audio runtime after Rust,
+worker, or build-tool edits. There is no Bun HTML server or legacy URL redirect.
+See [the route and build migration](docs/2026-09-20-nextjs-frontend.md).
 The deterministic and oscillator proof activations remain muted. **Local-file Play emits sound** at compiled
 gain 0.5; lower system volume first. Load prepares a suspended, disconnected node; Pause freezes media
 and render time without discarding PCM or converter history. WAV status distinguishes source-media
@@ -91,8 +103,7 @@ See the [measurement guide](tools/measure-local-media/README.md). It builds and 
 
 ## Local WAV/MP3 player
 
-Build with `bun run build:worklet` and serve with `bun run serve:proof`, then open `/player.html`.
-`bun run dev` also serves the player with React hot reload alongside the lab. When the global Bun
+Run `bun run dev`, then open `/player`. The development server supports React hot reload. When the global Bun
 version differs, first run `export PATH="$PWD/node_modules/.bin:$PATH"` to use the pinned Bun 1.4.0.
 
 The compact #22 player follows the [approved interactive prototype](docs/2026-09-13-wave-player-prototype.md).
@@ -112,11 +123,14 @@ without selecting a playback successor. Removed selection moves to the next rema
 at the end. **Close track / Cancel loading** in Settings retains the collection; the visual loading
 state also offers Cancel. Errors leave rows available for another file or retry.
 
-Choose nonempty little-endian RIFF PCM16/24 mono/stereo WAV or supported MP3. Playback supports the
+Choose nonempty little-endian RIFF PCM16/24 or IEEE float32 mono/stereo WAV, or supported MP3. Playback supports the
 active context's rate and prepared 44100 ↔ 48000 Hz conversion only. Library/theme/responsive
 changes do not replace the active owner or session. Desktop keeps a centered compact player and
 right companion library at ≥1212px; narrower browsing replaces only the visual region. Settings
-provides Light/Dark/System and a separate Pause visual action. A live Canvas2D oscilloscope (#23)
+provides Light/Dark/System and a separate Pause visual action. The WebGPU XY scope is the primary
+player visual at `/player`; its synthetic study enters the real playback engine after explicit Play.
+See the [scope contract](docs/2026-09-20-wave-player.md). The original Canvas2D oscilloscope (#23)
+is retained at `/developer/classic-player` and
 observes actual rendered output before listening volume/mute: mono solid, stereo left solid/right
 dashed, never channel-averaged. It is an approximate untagged browser history, not source/speaker
 synchronization. Reduced motion uses a stable baseline; unsupported/failed visuals leave playback
@@ -139,6 +153,24 @@ the render clock. Normal wraps do not use public seek or UI polling. Explicit co
 prepare silence. Review repairs cover EOF head draining, acknowledgment-time EOS pause, latest control
 intent and visible visual/capability explanations at the smallest layout. Human listening remains pending; see [MP3 loop evidence](docs/2026-09-14-mp3-loops.md) and [WAV loop evidence](docs/2026-09-14-wav-loops.md#bounded-review-repair-2026-09-14),
 including the small repository-hosted screenshot/runtime/check set.
+
+IEEE float32 WAV uses RIFF format tag 3 with 32-bit little-endian samples. The shared
+reader preserves finite values, including signed zero and values outside `[-1, 1]`,
+without normalization or clipping. NaN/Inf reject the entire decode block. Decode
+windows contain at most 1024 frames, up to 8192 bytes for stereo float32. Unknown
+RIFF chunks, including `JUNK` before `fmt`, follow the existing bounds/padding checks.
+PCM32, float64, WAVE_FORMAT_EXTENSIBLE and RF64 remain unsupported.
+
+Same-rate preparation preserves every finite float32 value. Cross-rate conversion
+requires `|sample| <= 1e30` to reserve headroom for the pinned float32 FFT; larger
+values reject before entering it. Conversion also rejects nonfinite output before
+publishing a chunk. Numeric failures report code 74. The compiled gain remains 0.5;
+this is not normalization. Native integer output clips rendered samples to `[-1, 1)`
+before conversion, matching browser output clipping. Float output preserves finite
+rendered values; device output can still clip at its physical limits. Nonfinite rendered
+output rejects the callback and reports output failure code 6. The waveform summary
+retains source extrema above full scale; its fixed-scale drawing clips visually.
+Validation of later decode blocks happens as they are read, not during WAV header inspection.
 
 MP3 support (#17) uses pinned Symphonia 0.6.1 in the shared Rust preparation path,
 not browser decoding. Accepted: MPEG-1 Layer III, 44.1/48 kHz mono/stereo, CBR/VBR
@@ -177,8 +209,8 @@ background, device or click-free-transition guarantee follows from the muted che
 
 ## Audio-engine learning lab
 
-The Bun + React frontend uses the research repo's shadcn/ui components and theme, with Inter and
-TX-02 fonts. Open `/lab.html` to explore the closed oscillator graph, compiled operation order, per-node waveforms,
+The Next.js App Router frontend uses the research repo's shadcn/ui components and theme, with Inter and
+TX-02 fonts. Open `/lab` to explore the closed oscillator graph, compiled operation order, per-node waveforms,
 sample-timed gain events, and render partitions. The lab renders the actual Rust/Wasm engine offline
 in a worker, then replays its mono output after an explicit Play action. It preserves both proof pages.
 
@@ -187,11 +219,9 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
-Open `http://127.0.0.1:4197/lab.html`. `bun run dev` builds Rust/Wasm and the workers, then serves
-the React page with hot reload on localhost. Set `PORT` to change the default 4197. React and CSS
-edits update live; restart `bun run dev` after Rust, worker or build-tool changes to rebuild them.
-For the bundled production assets, run `bun run build:worklet` then `PORT=4197 bun run serve:proof`.
-The existing proof pages remain at `/index.html` and `/plan.html` during development.
+Open `http://localhost:3000/lab`. `bun run dev --port 3000` builds the audio runtime and starts Next.
+React and CSS edits update live. Restart after Rust, worker, or build-tool changes.
+Use `bun run build` and `bun run start --port 3000` to inspect production output.
 
 See the
 [learning lab guide and evidence](docs/2026-09-06-audio-engine-learning-lab.md) for experiments,

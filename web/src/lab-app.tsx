@@ -1,3 +1,4 @@
+import { useAppearance } from "./appearance";
 import {
   useEffect,
   useEffectEvent,
@@ -56,7 +57,6 @@ import {
 } from "./lab-presentation.ts";
 import { trace, useLab, type LabActions, type LabState } from "./use-lab.ts";
 
-type Mode = "light" | "dark" | "system";
 type LabProps = { state: LabState; actions: LabActions };
 const experiments = ["Hear the beating", "Move one moment", "Cross a boundary"];
 const views = [
@@ -66,35 +66,6 @@ const views = [
   [256, "5.3 ms · 256 samples"],
   [32, "0.67 ms · 32 samples"],
 ] as const;
-
-function useMode() {
-  const [mode, setMode] = useState<Mode>(() => {
-    try {
-      const saved = localStorage.getItem("kkb-lab-mode");
-      return saved === "dark" || saved === "light" ? saved : "system";
-    } catch {
-      return "system";
-    }
-  });
-  const [dark, setDark] = useState(false);
-  useLayoutEffect(() => {
-    const query = matchMedia("(prefers-color-scheme: dark)");
-    const sync = () => {
-      const value = mode === "dark" || (mode === "system" && query.matches);
-      document.documentElement.classList.toggle("dark", value);
-      setDark(value);
-    };
-    sync();
-    query.addEventListener("change", sync);
-    try {
-      localStorage.setItem("kkb-lab-mode", mode);
-    } catch {
-      /* The mode still works without storage. */
-    }
-    return () => query.removeEventListener("change", sync);
-  }, [mode]);
-  return { mode, dark, setMode };
-}
 
 /** Numeric drafts commit on blur/Enter, so negative and partially typed values remain editable. */
 function NumberInput({
@@ -964,7 +935,7 @@ function Transport({ state, actions }: LabProps) {
 export function LabApp() {
   const lab = useLab();
   const { state, actions } = lab;
-  const theme = useMode();
+  const theme = useAppearance();
   const scope = useRef<HTMLCanvasElement>(null);
   const comparison = useRef<HTMLOutputElement>(null);
   function showScope() {
@@ -1011,7 +982,7 @@ export function LabApp() {
       </a>
       <header className="lab-header">
         <div>
-          <a className="lab-wordmark" href="/lab.html">
+          <a className="lab-wordmark" href="/lab">
             KKB / AUDIO
           </a>
           <h1>Audio engine lab</h1>
@@ -1023,18 +994,6 @@ export function LabApp() {
             {status}
           </Badge>
           <code>48,000 Hz · mono · 2 seconds</code>
-          <Field orientation="horizontal">
-            <FieldLabel htmlFor="mode">Theme</FieldLabel>
-            <NativeSelect
-              id="mode"
-              value={theme.mode}
-              onChange={(event) => theme.setMode(event.target.value as Mode)}
-            >
-              <NativeSelectOption value="system">System</NativeSelectOption>
-              <NativeSelectOption value="light">Light</NativeSelectOption>
-              <NativeSelectOption value="dark">Dark</NativeSelectOption>
-            </NativeSelect>
-          </Field>
         </div>
       </header>
       <main>
@@ -1150,7 +1109,7 @@ export function LabApp() {
         </span>
         <a
           className={cn(buttonVariants({ variant: "link", size: "sm" }))}
-          href="/plan.html"
+          href="/developer/plan"
         >
           Open the worklet proof
         </a>

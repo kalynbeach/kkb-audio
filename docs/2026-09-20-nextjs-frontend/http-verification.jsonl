@@ -1,0 +1,17 @@
+{"path":"/","status":200,"type":"text/html; charset=utf-8","title":"KKB Audio","probe":false}
+{"path":"/player","status":200,"type":"text/html; charset=utf-8","title":"Wave Player · KKB Audio","probe":false}
+{"path":"/lab","status":200,"type":"text/html; charset=utf-8","title":"Audio engine lab · KKB Audio","probe":false}
+{"path":"/developer","status":200,"type":"text/html; charset=utf-8","title":"Developer proofs · KKB Audio","probe":false}
+{"path":"/developer/pcm","status":200,"type":"text/html; charset=utf-8","title":"PCM transport proof · KKB Audio","probe":false}
+{"path":"/developer/plan","status":200,"type":"text/html; charset=utf-8","title":"Compiled-plan proof · KKB Audio","probe":false}
+{"path":"/developer/classic-player","status":200,"type":"text/html; charset=utf-8","title":"Classic player proof · KKB Audio","probe":false}
+{"path":"/developer/player-study","status":200,"type":"text/html; charset=utf-8","title":"Player design study · KKB Audio","probe":false}
+{"path":"/missing-route","status":404,"type":"text/html; charset=utf-8","title":"KKB Audio","probe":false}
+{"path":"/player.html","status":404,"type":"text/html; charset=utf-8","title":"KKB Audio","probe":false}
+{"path":"/audio-runtime/kkb_audio_bg.wasm","status":200,"type":"application/wasm","probe":false}
+{"path":"/audio-runtime/worklet-processor.js","status":200,"type":"application/javascript; charset=UTF-8","probe":false}
+{"path":"/audio-runtime/pcm-worker.js","status":200,"type":"application/javascript; charset=UTF-8","probe":false}
+{"path":"/audio-runtime/waveform-worker.js","status":200,"type":"application/javascript; charset=UTF-8","probe":false}
+{"path":"/audio-runtime/plan-processor.js","status":200,"type":"application/javascript; charset=UTF-8","probe":false}
+{"path":"/audio-runtime/plan-worker.js","status":200,"type":"application/javascript; charset=UTF-8","probe":false}
+{"path":"/audio-runtime/lab-worker.js","status":200,"type":"application/javascript; charset=UTF-8","probe":false}

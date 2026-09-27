@@ -2,7 +2,7 @@ import { afterAll, afterEach, describe, expect, mock, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { LabRequest, LabResult } from "../web/src/lab-model.ts";
 
-GlobalRegistrator.register({ url: "http://localhost/lab.html" });
+GlobalRegistrator.register({ url: "http://localhost/lab" });
 Object.defineProperty(document, "fonts", {
   value: { ready: Promise.resolve() },
 });

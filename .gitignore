@@ -1,4 +1,8 @@
 /target
 /node_modules
-/web/dist
+/public/audio-runtime
+/.next
+/next-env.d.ts
+/*.tsbuildinfo
 /web/src/generated
+/web/dist/

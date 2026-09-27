@@ -4,7 +4,7 @@ import { PlaybackOwner } from "../web/src/playback-owner";
 import { FakeMediaLoopPlayback } from "../web/test/media-loop-fixture";
 import { FakePlayback, deferred } from "../web/test/playback-fixture";
 
-GlobalRegistrator.register({ url: "http://localhost/player.html" });
+GlobalRegistrator.register({ url: "http://localhost/player" });
 HTMLElement.prototype.setPointerCapture = () => {};
 // UI fixtures do not fetch/build real Wasm; compiled-worker coverage lives separately.
 const unavailableWaveform = async () => { throw new Error("Fixture waveform unavailable"); };
@@ -20,6 +20,30 @@ const { default: userEvent } = await import("@testing-library/user-event");
 const { PlayerApp } = await import("../web/src/player-app");
 afterEach(cleanup);
 afterAll(() => GlobalRegistrator.unregister());
+
+test("catalog initialization prepares paused in order; separate player transports and unmount remain independent", async () => {
+  const firstPlayback = new FakePlayback();
+  const secondPlayback = new FakePlayback();
+  const firstOwner = new PlaybackOwner(async () => firstPlayback, unavailableWaveform);
+  const secondOwner = new PlaybackOwner(async () => secondPlayback, unavailableWaveform);
+  const first = render(<PlayerApp owner={firstOwner} initialTracks={[{ file: new File(["a"], "same.wav"), title: "First title" }, { file: new File(["b"], "same.wav"), title: "Second title" }]} />);
+  const second = render(<PlayerApp owner={secondOwner} initialTracks={[{ file: new File(["c"], "other.wav"), title: "Other instance" }]} />);
+  await waitFor(() => expect(firstOwner.getState().phase).toBe("paused"));
+  await waitFor(() => expect(secondOwner.getState().phase).toBe("paused"));
+  expect(firstPlayback.calls).not.toContain("play"); expect(secondPlayback.calls).not.toContain("play");
+  expect(first.container.querySelector("h1")?.textContent).toBe("First title");
+  await act(() => firstOwner.play());
+  expect(firstOwner.getState().phase).toBe("playing"); expect(secondOwner.getState().phase).toBe("paused");
+  const next = first.container.querySelector<HTMLButtonElement>('button[aria-label="Next track"]')!;
+  await act(() => next.click());
+  await waitFor(() => expect(first.container.querySelector("h1")?.textContent).toBe("Second title"));
+  expect(secondOwner.getState().phase).toBe("paused");
+  first.unmount();
+  await waitFor(() => expect(firstOwner.getState().phase).toBe("empty"));
+  expect(secondPlayback.closeCount).toBe(0);
+  second.unmount();
+  await waitFor(() => expect(secondPlayback.closeCount).toBe(1));
+});
 
 test("WAV loop disclosure, exact frame fields, keyboard handles and terminal retry clarity",async()=>{
   const playback=new FakeMediaLoopPlayback();const owner=new PlaybackOwner(async()=>playback,unavailableWaveform);
@@ -395,4 +419,18 @@ test("loop disclosure preserves the single failed visual caption and closed enab
     await act(()=>owner.setLoopEnabled(false));expect(trigger.getAttribute("data-active")).toBe("false");
     expect(caption.textContent).toContain("Visual unavailable");
   }finally{await act(()=>owner.close());HTMLCanvasElement.prototype.getContext=original;}
+});
+
+test("an open loop editor remains dismissible after closing the track", async () => {
+  const playback = new FakeMediaLoopPlayback();
+  const owner = new PlaybackOwner(async () => playback, unavailableWaveform);
+  const view = render(<PlayerApp owner={owner} />);
+  await act(() => owner.load(new File([], "loop.wav")));
+  await userEvent.setup().click(view.getByRole("button", { name: "Loop editor" }));
+  await act(() => owner.close());
+  const toggle = view.getByRole("button", { name: "Loop editor" });
+  expect(toggle.hasAttribute("disabled")).toBe(false);
+  await userEvent.setup().click(toggle);
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  expect(view.queryByText("Loops unavailable.")).toBeNull();
 });

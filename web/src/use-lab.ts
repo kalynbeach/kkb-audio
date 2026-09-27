@@ -137,7 +137,7 @@ export function useLab() {
   function getWorker() {
     const runtime = resources.current;
     if (runtime.worker) return runtime.worker;
-    const worker = new Worker(new URL("/lab-worker.js", window.location.href), {
+    const worker = new Worker(new URL("/audio-runtime/lab-worker.js", window.location.href), {
       type: "module",
     });
     runtime.worker = worker;
