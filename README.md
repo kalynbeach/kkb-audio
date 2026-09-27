@@ -50,10 +50,9 @@ See the canonical [system architecture](docs/2026-08-28-kkb-audio-system-archite
 
 ## Development
 
-The repository pins stable Rust 1.98 and Bun 1.4.0. The worklet build also requires the matching pinned `wasm-bindgen` CLI.
+The repository pins stable Rust 1.98 and Bun 1.4.0. `rust-toolchain.toml` pins the toolchain and the `wasm32-unknown-unknown` target, and rustup installs both on first use. The worklet build also requires the matching pinned `wasm-bindgen` CLI.
 
 ```sh
-rustup target add wasm32-unknown-unknown
 cargo install wasm-bindgen-cli --version 0.2.127 --locked
 bun install --frozen-lockfile
 
