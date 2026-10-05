@@ -56,6 +56,7 @@ struct SharedObservation {
     next_epoch: AtomicU64,
     loop_bounds: AtomicU64,
     loop_effective_bounds: AtomicU64,
+    // Bit 0 applies a loop command at the cursor; bit 1 retains enable/EOS pause; bit 2 edits.
     loop_change: AtomicU32,
     loop_state: AtomicU32,
     loop_extension_frames: AtomicU64,
@@ -137,10 +138,14 @@ impl SharedObservation {
         let target = u32::try_from(target).map_err(|_| 71_u32)?;
         let snapshot = self.playback_snapshot();
         let pending = self.seek_command.load(Ordering::SeqCst) >> 32 > snapshot.epoch;
+        let change = if pending {
+            self.loop_change.load(Ordering::SeqCst)
+        } else {
+            0
+        };
         // The single control writer composes a seek with the latest accepted loop intent,
         // even when the callback has not yet published that command's effective state.
         let bounds = if pending {
-            let change = self.loop_change.load(Ordering::SeqCst);
             if change != 0 && change & 2 == 0 {
                 0
             } else {
@@ -156,7 +161,9 @@ impl SharedObservation {
         } else {
             bounds
         };
-        self.request_position(target, bounds, 0)
+        // Retain acknowledgment-time EOS handling without replacing the explicit seek target
+        // with the callback cursor or loop A. Consecutive seeks carry the same enable bit.
+        self.request_position(target, bounds, if bounds == 0 { 0 } else { change & 2 })
     }
     fn request_position(&self, target: u32, bounds: u64, loop_change: u32) -> Result<u64, u32> {
         self.command_sequence.fetch_add(1, Ordering::SeqCst);
@@ -961,7 +968,7 @@ impl CallbackProcessor {
                     Err(_) => return self.finish_silent(FailureCode::Render, frame_count, started),
                 }
             };
-            if change != 0
+            if change & 1 != 0
                 && let Some(r) = region
             {
                 let cursor = self.input.pcm_position();
@@ -2328,6 +2335,76 @@ mod tests {
         assert_eq!(p.instance.next_frame(), clock + 17);
         assert!(!shared.playback_snapshot().paused);
         worker.stop();
+    }
+
+    #[test]
+    fn media_loop_native_pending_enable_then_seek_at_eos_preserves_pause() {
+        for (source_rate, output_rate) in [(48000, 48000), (44100, 48000), (48000, 44100)] {
+            for targets in [&[8_u64][..], &[4, 8][..]] {
+                let total = 17;
+                let (source, worker) = wav_source_at_rates(24, 2, total, source_rate, output_rate);
+                let shared = Arc::new(SharedObservation::new());
+                let timeline = PcmTimeline::new(source_rate, output_rate, total as u64).unwrap();
+                let mut p =
+                    CallbackProcessor::prepare(output_rate, 2, 1024, source, Arc::clone(&shared))
+                        .unwrap();
+                p.timeline = Some(timeline);
+                let deadline = Instant::now() + Duration::from_secs(2);
+                let mut out = [0f32; 34];
+                while !p.input.ended() {
+                    p.process(&mut out);
+                    assert!(Instant::now() < deadline);
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                assert!(!shared.playback_snapshot().paused);
+                shared.ended.store(false, Ordering::Release);
+                let clock = p.instance.next_frame();
+                shared
+                    .request_loop(0, 16, true, timeline, output_rate, true)
+                    .unwrap();
+                let mut epoch = 0;
+                for target in targets {
+                    epoch = shared.request_seek(*target, timeline).unwrap();
+                }
+
+                p.process(&mut out);
+                assert!(
+                    shared.playback_snapshot().paused,
+                    "a seek retaining a pending enable must preserve acknowledgment-time EOS"
+                );
+                let deadline = Instant::now() + Duration::from_secs(2);
+                while p.input.preparing() {
+                    assert_positive_zero(&out);
+                    p.process(&mut out);
+                    assert!(Instant::now() < deadline);
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                let target = timeline.seek_pcm_frame(8).unwrap();
+                assert_eq!(p.input.active_epoch(), epoch);
+                assert_eq!(p.input.pcm_position(), target);
+                assert_eq!(p.instance.next_frame(), clock);
+                assert_positive_zero(&out);
+                assert_eq!(shared.playback_snapshot().loop_state, 2);
+
+                let original: Vec<Vec<f32>> = (0..2)
+                    .map(|channel| {
+                        (0..total)
+                            .map(|frame| crate::local_wav::tests::expected(frame, channel, 24))
+                            .collect()
+                    })
+                    .collect();
+                let reference =
+                    crate::sample_rate::tests::convert(source_rate, output_rate, &original, &[17]);
+                shared.playback_command.store(2, Ordering::Release);
+                p.process(&mut out);
+                assert_eq!(p.instance.next_frame(), clock + 17);
+                assert!(!shared.playback_snapshot().paused);
+                for channel in 0..2 {
+                    assert_eq!(out[channel], reference[channel][target as usize] * 0.5);
+                }
+                worker.stop();
+            }
+        }
     }
 
     #[test]
