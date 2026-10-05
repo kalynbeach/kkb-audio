@@ -135,7 +135,20 @@ impl SharedObservation {
     fn request_seek(&self, target: u64, timeline: PcmTimeline) -> Result<u64, u32> {
         timeline.seek_pcm_frame(target)?;
         let target = u32::try_from(target).map_err(|_| 71_u32)?;
-        let bounds = self.loop_effective_bounds.load(Ordering::Acquire);
+        let snapshot = self.playback_snapshot();
+        let pending = self.seek_command.load(Ordering::SeqCst) >> 32 > snapshot.epoch;
+        // The single control writer composes a seek with the latest accepted loop intent,
+        // even when the callback has not yet published that command's effective state.
+        let bounds = if pending {
+            let change = self.loop_change.load(Ordering::SeqCst);
+            if change != 0 && change & 2 == 0 {
+                0
+            } else {
+                self.loop_bounds.load(Ordering::SeqCst)
+            }
+        } else {
+            self.loop_effective_bounds.load(Ordering::SeqCst)
+        };
         let bounds = if bounds != 0
             && (u64::from(target) < bounds >> 32 || u64::from(target) >= u64::from(bounds as u32))
         {
@@ -2092,6 +2105,125 @@ mod tests {
                 .is_err()
         );
         worker.stop();
+    }
+
+    #[test]
+    fn media_loop_native_seek_preserves_latest_pending_loop_intent() {
+        for (source_rate, output_rate) in [(48000, 48000), (44100, 48000), (48000, 44100)] {
+            let total = 10003;
+            let timeline = PcmTimeline::new(source_rate, output_rate, total as u64).unwrap();
+            let original: Vec<Vec<f32>> = (0..2)
+                .map(|channel| {
+                    (0..total)
+                        .map(|frame| crate::local_wav::tests::expected(frame, channel, 24))
+                        .collect()
+                })
+                .collect();
+            let reference =
+                crate::sample_rate::tests::convert(source_rate, output_rate, &original, &[17, 239]);
+            for (initially_enabled, pending_change, target, expected_bounds) in [
+                (true, "disable", 6000, 0),
+                (false, "enable", 6000, (1000_u64 << 32) | 9000),
+                (true, "edit", 6000, (3000_u64 << 32) | 8000),
+                (true, "edit", 2000, 0),
+                (false, "enable", 500, 0),
+                (false, "enable", 9000, 0),
+                (true, "disable then edit", 6000, 0),
+                (false, "enable then edit", 6000, (3000_u64 << 32) | 8000),
+            ] {
+                let (source, worker) = wav_source_at_rates(24, 2, total, source_rate, output_rate);
+                let shared = Arc::new(SharedObservation::new());
+                let mut p =
+                    CallbackProcessor::prepare(output_rate, 2, 1024, source, Arc::clone(&shared))
+                        .unwrap();
+                p.timeline = Some(timeline);
+                p.process(&mut [0f32; 34]);
+                shared.playback_command.store(1, Ordering::Release);
+                let wait = |p: &mut CallbackProcessor, epoch: u64| {
+                    let deadline = Instant::now() + Duration::from_secs(2);
+                    loop {
+                        assert_eq!(p.process(&mut [0f32; 34]), ProcessStatus::Rendered);
+                        let snapshot = shared.playback_snapshot();
+                        if snapshot.epoch == epoch && snapshot.ready {
+                            break;
+                        }
+                        assert!(Instant::now() < deadline, "{pending_change} readiness");
+                        std::thread::sleep(Duration::from_millis(1));
+                    }
+                };
+                let start = shared.request_seek(4000, timeline).unwrap();
+                wait(&mut p, start);
+                let initial = shared
+                    .request_loop(1000, 9000, initially_enabled, timeline, output_rate, true)
+                    .unwrap();
+                wait(&mut p, initial);
+                let render_frame = p.instance.next_frame();
+
+                // These commands all arrive before the renderer acknowledges any of them.
+                match pending_change {
+                    "disable" | "disable then edit" => {
+                        shared
+                            .request_loop(1000, 9000, false, timeline, output_rate, true)
+                            .unwrap();
+                    }
+                    "enable" | "enable then edit" => {
+                        shared
+                            .request_loop(1000, 9000, true, timeline, output_rate, true)
+                            .unwrap();
+                    }
+                    "edit" => {}
+                    _ => unreachable!(),
+                }
+                if pending_change.contains("edit") {
+                    shared
+                        .request_region(3000, 8000, timeline, output_rate, true)
+                        .unwrap();
+                }
+                let epoch = shared.request_seek(target, timeline).unwrap();
+                wait(&mut p, epoch);
+                let snapshot = shared.playback_snapshot();
+                assert_eq!(p.loop_bounds, expected_bounds, "{pending_change}");
+                assert_eq!(
+                    snapshot.loop_enabled,
+                    expected_bounds != 0,
+                    "{pending_change}"
+                );
+                assert_eq!(
+                    snapshot.loop_state,
+                    if expected_bounds == 0 { 0 } else { 2 }
+                );
+                let pcm_target = timeline.seek_pcm_frame(target).unwrap();
+                assert_eq!(snapshot.pcm_position, pcm_target, "{pending_change}");
+                assert_eq!(
+                    snapshot.source_position,
+                    timeline.source_position(pcm_target)
+                );
+                assert_eq!(snapshot.render_frame, render_frame);
+                assert!(snapshot.paused);
+                assert!(!snapshot.ended);
+
+                // Resume through the actual worker/rings/callback and inspect rendered PCM.
+                shared.playback_command.store(2, Ordering::Release);
+                let mut output = [0f32; 34];
+                assert_eq!(p.process(&mut output), ProcessStatus::Rendered);
+                for frame in 0..17 {
+                    for channel in 0..2 {
+                        assert_eq!(
+                            output[frame * 2 + channel],
+                            reference[channel][pcm_target as usize + frame] * 0.5,
+                            "{pending_change}, frame {frame}, channel {channel}"
+                        );
+                    }
+                }
+                let snapshot = shared.playback_snapshot();
+                assert!(!snapshot.paused);
+                assert_eq!(snapshot.epoch, epoch);
+                assert_eq!(snapshot.pcm_position, pcm_target + 17);
+                assert_eq!(snapshot.render_frame, render_frame + 17);
+                assert_eq!(p.input.counters().invalid_blocks, 0);
+                worker.stop();
+            }
+        }
     }
 
     #[test]
