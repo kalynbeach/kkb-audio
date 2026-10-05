@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
-import { LocalWav, WorkletKernel, initSync } from "../web/src/generated/kkb_audio.js";
+import { LocalWav, PreparedRateConverter, WorkletKernel, initSync } from "../web/src/generated/kkb_audio.js";
 import { PreparedPlanarAdapter } from "../web/src/render-adapter";
 import { LocalPcmProducer } from "../web/src/local-pcm-producer";
 import { wavFixture, expectedWavSample } from "./local-wav-fixture";
 import type { PcmBlockMessage } from "../web/src/pcm-protocol";
 
-const module = await WebAssembly.compile(await Bun.file("web/dist/kkb_audio_bg.wasm").arrayBuffer());
+const module = await WebAssembly.compile(await Bun.file("public/audio-runtime/kkb_audio_bg.wasm").arrayBuffer());
 const exports = initSync({ module });
 const flush = async () => { for (let i = 0; i < 32; i++) await Promise.resolve(); };
 function parse(bytes: Uint8Array): LocalWav {
@@ -28,8 +28,72 @@ test("actual Wasm shared decoder rejects malformed chunk bounds and unsupported 
   expect(() => parse(wavFixture(16, 1, 48000, 0))).toThrow();
 });
 
+test("float32 Wasm preserves wire values, accepts 8192-byte blocks, skips JUNK and rejects numeric overflow", () => {
+  const original = wavFixture(32, 2, 48000, 1025);
+  const bytes = new Uint8Array(original.length + 10);
+  bytes.set(original.subarray(0, 12));
+  bytes.set([74, 85, 78, 75, 1, 0, 0, 0, 42, 0], 12);
+  bytes.set(original.subarray(12), 22);
+  new DataView(bytes.buffer).setUint32(4, bytes.length - 8, true);
+  const wav = parse(bytes);
+  try {
+    expect(wav.data_offset()).toBe(54n);
+    const pcm = wav.decode(bytes.subarray(54, 54 + 8192));
+    expect(pcm.length).toBe(2048);
+    expect(Array.from(pcm.subarray(0, 5))).toEqual([-1.5, 1.25, -0, 0, 0.5]);
+    expect(Array.from(pcm.subarray(1024, 1029))).toEqual([-0, 0, 0.5, -1.5, 1.25]);
+    expect(() => wav.decode(bytes.subarray(54))).toThrow();
+    const data = new DataView(bytes.buffer);
+    for (const bits of [0x7f800000, 0xff800000, 0x7fc00000]) {
+      data.setUint32(54, bits, true);
+      expect(() => wav.decode(bytes.subarray(54, 62))).toThrow();
+    }
+    data.setUint32(54, 0x7f7fffff, true);
+    const maximum = wav.decode(bytes.subarray(54, 62));
+    expect(maximum[0]).toBe(Math.fround(3.4028234663852886e38));
+    for (const [source, output] of [[44100, 48000], [48000, 44100]] as const) {
+      const converter = new PreparedRateConverter(source, output, 2, 1025n);
+      try {
+        expect(() => converter.push(maximum)).toThrow();
+        expect(converter.source_frames_read()).toBe(0n);
+        expect(converter.available_frames()).toBe(0);
+      } finally { converter.free(); }
+    }
+  } finally { wav.free(); }
+});
+
+test("built float WAV worker reports invalid samples before admitting PCM", async () => {
+  const originalSelf = globalThis.self;
+  for (const [value, rate, detail] of [[NaN, 48000, "finite samples"], [Infinity, 48000, "finite samples"], [Math.fround(3.4028234663852886e38), 44100, "(74)"]] as const) {
+    const bytes = wavFixture(32, 2, 48000, 17);
+    new DataView(bytes.buffer).setFloat32(44, value, true);
+    const messages: Array<{ type: string; detail?: string }> = [];
+    const host = { onmessage: undefined as ((event: { data: unknown }) => Promise<void>) | undefined, postMessage: (message: typeof messages[number]) => messages.push(message) };
+    const ports = new MessageChannel();
+    let blocks = 0;
+    ports.port2.onmessage = () => { blocks++; };
+    try {
+      Object.defineProperty(globalThis, "self", { configurable: true, value: host });
+      await import(`data:text/javascript;base64,${Buffer.from(await Bun.file("public/audio-runtime/pcm-worker.js").text() + `\n// invalid ${value} ${rate}`).toString("base64")}`);
+      await host.onmessage!({ data: { type: "inspect", file: new File([bytes], "invalid-float.wav"), module, sampleRate: rate } });
+      await host.onmessage!({ data: { type: "initialize", config: { channelCount: 2, sampleRate: rate, sourceId: 3, epoch: 1, slotCount: 4, slotFrames: 1024 }, port: ports.port1 } });
+      const deadline = performance.now() + 2000;
+      while (!messages.some(message => message.type === "worker-failed")) {
+        if (performance.now() > deadline) throw new Error("invalid float preparation did not fail");
+        await Bun.sleep(1);
+      }
+      expect(messages.at(-1)?.detail).toContain(detail);
+      expect(messages.some(message => message.type === "worker-ready")).toBe(false);
+      expect(blocks).toBe(0);
+    } finally {
+      ports.port1.close(); ports.port2.close();
+      Object.defineProperty(globalThis, "self", { configurable: true, value: originalSelf });
+    }
+  }
+});
+
 test("actual decoder → bounded producer → compiled Wasm: finite tails, irregular partitions, channel identity and EOS", async () => {
-  for (const bits of [16, 24] as const) for (const channels of [1, 2] as const) for (const rate of [44100, 48000]) for (const total of [1, 17, 256, 257, 1024, 1025]) {
+  for (const bits of [16, 24, 32] as const) for (const channels of [1, 2] as const) for (const rate of [44100, 48000]) for (const total of [1, 17, 256, 257, 1024, 1025]) {
     const bytes = wavFixture(bits, channels, rate, total);
     const wav = parse(bytes);
     const kernel = new WorkletKernel(channels, rate, 3n, 1n, 1024, 256);
@@ -148,7 +212,7 @@ test("built browser worker reads bounded File slices, rejects unsupported conver
     const messages: Array<{ type: string; detail?: string; initialAdmittedBlocks?: number }> = [];
     const host = { onmessage: undefined as ((event: { data: unknown }) => Promise<void>) | undefined, postMessage: (message: typeof messages[number]) => messages.push(message) };
     Object.defineProperty(globalThis, "self", { configurable: true, value: host });
-    await import(`data:text/javascript;base64,${Buffer.from((await Bun.file("web/dist/pcm-worker.js").text()) + `\n// case ${mismatch}`).toString("base64")}`);
+    await import(`data:text/javascript;base64,${Buffer.from((await Bun.file("public/audio-runtime/pcm-worker.js").text()) + `\n// case ${mismatch}`).toString("base64")}`);
     await host.onmessage!({ data: { type: "inspect", file: new TrackedFile([wavFixture(24, 2, 48000, 257)], "short.wav"), module, sampleRate: mismatch ? 32000 : 48000 } });
     if (mismatch) { expect(messages[0]?.type).toBe("worker-failed"); expect(messages[0]?.detail).toContain("71"); continue; }
     expect(messages[0]?.type).toBe("metadata");

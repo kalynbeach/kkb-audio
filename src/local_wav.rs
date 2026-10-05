@@ -1,4 +1,5 @@
-//! Private incremental RIFF PCM reader. Hosts supply only the requested header window.
+//! Private incremental RIFF PCM16/24 and IEEE float32 reader.
+//! Hosts supply only the requested header window.
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
@@ -14,6 +15,7 @@ pub struct LocalWav {
     stage: u8,
     channels: u32,
     rate: u32,
+    format: u16,
     bits: u32,
     data_offset: u64,
     data_bytes: u64,
@@ -33,6 +35,7 @@ impl LocalWav {
             stage: 0,
             channels: 0,
             rate: 0,
+            format: 0,
             bits: 0,
             data_offset: 0,
             data_bytes: 0,
@@ -107,12 +110,12 @@ impl LocalWav {
                 }
             }
             2 => {
+                self.format = le16(&bytes[..2]);
                 self.channels = u32::from(le16(&bytes[2..4]));
                 self.rate = le32(&bytes[4..8]);
                 self.bits = u32::from(le16(&bytes[14..16]));
-                if le16(&bytes[..2]) != 1
+                if !matches!((self.format, self.bits), (1, 16 | 24) | (3, 32))
                     || !matches!(self.channels, 1 | 2)
-                    || !matches!(self.bits, 16 | 24)
                     || self.rate == 0
                     || u32::from(le16(&bytes[12..14])) != self.block_align()
                     || self.rate.checked_mul(self.block_align()) != Some(le32(&bytes[8..12]))
@@ -143,11 +146,13 @@ impl LocalWav {
         }
         Ok(())
     }
-    /// Bounded worker-only decode; planar output, with no padded source frames.
+    /// At most 1024 frames of planar output, with no padded source frames.
+    /// Float32 samples retain their finite values, including values outside [-1, 1].
+    /// Reject an entire block containing NaN/Inf; never normalize or clip samples.
     pub fn decode(&self, bytes: &[u8]) -> Result<Vec<f32>, u32> {
         if self.stage != 3
             || bytes.is_empty()
-            || bytes.len() > 1024 * 6
+            || bytes.len() > 1024 * self.block_align() as usize
             || !bytes.len().is_multiple_of(self.block_align() as usize)
         {
             return Err(INVALID_WAV);
@@ -159,7 +164,13 @@ impl LocalWav {
             for channel in 0..self.channels as usize {
                 let start = (frame * self.channels as usize + channel) * width;
                 let sample = &bytes[start..start + width];
-                output[channel * frames + frame] = if width == 2 {
+                output[channel * frames + frame] = if self.format == 3 {
+                    let value = f32::from_bits(le32(sample));
+                    if !value.is_finite() {
+                        return Err(INVALID_WAV);
+                    }
+                    value
+                } else if width == 2 {
                     i16::from_le_bytes([sample[0], sample[1]]) as f32 / 32768.0
                 } else {
                     (i32::from_le_bytes([0, sample[0], sample[1], sample[2]]) >> 8) as f32
@@ -188,7 +199,7 @@ pub(crate) fn read_header(file: &mut std::fs::File) -> Result<LocalWav, String> 
         let bytes = &mut window[..wav.length()];
         file.read_exact(bytes).map_err(|e| e.to_string())?;
         wav.accept(bytes).map_err(|_| {
-            "unsupported or malformed WAV (expected nonempty RIFF PCM16/24 mono/stereo)".to_owned()
+            "unsupported or malformed WAV (expected nonempty RIFF PCM16/24 or IEEE float32 mono/stereo)".to_owned()
         })?;
     }
     Ok(wav)
@@ -205,6 +216,9 @@ pub(crate) mod tests {
         bytes.extend_from_slice(b"RIFF");
         bytes.extend_from_slice(&(36 + data_size as u32 + (data_size as u32 & 1)).to_le_bytes());
         bytes.extend_from_slice(b"WAVEfmt \x10\0\0\0\x01\0");
+        if bits == 32 {
+            bytes[20] = 3;
+        }
         bytes.extend_from_slice(&channels.to_le_bytes());
         bytes.extend_from_slice(&rate.to_le_bytes());
         bytes.extend_from_slice(&(rate * u32::from(align)).to_le_bytes());
@@ -214,6 +228,10 @@ pub(crate) mod tests {
         bytes.extend_from_slice(&(data_size as u32).to_le_bytes());
         for frame in 0..frames {
             for channel in 0..channels {
+                if bits == 32 {
+                    bytes.extend_from_slice(&expected(frame, channel as usize, bits).to_le_bytes());
+                    continue;
+                }
                 let value = fixture_integer(frame, channel as usize, bits);
                 bytes.extend_from_slice(&value.to_le_bytes()[..usize::from(bits / 8)]);
             }
@@ -235,6 +253,9 @@ pub(crate) mod tests {
         }
     }
     pub(crate) fn expected(frame: usize, channel: usize, bits: u16) -> f32 {
+        if bits == 32 {
+            return [-1.5, 1.25, -0.0, 0.0, 0.5][(frame + channel * 2) % 5];
+        }
         fixture_integer(frame, channel, bits) as f32 / (1 << (bits - 1)) as f32
     }
     pub(crate) fn parse(bytes: &[u8]) -> Result<LocalWav, u32> {
@@ -271,6 +292,64 @@ pub(crate) mod tests {
                     assert!(wav.decode(&[0; 6145]).is_err());
                 }
             }
+        }
+    }
+    #[test]
+    fn float32_preserves_independent_ieee_values_and_rejects_nonfinite_blocks() {
+        // Independently specified wire bits include out-of-range values, signed
+        // zero, the smallest subnormal, and the largest finite float32.
+        let bits = [
+            0x3fc00000_u32,
+            0xc0100000,
+            0x80000000,
+            1,
+            0x7f7fffff,
+            0xff7fffff,
+        ];
+        let expected = [1.5_f32, -2.25, -0.0, f32::from_bits(1), f32::MAX, f32::MIN];
+        for channels in [1, 2] {
+            let mut bytes = fixture(32, channels, 48_000, 3 * 2 / channels as usize);
+            for (slot, bits) in bytes[44..].as_chunks_mut::<4>().0.iter_mut().zip(bits) {
+                slot.copy_from_slice(&bits.to_le_bytes());
+            }
+            let wav = parse(&bytes).unwrap();
+            let frames = wav.total_frames() as usize;
+            let output = wav.decode(&bytes[44..]).unwrap();
+            for frame in 0..frames {
+                for ch in 0..channels as usize {
+                    assert_eq!(
+                        output[ch * frames + frame].to_bits(),
+                        expected[frame * channels as usize + ch].to_bits()
+                    );
+                }
+            }
+            for invalid in [0x7f800000_u32, 0xff800000, 0x7fc00000, 0x7f800001] {
+                bytes[48..52].copy_from_slice(&invalid.to_le_bytes());
+                assert_eq!(wav.decode(&bytes[44..]), Err(INVALID_WAV));
+            }
+        }
+    }
+
+    #[test]
+    fn decode_cap_is_1024_frames_for_every_encoding_and_layout() {
+        for bits in [16, 24, 32] {
+            for channels in [1, 2] {
+                let bytes = fixture(bits, channels, 44_100, 1025);
+                let wav = parse(&bytes).unwrap();
+                let align = wav.block_align() as usize;
+                assert_eq!(
+                    wav.decode(&bytes[44..44 + 1024 * align]).unwrap().len(),
+                    1024 * channels as usize
+                );
+                assert!(wav.decode(&bytes[44..44 + 1025 * align]).is_err());
+                assert!(wav.decode(&bytes[44..44 + align - 1]).is_err());
+            }
+        }
+        let mut float = fixture(32, 2, 48_000, 1);
+        for (tag, bits) in [(1_u16, 32_u16), (3, 16), (3, 24), (3, 64), (0xfffe, 32)] {
+            float[20..22].copy_from_slice(&tag.to_le_bytes());
+            float[34..36].copy_from_slice(&bits.to_le_bytes());
+            assert!(parse(&float).is_err());
         }
     }
     #[test]

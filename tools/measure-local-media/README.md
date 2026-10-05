@@ -11,7 +11,7 @@ PATH="$PWD/node_modules/.bin:$PATH" bun run measure:media /tmp/local-media-measu
 
 Open the printed loopback URL in a desktop browser and click **Run measurements**. The server saves JSON to the requested path and exits. It refuses to overwrite an existing report and stops after ten minutes if no report arrives. Temporary build files and generated audio stay at the printed temporary path for inspection. The command needs the same Rust/Wasm toolchain as `build:worklet` and a `lame` executable.
 
-The runner copies source and Cargo configuration into a temporary directory and uses the existing build script and Wasm memory audit there. It shares the repository's Cargo target cache and installed dependencies. It does not rebuild or serve the repository's `web/dist` or add measurement controls to the player. No network service other than loopback is used.
+The runner copies source and Cargo configuration into a temporary directory and uses the existing build script and Wasm memory audit there. It shares the repository's Cargo target cache and installed dependencies. It does not rebuild or serve the repository's `public/audio-runtime` or add measurement controls to the player. No network service other than loopback is used.
 
 ## Workload and boundaries
 

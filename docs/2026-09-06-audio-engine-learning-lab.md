@@ -5,7 +5,7 @@ Frontend updated: 2026-09-07
 Branch: `feat/audio-engine-learning-lab`
 Base: reviewed Gate B `e199dbe82d184ca05ff28c711e2ca0afde888439`
 
-The lab is a dedicated page at `/lab.html`. It makes the existing closed oscillator program
+The lab is now a dedicated App Router page at `/lab`. It makes the existing closed oscillator program
 inspectable without changing the real-time executor or replacing the PCM and worklet proof pages.
 The [canonical architecture](2026-08-28-kkb-audio-system-architecture.md) and
 [Gate A/B evidence](2026-09-06-milestone-4-compiled-plan-evidence.md) retain their authority.
@@ -19,11 +19,11 @@ bun install --frozen-lockfile
 bun run dev
 ```
 
-Open `http://127.0.0.1:4197/lab.html`. This builds Rust/Wasm and worker assets, then serves the
-React HTML entry with hot reload. `PORT` overrides 4197. React/CSS changes update live; restart
-`bun run dev` after Rust, worker or build-tool edits. To inspect production bundles, use
-`bun run build:worklet` followed by `PORT=4197 bun run serve:proof`. Existing proof pages remain
-at `/index.html` and `/plan.html` in development.
+Open `http://localhost:3000/lab`. This builds Rust/Wasm and independent worker assets, then starts
+Next.js. Use `bun run dev --port 3000` to choose a port. React/CSS changes update live; restart
+after Rust, worker or build-tool edits. Use `bun run build` then `bun run start --port 3000` for
+production. Proof pages live under `/developer`. The [September 20 migration](2026-09-20-nextjs-frontend.md)
+records route disposition; the original implementation evidence below remains historical.
 No deployment or existing preview channel is involved. Audio remains silent until Play.
 Listening volume begins at 15% and can be muted independently of the engine samples.
 

@@ -62,7 +62,8 @@ Object.defineProperties(globalThis, {
 });
 
 const { PreparedProof, prepareProof } = await import("../src/prepared-playback");
-await import("../src/main");
+const { mountPcmProof } = await import("../src/main");
+mountPcmProof(document);
 
 class FakeContext {
   readonly destination = new FakeAudioNode();

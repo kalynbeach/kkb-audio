@@ -1,4 +1,4 @@
-// A separate temporary build and loopback server; never writes web/dist.
+// A separate temporary build and loopback server; never writes public/audio-runtime.
 import { cpSync, mkdirSync, mkdtempSync, symlinkSync } from "node:fs";
 import { tmpdir, cpus, platform, release } from "node:os";
 import { join, resolve } from "node:path";
@@ -23,15 +23,15 @@ const run = (command: string[], cwd = temporary) => {
 for (const name of [".cargo", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "package.json", "THIRD_PARTY_NOTICES.md", "licenses", "src", "web", "tools"]) {
   cpSync(join(root, name), join(temporary, name), {
     recursive: true,
-    filter: path => path !== join(root, "web/dist") && path !== join(root, "web/src/generated"),
+    filter: path => path !== join(root, "public/audio-runtime") && path !== join(root, "web/src/generated"),
   });
 }
 symlinkSync(join(root, "node_modules"), join(temporary, "node_modules"), "dir");
 symlinkSync(join(root, "target"), join(temporary, "target"), "dir");
 console.log(`Building measurement copy in ${temporary}`);
 run([process.execPath, "tools/build-worklet.ts"]);
-run([process.execPath, "tools/check-wasm-memory.ts", "web/dist/kkb_audio_bg.wasm"]);
-const dist = join(temporary, "web/dist");
+run([process.execPath, "tools/check-wasm-memory.ts", "public/audio-runtime/kkb_audio_bg.wasm"]);
+const dist = join(temporary, "public/audio-runtime");
 const build = await Bun.build({ entrypoints: [join(temporary, "tools/measure-local-media/browser.ts"), join(temporary, "tools/measure-local-media/worker-probe.ts")], outdir: dist, target: "browser" });
 if (!build.success) throw new Error(build.logs.join("\n"));
 const probe = await Bun.file(join(dist, "worker-probe.js")).text();
@@ -92,7 +92,8 @@ const server = Bun.serve({ hostname: "127.0.0.1", port: 0, maxRequestBodySize: 1
     if (path === "/fixtures.json") return Response.json(fixtures);
     const fixture = fixtures.find(item => path === `/fixtures/${item.name}`);
     if (fixture) return new Response(Bun.file(join(fixturesDirectory, fixture.name)));
-    if (assets.has(path.slice(1))) return new Response(Bun.file(join(dist, path.slice(1))), { headers: { "Cache-Control": "no-store" } });
+    const asset = path.startsWith("/audio-runtime/") ? path.slice("/audio-runtime/".length) : path.slice(1);
+    if (assets.has(asset)) return new Response(Bun.file(join(dist, asset)), { headers: { "Cache-Control": "no-store" } });
     return new Response("Not found", { status: 404 });
   },
 });

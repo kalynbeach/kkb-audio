@@ -53,7 +53,7 @@ export function waveformPath(summary: SourceWaveform, maximumColumns = 160): str
       min = Math.min(min, summary.extrema[bin * 2]!);
       max = Math.max(max, summary.extrema[bin * 2 + 1]!);
     }
-    // Fixed full-scale display; MP3 overshoot clips visually, never in the summary.
+    // Fixed full-scale display; float WAV/MP3 overshoot clips visually, never in the summary.
     const top = 20 - Math.min(1, Math.max(-1, max)) * 17;
     const bottom = 20 - Math.min(1, Math.max(-1, min)) * 17;
     paths.push(`M${((column + 0.5) * 320 / columns).toFixed(2)},${top.toFixed(2)}v${Math.max(0.5, bottom - top).toFixed(2)}`);

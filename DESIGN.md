@@ -52,6 +52,17 @@ typography:
     fontSize: "11px"
     fontWeight: 400
     letterSpacing: "0"
+  page-heading:
+    fontFamily: '"InterVariable", Inter, ui-sans-serif, system-ui, sans-serif'
+    fontSize: "clamp(30px, 4vw, 48px)"
+    fontWeight: 500
+    lineHeight: "1.15"
+    letterSpacing: "-0.03em"
+  route-title:
+    fontFamily: '"InterVariable", Inter, ui-sans-serif, system-ui, sans-serif'
+    fontSize: "22px"
+    fontWeight: 500
+    letterSpacing: "-0.02em"
 rounded:
   square: "0rem"
 spacing:
@@ -100,6 +111,14 @@ components:
   seek-range:
     rounded: "{rounded.square}"
     height: "40px"
+  navigation-link:
+    textColor: "{colors.pi-muted-ink}"
+    typography: "{typography.body}"
+    rounded: "{rounded.square}"
+    padding: "10px 12px"
+  navigation-link-current:
+    backgroundColor: "{colors.pi-ground-deep}"
+    textColor: "{colors.pi-ink}"
 ---
 
 # Design System: Learning lab and local player
@@ -108,11 +127,19 @@ components:
 
 **Creative North Star: "a compact track-first listening object"**
 
-For `/player.html`, this is the user-pinned [#21 interactive prototype](docs/2026-09-13-wave-player-prototype.md), not a generated seed or a new visual world. Its compact, square listening object pairs restrained surfaces with precise identity, honest media state and persistent transport. #22 replaces the historical demo composition only; it does not redesign the lab.
+For `/developer/classic-player`, this is the user-pinned [#21 interactive prototype](docs/2026-09-13-wave-player-prototype.md), not a generated seed or a new visual world. Its compact, square listening object pairs restrained surfaces with precise identity, honest media state and persistent transport. #22 replaces the historical demo composition only; it does not redesign the lab.
+
+The experimental `/player` extends the same player with a WebGPU XY scope.
+Its dark phosphor field is a local exception described under Components; the shared
+typography, controls, waveform, loop editor, transport and library retain these rules.
 
 KKB is a technical and creative workshop. The lab should make its work inspectable, using precise
 labels, visible state and useful controls. Typography, symbol meaning and information hierarchy
 stay stable across light and dark modes. Theme changes come through semantic tokens.
+
+The shared App Router navigation and overview continue this visual system. Page headings
+introduce a separate reading hierarchy while player typography and geometry remain scoped
+to the listening object.
 
 **Key Characteristics:**
 - Paired warm neutral modes, ruled divisions and flat resting surfaces.
@@ -124,7 +151,7 @@ stay stable across light and dark modes. Theme changes come through semantic tok
 
 This lab follows the KKB design-system baseline from [`kkb/DESIGN.md`](https://github.com/kalynbeach/kkb/blob/c30c935932ff5a7c245454491cef2591a55fece4/DESIGN.md)
 and [`@kkb/ui`](https://github.com/kalynbeach/kkb/tree/c30c935932ff5a7c245454491cef2591a55fece4/packages/ui).
-The surfaces are `/lab.html` and `/player.html`; the engine's architecture remains in [the canonical architecture](docs/2026-08-28-kkb-audio-system-architecture.md).
+The surfaces are `/lab` and `/player`; the engine's architecture remains in [the canonical architecture](docs/2026-08-28-kkb-audio-system-architecture.md).
 
 Kalyn's September 7 direction specifies the research repository's shadcn theme and component
 styles, with **Inter for sans and TX-02 for mono**. These choices override the baseline's font,
@@ -135,7 +162,7 @@ icon and theme selections. They do not change its accessibility or product princ
 - Typography: research's Inter/TX-02 token roles, with self-hosted Inter variable Latin and the TX-02 variable asset from KKB. No Geist face or fallback is used.
 - Layout: [`web/lab.css`](web/lab.css) owns the graph, plots and page composition. Ordinary buttons, fields, sliders, checkboxes, selection groups and status elements use the copied shadcn components.
 
-Player extraction is grounded in [`web/player.css`](web/player.css), [`web/src/player-app.tsx`](web/src/player-app.tsx), shared controls and the emitted [direction contract](web/player.html). The frontmatter records the reused player palette/type/spacing subset; it is not a replacement theme or a lab typography migration. Unsuffixed colors are light values; `-dark` records the same source primitive under `.dark`. Component tokens describe light defaults; semantic mode mapping below and live-bound sidecar snippets preserve dark behavior. [`.impeccable/design.json`](.impeccable/design.json) holds extensions only. Its synthesized tonal strips are panel previews, not additional application colors.
+Player extraction is grounded in [`web/player.css`](web/player.css), [`web/src/player-app.tsx`](web/src/player-app.tsx) and shared controls. The App Router continuation is grounded in [`app/globals.css`](app/globals.css), its route components and the [direction contract](app/layout.tsx), with surface seed `7275cbc3`. The frontmatter records the reused player palette/type/spacing subset and separate page-heading roles; it is not a replacement theme or a lab typography migration. Unsuffixed colors are light values; `-dark` records the same source primitive under `.dark`. Component tokens describe light defaults; semantic mode mapping below and live-bound sidecar snippets preserve dark behavior. [`.impeccable/design.json`](.impeccable/design.json) holds extensions only. Its synthesized tonal strips are panel previews, not additional application colors.
 
 [Dated implementation evidence](docs/2026-09-13-compact-player.md) distinguishes original checks from the repair's current screenshots and 47-assertion muted browser run. The repair mobile compact screenshot includes a transient Settings exit snapshot, not a settled-state rule. Documentation is not parent acceptance, publication or device/accessibility certification.
 
@@ -201,6 +228,12 @@ Lab signal colors retain the theme's `chart-1`, `chart-2` and `chart-3` roles wi
 
 The player has a compact role-based hierarchy, not a display scale. The recurring frontmatter roles cover instructions, button labels, filenames, metadata and states. Row metadata and time use the meta role's 16px line box; filename rows use an 18px line box. Values use tabular numerals. Loaded identity remains a scoped Inter heading (22px/27px, weight 500, tracking −0.025em), not a global display token. Library and Settings headings remain local to those surfaces.
 
+The page-heading role belongs to developer and message-page titles. The route-title role belongs
+to repeated destination links on the overview and developer directory. Both use Inter and remain
+outside the compact player ramp. The overview's large introduction uses a local fluid heading
+from 48px to 76px at 6vw, with a 1.05 line height and −0.04em tracking. Its lead copy is 21px,
+dropping to 17px at 850px. These overview details do not redefine player identity or body sizes.
+
 Inter carries instructions and control labels. TX-02 carries sample coordinates, values, process
 names and technical metadata. Use tabular numeric presentation. Compact labels must remain readable
 in both modes, and selected controls must expose their state beyond color.
@@ -215,7 +248,7 @@ Player icons are the actual regular Phosphor SVG subset in [`web/src/player-icon
 
 The desktop listening object is centered independently of its library: 380 × 532px, with a fixed 64px identity header, flexible visual region, functional navigation and independently centered transport. At ≥1212px the 380px right companion opens across a 12px gap without shifting identity, seek or transport. Below that threshold the library replaces only the visual region.
 
-At ≤760px, the card width is `min(380px, 100%)`, with 12px page insets. Height is `min(640px, calc(100svh - 140px))`, minimum 440px. Short screens scroll vertically. The document has a 320px minimum width. Library overflow is local and keyboard reachable. Names stay single-line with ellipsis and full native/accessibility naming rather than changing row or header geometry.
+At ≤760px, the card width is `min(380px, 100%)`, with 12px page insets. The base player stylesheet uses `min(640px, calc(100svh - 140px))`, with a 440px minimum height. App Router player pages override the height to `min(640px, calc(100svh - 280px))` to account for the shared header and footer. This route exception retains the 440px minimum, removes the stage's minimum height and uses 12px top and 24px bottom stage padding. Short screens scroll vertically. The document has a 320px minimum width. Library overflow is local and keyboard reachable. Names stay single-line with ellipsis and full native/accessibility naming rather than changing row or header geometry.
 
 The shared 4px rhythm remains the baseline; repeated compact insets and section spacing are in the frontmatter. The approved player has optical exceptions, not a mandate that every value be a multiple of four.
 
@@ -287,9 +320,34 @@ Read [the timing/storage contract and evidence](docs/2026-09-13-live-oscilloscop
 approximate untagged rendered histories, not a source/speaker clock. No geometry, font, library,
 Volume or disclosure animation owner changes are part of #23.
 
+### Experimental WebGPU XY scope
+
+The [experimental entry point](app/player/page.tsx) reuses the compact React player
+and [player stylesheet](web/player.css). Its [scope styles](web/wave-player.css) keep
+a dark field in both page themes, with P31 green signal and persistence confined
+to that field. This exception does not change the Canvas2D palette or add glow to
+the surrounding controls. The [instance preset](web/src/wave-scope/preset.ts) is
+proposed, pending Kalyn's confirmation; its gain, bloom and trail settings remain
+local source values, not shared tokens or listener options.
+
+The XY trace shows actual rendered output before listening volume and mute. Left
+drives X, right drives Y, and mono drives both axes. Equal physical axis scale and
+fixed visual gain preserve proportions across viewports without normalizing each
+track. Persistence retains actual observations. The optional synthetic study is
+explicitly labelled in-memory WAV media admitted through the normal engine path;
+it never supplies a generated fallback visual.
+
+TX-02 captions remain outside the canvas on dark backing, with readable state and
+axis labels in either theme. Opening the loop editor moves the caption above it.
+Audio pause retains the last observation; seek clears it. Resize, theme and dialog
+changes can present retained history once without reading audio. Reduced motion,
+hidden views and Pause visual clear history and stop observation. Unavailable
+WebGPU keeps the explanation and playback controls usable. See the [implementation
+and visual evidence](docs/2026-09-20-wave-player.md).
+
 ### Honest states and Settings
 
-Unavailable metadata, artwork and duration are stated, never invented. Unknown time uses an em dash; a genuinely prepared sub-second duration may read `0:00`. Prepared playback uses the actual #23 oscilloscope, never the prototype study image or synthetic signal; unsupported/failed rendering retains “Visual unavailable” with independent playback controls. Empty state gives instructions and Open files without a decorative eyebrow. PREPARING/UNAVAILABLE are meaningful feedback, not a reusable kicker style.
+Unavailable metadata, artwork and duration are stated, never invented. Unknown time uses an em dash; a genuinely prepared sub-second duration may read `0:00`. Prepared playback uses the actual #23 oscilloscope or experimental WebGPU output observation, never the prototype study image or a generated fallback signal; unsupported/failed rendering retains “Visual unavailable” with independent playback controls. Empty state gives instructions and Open files without a decorative eyebrow. PREPARING/UNAVAILABLE are meaningful feedback, not a reusable kicker style.
 
 Errors stay visible outside the visual/library swap and keep alert semantics. Settings holds Add files, Remove selected, Clear session and Close track/Cancel loading; the loading visual also offers Cancel. Original files remain untouched. Keep codec limits and session policy in [PRODUCT.md](PRODUCT.md) and the dated evidence, not in visual tokens.
 
@@ -327,9 +385,31 @@ changes engine behavior. Browser verification and its limits are recorded in the
 - **Do** retain real fonts, regular SVG icons, honest media states and source-linked evidence.
 
 ### Don't:
-- **Don't** promote prototype study imagery, synthetic signals or dead future controls into the current player.
+- **Don't** use prototype study imagery or generated fallback signals as playback observation, or add dead future controls to the player.
 - **Don't** turn functional state labels into decorative eyebrows or invent a global display scale.
 - **Don't** add ambient shadows, gradients or a second animation owner to the approved player.
 - **Don't** treat muted Chromium evidence or sidecar samples as listening, device or accessibility certification.
 
-Intentionally not canonized: one-off heading sizes, footer microtype, optical offsets, scrim colors, popup width, seek-thumb dimensions and snapshot stacking numbers remain local source details, not reusable tokens. Unused theme serif/sidebar/chart extensions are not promoted into player roles. The removed “YOUR MUSIC” eyebrow and superseded red error ink are not system precedents. Sidecar tonal ramps are synthesized preview metadata only; component samples describe appearance, not a second playback implementation.
+Intentionally not canonized: overview display sizing, wordmark and footer microtype, optical offsets, scrim colors, popup width, seek-thumb dimensions and snapshot stacking numbers remain local source details, not reusable tokens. Unused theme serif/sidebar/chart extensions are not promoted into player roles. The removed “YOUR MUSIC” eyebrow and superseded red error ink are not system precedents. Sidecar tonal ramps are synthesized preview metadata only; component samples describe appearance, not a second playback implementation.
+
+
+## Application navigation and overview
+
+The App Router shell extends the existing visual system. Inter carries navigation and page copy;
+TX-02 remains for measurements and filenames. Warm neutral light and dark tokens, square controls,
+and ruled divisions remain consistent with the approved player.
+
+The overview is a task directory with a large Wave Player entry, then separate lab and developer
+entries. Its audio icon is navigation artwork, not a simulated or measured waveform. The shell
+provides Overview, Wave Player, Lab, and Developer links with a current-page state and skip link.
+A native Appearance selector shares Light/Dark/System across routes for the page session.
+At ≤850px navigation occupies a second row. Current and hovered links use secondary fill and
+foreground ink; the current link also exposes `aria-current`. The overview has a maximum width
+of 1180px. At ≤560px its introduction and destination entries use one column, and the audio icon
+is hidden. Desktop player dimensions remain 380 × 532. Mobile player height follows the shared
+header/footer exception under Layout.
+
+Developer pages use readable prose, labelled controls and scrollable diagnostic output.
+The simulated player study is labelled before its controls. Loading, retry, and missing-page
+states retain the shell. Motion respects the existing reduced-motion behavior.
+Source and verification boundaries are recorded in the [App Router migration](docs/2026-09-20-nextjs-frontend.md).

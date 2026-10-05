@@ -240,6 +240,13 @@ mod tests {
         let r = LoopRegion::new(7, 487, 48000).unwrap();
         assert_eq!(r.fade, 120);
         for p in r.a..r.b {
+            for (tail, head) in [
+                (f32::MAX, f32::MAX),
+                (f32::MIN, f32::MIN),
+                (f32::MAX, f32::MIN),
+            ] {
+                assert!(r.sample(p, tail, head).is_finite());
+            }
             assert!((r.sample(p, 0.375, 0.375) - 0.375).abs() < 3e-8);
             let y = r.sample(p, -0.6, 0.4);
             assert!((-0.6..=0.4).contains(&y));

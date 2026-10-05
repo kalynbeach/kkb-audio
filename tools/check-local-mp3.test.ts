@@ -3,7 +3,7 @@ import { LocalMedia, PreparedRateConverter, WorkletKernel, initSync } from "../w
 import { PreparedPlanarAdapter } from "../web/src/render-adapter";
 import type { PcmBlockMessage } from "../web/src/pcm-protocol";
 
-const module = await WebAssembly.compile(await Bun.file("web/dist/kkb_audio_bg.wasm").arrayBuffer());
+const module = await WebAssembly.compile(await Bun.file("public/audio-runtime/kkb_audio_bg.wasm").arrayBuffer());
 const { memory } = initSync({ module });
 function reference(bytes: Uint8Array, rate: number): Float32Array[] {
   const wav = new LocalMedia(BigInt(bytes.length), true);
@@ -67,7 +67,7 @@ test("MP3 actual worker/Wasm seeks: uninterrupted reference, paused reclamation,
       const messages: WorkerMessage[] = [];
       const host = { onmessage: undefined as ((event: { data: unknown }) => Promise<void>) | undefined, postMessage: (message: WorkerMessage) => messages.push(message) };
       Object.defineProperty(globalThis, "self", { configurable: true, value: host });
-      await import(`data:text/javascript;base64,${Buffer.from((await Bun.file("web/dist/pcm-worker.js").text()) + `\n// mp3 seek ${name} ${sourceRate} ${outputRate} ${total}`).toString("base64")}`);
+      await import(`data:text/javascript;base64,${Buffer.from((await Bun.file("public/audio-runtime/pcm-worker.js").text()) + `\n// mp3 seek ${name} ${sourceRate} ${outputRate} ${total}`).toString("base64")}`);
       const send = (data: unknown) => host.onmessage!({ data });
       const wait = async (condition: () => boolean) => {
         const deadline = performance.now() + 3000;

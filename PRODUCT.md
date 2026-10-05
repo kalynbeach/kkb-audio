@@ -14,7 +14,7 @@ web
 
 ## Compact local player
 
-`/player.html` delivers #22's approved track-first listening object alongside the unchanged lab and
+`/developer/classic-player` preserves #22's approved track-first listening object alongside the unchanged lab and
 proofs. Open files or Settings → Add files admits up to 100 WAV/MP3 File references in picker order,
 with explicit unsupported/over-limit counts. Repeated names do not imply identity. Nothing is
 uploaded, persisted, eagerly decoded or cached across the collection. Reload ends the session.
@@ -37,9 +37,11 @@ changes preserve the owner and playback. Volume is a slim anchored disclosure; m
 initially 15% after compiled gain 0.5. Seeking previews before a single commit; cancellation abandons
 the draft. Ended is terminal and paused; seeking back stays paused until Play, Replay returns to zero.
 
-Supported: nonempty little-endian RIFF PCM16/24 WAV or MPEG-1 Layer III MP3, mono/stereo, same-rate or
+Supported: nonempty little-endian RIFF PCM16/24 or IEEE float32 WAV, or MPEG-1 Layer III MP3, mono/stereo, same-rate or
 44.1 ↔ 48 kHz conversion. MP3 is bounded to 32 MiB and ten minutes including codec padding; full policy
-is in [MP3 evidence](docs/2026-09-13-mp3-preparation.md). Errors recover through another row or retry.
+is in [MP3 evidence](docs/2026-09-13-mp3-preparation.md). Float WAV preserves finite samples without normalization;
+NaN/Inf and conversion magnitudes above 1e30 reject. See the [numerical contract](README.md#local-wavmp3-player).
+Errors recover through another row or retry.
 The full-track source waveform (#18) scans only the active file in an independent cancellable Rust/Wasm
 worker after playback readiness. Playback/seek remain functional during preparation or analysis failure.
 At most 4096 time bins (32 KiB) retain channel min/max extrema, not signed averages; display columns
@@ -70,9 +72,56 @@ track retry, not a dead loop-only Retry. Held-head smoothing is not a universal 
 human listening remains pending. Review repairs retain latest control intent before preparation,
 pause an acknowledgment-time EOS before any loop head can play, expose initial short-file rejection,
 and keep visual explanations visible above the bounded editor. See [loop evidence](docs/2026-09-14-wav-loops.md).
-MP3 loop continuation uses a bounded private encoded anchor on the decoded-and-trimmed timeline; internal carrier/predecessor PCM is discarded, never media. See [MP3 loop evidence](docs/2026-09-14-mp3-loops.md). Persistence/catalog, queues, HTTP, broader codecs and deployment remain out of scope. No fake signal, clock or dead loop controls ship.
+MP3 loop continuation uses a bounded private encoded anchor on the decoded-and-trimmed timeline; internal carrier/predecessor PCM is discarded, never media. See [MP3 loop evidence](docs/2026-09-14-mp3-loops.md). Persistent file access, queues, HTTP, broader codecs and deployment remain out of scope. No fake signal, clock or dead loop controls ship.
 Muted/device-free checks are not listening, broad browser, device or background certification; see
 [implementation evidence](docs/2026-09-13-compact-player.md).
+
+## Experimental WebGPU player
+
+`/player` composes the same React player, private PlaybackOwner and local
+collection with KKB's WebGPU P31 phosphor XY renderer. `/developer/classic-player` remains
+available with its Canvas2D oscilloscope. Transport, source waveform, seeking,
+WAV/MP3 loops and session rules are shared. There is one audio owner and no new
+decode, microphone input, media persistence or upload path.
+
+The visual reads the existing 2048-sample worklet-output tap at at most 30 Hz,
+before listening gain/mute. Left drives X and right drives Y; mono drives both
+axes. The authored preset applies a fixed 0.86 visual gain with equal physical
+axis scale across aspect ratios, no per-track normalization. GPU persistence
+fades actual observations. This approximate trailing history has no source-frame
+or speaker synchronization. Pause freezes the image; seek, replacement, close,
+hidden views, reduced motion and visual suspension discard its history.
+
+One P31 green preset lives in the instance source, with Kalyn owning its direction.
+It is the proposed initial treatment, pending owner confirmation; listeners have
+no visual configuration. Its dark phosphor field is consistent across page themes.
+Missing WebGPU, device loss and render errors leave playback controls functional.
+GPU resources belong to the visual and are disposed on unmount, including cancelled
+asynchronous setup. Texture dimensions are capped at 2048 with DPR at most 2.
+
+The optional, explicitly labelled synthetic study creates a 30-second PCM16 stereo
+WAV in memory and adds it to the ordinary collection. It never autoplays and is
+decoded by the same Rust/Wasm path. It is demonstration media, never a replacement
+for a local track's observed samples. See the [implementation and case-study
+handoff](docs/2026-09-20-wave-player.md) for verification boundaries.
+
+## Local catalog experiment
+
+`/catalog` arranges up to 20 selected local WAV/MP3 files, capped at 32 MiB each and
+128 MiB total. Each asset has a stable UUID, editable title, and immutable
+`sha256:<digest>` revision derived from exact file bytes. Filenames are hints,
+never identities. Playlist order and IDs survive a versioned JSON manifest roundtrip.
+
+Only catalog metadata is saved in this tab's session storage. Reload, route exit,
+or manifest import discards File bindings; playback requires reselecting matching
+bytes. Import replaces the catalog and clears every binding. Changed bytes are
+rejected during rebind and can be added as a new asset. There is no persisted file
+access, upload, backend, archive scan, or decoded collection cache.
+
+Open selection mounts the existing Wave Player with one private owner and the
+selected tracks in playlist order. The first track prepares paused. Returning to
+the editor or leaving the route closes playback. Player-only collection edits do
+not change the catalog. See [WaveCatalog v0](docs/2026-09-20-wavecatalog.md).
 
 ## Users and purpose
 
@@ -83,9 +132,18 @@ engine code and its limits.
 
 ## Operating context
 
-The frontend uses Bun 1.4.0, React and shadcn/ui. Bun serves the React HTML entry with hot reload
-for local development and bundles its production assets. Cargo builds Rust/Wasm; a worker renders
-the engine's recorded samples. The existing PCM and oscillator worklet proof pages remain available.
+The frontend uses Next.js 16.3.5 App Router, React, shadcn/ui, and Bun 1.4.0 tooling.
+The overview at `/` leads to Wave Player at `/player`, WaveCatalog at `/catalog`, the engine lab at `/lab`, and developer
+proofs at `/developer`. PCM transport and compiled-plan proofs have dedicated nested routes.
+The historical player study is explicitly simulated. Every route has a distinct title and shares
+navigation, keyboard focus, and Light/Dark/System appearance. Appearance lasts for the page session.
+Leaving an audio route closes its resources; playback does not persist across routes.
+
+Cargo builds Rust/Wasm. Bun independently bundles worklets and workers into `public/audio-runtime`,
+including the patched wasm-bindgen glue, fixed-memory module and license notices. Next builds the
+pages without compiling worklets through React. Player and lab enter through browser-only boundaries.
+The lab's worker renders the engine's recorded samples. No isolation headers are required by this
+unshared-memory transport. See [the migration](docs/2026-09-20-nextjs-frontend.md).
 
 This repository vendors the research repo's shadcn component implementations and theme. Shared
 control behavior remains in those components; graph composition, browser sessions, workers and

@@ -24,14 +24,14 @@ export const prepareWaveform: PrepareWaveform = async (file, totalFrames, source
       let module: WebAssembly.Module;
       try {
         module = await Promise.race([startupCancelled, (async () => {
-          const response = await fetch("./kkb_audio_bg.wasm", { signal: startupSignal });
+          const response = await fetch("/audio-runtime/kkb_audio_bg.wasm", { signal: startupSignal });
           if (!response.ok) throw new Error("Waveform module unavailable");
           return WebAssembly.compile(await response.arrayBuffer());
         })()]);
       } finally { startupSignal.removeEventListener("abort", startupAbort); }
       signal.throwIfAborted();
       startupSignal.throwIfAborted();
-      worker = new Worker("./waveform-worker.js", { type: "module" });
+      worker = new Worker("/audio-runtime/waveform-worker.js", { type: "module" });
       return await new Promise<SourceWaveform>((resolve, reject) => {
         worker!.onerror = () => reject(new Error("Waveform worker unavailable"));
         worker!.onmessage = event => {

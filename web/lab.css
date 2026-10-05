@@ -1,14 +1,3 @@
-@import "inter-ui/inter-variable-latin.css";
-@import "./styles/theme.css";
-
-@font-face {
-  font-family: "TX-02";
-  src: url("./assets/TX-02-VF.woff2") format("woff2");
-  font-weight: 100 900;
-  font-style: normal;
-  font-display: swap;
-}
-
 /* Page composition and signal graphics. Control styles come from research's shadcn sources. */
 html {
   scroll-padding-block: 1rem 9rem;

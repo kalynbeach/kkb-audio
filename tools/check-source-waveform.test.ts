@@ -3,7 +3,7 @@ import { LocalMedia, initSync } from "../web/src/generated/kkb_audio.js";
 import { wavFixture, expectedWavSample } from "./local-wav-fixture";
 import type { SourceWaveform } from "../web/src/source-waveform";
 
-const module = await WebAssembly.compile(await Bun.file("web/dist/kkb_audio_bg.wasm").arrayBuffer());
+const module = await WebAssembly.compile(await Bun.file("public/audio-runtime/kkb_audio_bg.wasm").arrayBuffer());
 initSync({ module });
 let identity = 0;
 async function scan(bytes: Uint8Array<ArrayBuffer>, mp3: boolean) {
@@ -19,7 +19,7 @@ async function scan(bytes: Uint8Array<ArrayBuffer>, mp3: boolean) {
   const host = { onmessage: undefined as ((event: { data: unknown }) => Promise<void>) | undefined, postMessage: (value: typeof message) => { message = value; } };
   try {
     Object.defineProperty(globalThis, "self", { configurable: true, value: host });
-    await import(`data:text/javascript;base64,${Buffer.from(await Bun.file("web/dist/waveform-worker.js").text() + `\n// scan ${identity++}`).toString("base64")}`);
+    await import(`data:text/javascript;base64,${Buffer.from(await Bun.file("public/audio-runtime/waveform-worker.js").text() + `\n// scan ${identity++}`).toString("base64")}`);
     await host.onmessage!({ data: { module, file: new MeasuredFile([bytes], "same-name"), totalFrames, sourceRate } });
     expect(message?.type).toBe("waveform-complete");
     expect(Math.max(...reads)).toBeLessThanOrEqual(65536);
@@ -40,8 +40,8 @@ function compare(summary: SourceWaveform, channels: number, sample: (frame: numb
     expect(Math.abs(summary.extrema[2 * bin + 1]! - high)).toBeLessThanOrEqual(tolerance);
   }
 }
-test("source-waveform real Rust/Wasm worker: independent PCM16/24 mono/stereo, rates, short/partial bins", async () => {
-  for (const bits of [16, 24] as const) for (const channels of [1, 2] as const) for (const rate of [44100, 48000]) for (const frames of [1, 17, 8194]) {
+test("source-waveform real Rust/Wasm worker: independent PCM16/24 and float32 mono/stereo, rates, short/partial bins", async () => {
+  for (const bits of [16, 24, 32] as const) for (const channels of [1, 2] as const) for (const rate of [44100, 48000]) for (const frames of [1, 17, 8194]) {
     const { summary } = await scan(wavFixture(bits, channels, rate, frames), false);
     expect(summary.totalFrames).toBe(frames); expect(summary.sourceRate).toBe(rate);
     compare(summary, channels, (f, c) => expectedWavSample(bits, f, c) * 2);

@@ -1,7 +1,8 @@
 import type { PlaybackOwner } from "./playback-owner";
 
 export const SESSION_LIMIT = 100;
-export type SessionEntry = { id: string; file: File; duration: number | null; error: string | null };
+export type PlayerInitialTrack = { file: File; title?: string };
+export type SessionEntry = { id: string; file: File; title: string; duration: number | null; error: string | null };
 type CollectionState = { entries: readonly SessionEntry[]; selected: string | null; active: string | null; notice: string };
 
 /** Private file/activation coordinator. PlaybackOwner alone owns preparation and audio resources. */
@@ -11,7 +12,9 @@ export class PlayerCollection {
   #nextId = 0;
   #activation = 0;
   #playAfterLoad = false;
-  constructor(private readonly owner: PlaybackOwner) {}
+  constructor(private readonly owner: PlaybackOwner, initialTracks: readonly PlayerInitialTrack[] = []) {
+    if (initialTracks.length) this.#addTracks(initialTracks);
+  }
   getState = () => this.#state;
   subscribe = (listener: () => void) => { this.#listeners.add(listener); return () => { this.#listeners.delete(listener); }; };
   #publish(patch: Partial<CollectionState>) {
@@ -19,13 +22,16 @@ export class PlayerCollection {
     for (const listener of this.#listeners) listener();
   }
   add(files: Iterable<File>) {
+    this.#addTracks(Array.from(files, file => ({ file })));
+  }
+  #addTracks(tracks: Iterable<PlayerInitialTrack>) {
     const entries = [...this.#state.entries];
     let added = 0, unsupported = 0, overflow = 0;
     // Admission uses names only, never reads bytes or deduces identity from a name.
-    for (const file of files) {
+    for (const { file, title } of tracks) {
       if (!/\.(wav|mp3)$/i.test(file.name)) { unsupported++; continue; }
       if (entries.length === SESSION_LIMIT) { overflow++; continue; }
-      entries.push({ id: `entry-${++this.#nextId}`, file, duration: null, error: null });
+      entries.push({ id: `entry-${++this.#nextId}`, file, title: title ?? file.name, duration: null, error: null });
       added++;
     }
     this.#publish({ entries, selected: this.#state.selected ?? entries[0]?.id ?? null,

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-14T01:23:32.489Z",
+  "generatedAt": "2026-09-20T22:06:05.659Z",
   "title": "Design System: Learning lab and local player",
   "extensions": {
     "colorMeta": {
@@ -259,6 +259,14 @@
       "state": {
         "displayName": "Short player state",
         "purpose": "Departure Mono phase labels; not decorative eyebrows."
+      },
+      "page-heading": {
+        "displayName": "Page heading",
+        "purpose": "Developer and message-page titles; separate from the compact player type ramp."
+      },
+      "route-title": {
+        "displayName": "Route title",
+        "purpose": "Repeated destination headings on the overview and developer directory; not player identity."
       }
     },
     "shadows": [
@@ -303,6 +311,14 @@
       {
         "name": "narrow-max",
         "value": "760px"
+      },
+      {
+        "name": "navigation-wrap-max",
+        "value": "850px"
+      },
+      {
+        "name": "overview-stack-max",
+        "value": "560px"
       }
     ]
   },
@@ -370,11 +386,19 @@
       "description": "Previous/Play/Next appearance excerpt. Utilities sit in independent side columns in the full player; no audio or queue behavior exists in this sample.",
       "html": "<div class=\"ds-transport\" role=\"group\" aria-label=\"Playback\"><button class=\"ds-button ds-ghost\" type=\"button\" aria-label=\"Previous track\"><svg viewBox=\"0 0 256 256\" fill=\"currentColor\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M199.81,34a16,16,0,0,0-16.24.43L64,109.23V40a8,8,0,0,0-16,0V216a8,8,0,0,0,16,0V146.77l119.57,74.78A15.95,15.95,0,0,0,208,208.12V47.88A15.86,15.86,0,0,0,199.81,34ZM192,208,64.16,128,192,48.07Z\"></path></svg></button><button class=\"ds-button ds-secondary\" type=\"button\" aria-label=\"Play\"><svg viewBox=\"0 0 256 256\" fill=\"currentColor\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M232.4,114.49,88.32,26.35a16,16,0,0,0-16.2-.3A15.86,15.86,0,0,0,64,39.87V216.13A15.94,15.94,0,0,0,80,232a16.07,16.07,0,0,0,8.36-2.35L232.4,141.51a15.81,15.81,0,0,0,0-27ZM80,215.94V40l143.83,88Z\"></path></svg></button><button class=\"ds-button ds-ghost\" type=\"button\" aria-label=\"Next track\"><svg viewBox=\"0 0 256 256\" fill=\"currentColor\" aria-hidden=\"true\" focusable=\"false\"><path d=\"M200,32a8,8,0,0,0-8,8v69.23L72.43,34.45A15.95,15.95,0,0,0,48,47.88V208.12a16,16,0,0,0,24.43,13.43L192,146.77V216a8,8,0,0,0,16,0V40A8,8,0,0,0,200,32ZM64,207.93V48.05l127.84,80Z\"></path></svg></button></div>",
       "css": ".ds-button { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid transparent; border-radius: 0; background: transparent; color: var(--foreground, #171714); font: 500 14px/20px var(--pi-font-sans, InterVariable, Inter, ui-sans-serif, system-ui, sans-serif); padding: 0; cursor: pointer; white-space: nowrap; transition: background-color 120ms ease-out; }\n.ds-button svg { width: 20px; height: 20px; pointer-events: none; }\n.ds-button:hover, .ds-button[aria-expanded=\"true\"] { background: var(--muted, #ecece6); color: var(--foreground, #171714); }\n:host-context(.dark) .ds-ghost:hover { background: color-mix(in oklab, var(--muted, #292925) 50%, transparent); }\n.ds-button:focus-visible { border-color: var(--ring, #a9a9a0); box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring, #a9a9a0) 50%, transparent); outline: 2px solid var(--foreground, #171714); outline-offset: 2px; }\n.ds-button:active:not([aria-haspopup]) { transform: translateY(1px); }\n.ds-button:disabled { pointer-events: none; opacity: .5; cursor: default; }\n@media (prefers-reduced-motion: reduce) { .ds-button { transition: none; } }\n.ds-ghost { width: 32px; height: 40px; } @media (max-width: 760px) { .ds-ghost { width: 44px; height: 44px; } }\n.ds-secondary { width: 38px; height: 38px; background: var(--secondary, #ecece6); color: var(--secondary-foreground, #363632); }\n.ds-secondary svg { width: 22px; height: 22px; }\n.ds-secondary:hover { background: color-mix(in oklch, var(--secondary, #ecece6), var(--foreground, #171714) 5%); color: var(--secondary-foreground, #363632); }\n@media (max-width: 760px) { .ds-secondary { width: 40px; height: 40px; position: relative; } .ds-secondary::after { content: \"\"; position: absolute; inset: -2px; } }\n.ds-transport { display: flex; justify-content: center; align-items: center; gap: 6px; color: var(--card-foreground, #171714); background: var(--card, #fffffc); }\n@media (max-width: 760px) { .ds-transport { gap: 2px; } }"
+    },
+    {
+      "name": "Application navigation",
+      "kind": "nav",
+      "refersTo": "navigation-link",
+      "description": "Shared App Router destinations with a visible and semantic current-page state. At narrow widths the header places this navigation on its own row.",
+      "html": "<nav class=\"ds-site-nav\" aria-label=\"Main navigation\"><a href=\"/\" aria-current=\"page\">Overview</a><a href=\"/player\">Wave Player</a><a href=\"/lab\">Lab</a><a href=\"/developer\">Developer</a></nav>",
+      "css": ".ds-site-nav { display: flex; align-items: center; gap: 8px; font-family: var(--pi-font-sans, InterVariable, Inter, ui-sans-serif, system-ui, sans-serif); }\n.ds-site-nav a { padding: 10px 12px; font-size: 13px; color: var(--muted-foreground, #6a6a64); text-decoration: none; white-space: nowrap; transition: color 120ms ease-out, background-color 120ms ease-out; }\n.ds-site-nav a:hover, .ds-site-nav a[aria-current] { color: var(--foreground, #171714); background: var(--secondary, #ecece6); }\n.ds-site-nav a:focus-visible { outline: 2px solid var(--foreground, #171714); outline-offset: 4px; }\n@media (max-width: 850px) { .ds-site-nav { width: 100%; justify-content: space-between; border-top: 1px solid var(--border, #d6d6ce); padding-top: 8px; } .ds-site-nav a { padding: 10px 8px; } }\n@media (max-width: 560px) { .ds-site-nav a { font-size: 12px; } }\n@media (prefers-reduced-motion: reduce) { .ds-site-nav a { transition: none; } }"
     }
   ],
   "narrative": {
     "northStar": "a compact track-first listening object",
-    "overview": "For `/player.html`, this is the user-pinned [#21 interactive prototype](docs/2026-09-13-wave-player-prototype.md), not a generated seed or a new visual world. Its compact, square listening object pairs restrained surfaces with precise identity, honest media state and persistent transport. #22 replaces the historical demo composition only; it does not redesign the lab.\n\nKKB is a technical and creative workshop. The lab should make its work inspectable, using precise\nlabels, visible state and useful controls. Typography, symbol meaning and information hierarchy\nstay stable across light and dark modes. Theme changes come through semantic tokens.",
+    "overview": "For `/developer/classic-player`, this is the user-pinned [#21 interactive prototype](docs/2026-09-13-wave-player-prototype.md), not a generated seed or a new visual world. Its compact, square listening object pairs restrained surfaces with precise identity, honest media state and persistent transport. #22 replaces the historical demo composition only; it does not redesign the lab.\n\nThe experimental `/player` extends the same player with a WebGPU XY scope.\nIts dark phosphor field is a local exception described under Components; the shared\ntypography, controls, waveform, loop editor, transport and library retain these rules.\n\nKKB is a technical and creative workshop. The lab should make its work inspectable, using precise\nlabels, visible state and useful controls. Typography, symbol meaning and information hierarchy\nstay stable across light and dark modes. Theme changes come through semantic tokens.\n\nThe shared App Router navigation and overview continue this visual system. Page headings\nintroduce a separate reading hierarchy while player typography and geometry remain scoped\nto the listening object.",
     "keyCharacteristics": [
       "Paired warm neutral modes, ruled divisions and flat resting surfaces.",
       "Inter identity and instructions, TX-02 technical values, player-only Departure Mono states.",
@@ -404,7 +428,7 @@
       },
       {
         "name": "The Honest Media Rule",
-        "body": "Unavailable media is explicit; never portray invented artwork, metadata, elapsed time or decorative bars as actual source analysis. The live oscilloscope uses paired signal/surface palettes, solid left/mono and dashed right traces of actual pre-volume rendered output. It is an approximate untagged browser history, not source/speaker sync. Reduced-motion, paused-visual and unavailable explanations preserve independent transport.",
+        "body": "Unavailable media is explicit; never portray invented artwork, metadata, elapsed time or decorative bars as actual source analysis.",
         "section": "components"
       }
     ],
@@ -415,7 +439,7 @@
       "**Do** retain real fonts, regular SVG icons, honest media states and source-linked evidence."
     ],
     "donts": [
-      "**Don't** promote prototype study imagery, synthetic signals or dead future controls into the current player.",
+      "**Don't** use prototype study imagery or generated fallback signals as playback observation, or add dead future controls to the player.",
       "**Don't** turn functional state labels into decorative eyebrows or invent a global display scale.",
       "**Don't** add ambient shadows, gradients or a second animation owner to the approved player.",
       "**Don't** treat muted Chromium evidence or sidecar samples as listening, device or accessibility certification."

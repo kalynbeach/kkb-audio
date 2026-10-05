@@ -2,13 +2,37 @@
   "compilerOptions": {
     "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
-    "lib": ["ES2024", "DOM"],
+    "lib": [
+      "ES2024",
+      "DOM"
+    ],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "noEmit": true,
     "strict": true,
     "target": "ES2024",
-    "types": ["bun"]
+    "types": [
+      "bun"
+    ],
+    "allowJs": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "incremental": true,
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "paths": {
+      "#components/*": [
+        "./web/src/components/*"
+      ],
+      "#lib/*": [
+        "./web/src/lib/*"
+      ]
+    },
+    "skipLibCheck": true
   },
   "include": [
     "tools/**/*.ts",
@@ -16,6 +40,15 @@
     "web/src/**/*.ts",
     "web/src/**/*.tsx",
     "web/test/**/*.ts",
-    "web/test/**/*.tsx"
+    "web/test/**/*.tsx",
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "next.config.ts",
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
   ]
 }

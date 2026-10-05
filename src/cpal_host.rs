@@ -27,6 +27,9 @@ enum AdapterPrepareError {
     Stream,
 }
 
+/// Largest f32 below 1.0; the top of CPAL's integer conversion range.
+const INTEGER_OUTPUT_MAX: f32 = 1.0 - f32::EPSILON / 2.0;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 enum FailureCode {
@@ -36,6 +39,7 @@ enum FailureCode {
     InvalidInterleavedLength = 3,
     CapacityExceeded = 4,
     Render = 5,
+    OutputRange = 6,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -127,7 +131,7 @@ impl SharedObservation {
         }
     }
 
-    /// RIFF PCM16/24 limits the source coordinate to u32; pack one coherent latest request.
+    /// Supported RIFF formats limit the source coordinate to u32; pack one coherent request.
     fn request_seek(&self, target: u64, timeline: PcmTimeline) -> Result<u64, u32> {
         timeline.seek_pcm_frame(target)?;
         let target = u32::try_from(target).map_err(|_| 71_u32)?;
@@ -505,7 +509,7 @@ fn spawn_worker(
         });
         let mut next_frame = 0_u64;
         let mut exhausted = false;
-        let mut bytes = [0_u8; PCM_SLOT_FRAMES * 6];
+        let mut bytes = [0_u8; PCM_SLOT_FRAMES * 8];
         let mut converter = match wav_file.as_ref() {
             Some((_, wav)) => match NativePcmPreparation::new(
                 wav.sample_rate(),
@@ -887,7 +891,7 @@ impl CallbackProcessor {
 
     fn process<T>(&mut self, output: &mut [T]) -> ProcessStatus
     where
-        T: Sample + FromSample<f32>,
+        T: SizedSample + FromSample<f32>,
     {
         let started = Instant::now();
         output.fill(T::EQUILIBRIUM);
@@ -1064,10 +1068,29 @@ impl CallbackProcessor {
             return self.finish_silent(FailureCode::Render, frame_count, started);
         }
 
+        // Nonfinite output is an engine fault. Reject the whole callback.
+        let nonfinite = |sample: &f32| !sample.is_finite();
+        if self.left[..frame_count].iter().any(nonfinite)
+            || (self.layout == ChannelLayout::Stereo
+                && self.right[..frame_count].iter().any(nonfinite))
+        {
+            return self.finish_silent(FailureCode::OutputRange, frame_count, started);
+        }
+        // CPAL's float-to-integer conversion requires [-1, 1) and wraps 24-bit
+        // values outside it. Integer output clips there, like browser output.
+        let clip = !T::FORMAT.is_float();
+        let convert = |sample: f32| {
+            T::from_sample(if clip {
+                sample.clamp(-1.0, INTEGER_OUTPUT_MAX)
+            } else {
+                sample
+            })
+        };
+
         match self.layout {
             ChannelLayout::Mono => {
                 for (destination, source) in output.iter_mut().zip(self.left.iter().copied()) {
-                    *destination = T::from_sample(source);
+                    *destination = convert(source);
                 }
             }
             ChannelLayout::Stereo => {
@@ -1078,7 +1101,7 @@ impl CallbackProcessor {
                     .zip(self.right.iter().copied())
                     .flat_map(|(left, right)| [left, right]);
                 for (destination, source) in output.iter_mut().zip(planar_samples) {
-                    *destination = T::from_sample(source);
+                    *destination = convert(source);
                 }
             }
         }
@@ -1377,6 +1400,51 @@ mod tests {
 
     fn assert_positive_zero(samples: &[f32]) {
         assert!(samples.iter().all(|sample| sample.to_bits() == 0));
+    }
+
+    #[test]
+    fn native_output_preserves_float_extremes_and_clips_integer_overload() {
+        let prepare = |sample: f32| {
+            let mut source = test_source(ChannelLayout::Stereo, 2);
+            let mut block = source.pop_ready().unwrap();
+            block.left[..2].copy_from_slice(&[0.25, sample]);
+            block.right[..2].copy_from_slice(&[-0.25, -sample]);
+            let (mut producer, consumer) = RingBuffer::new(1);
+            assert!(producer.push(block).is_ok());
+            source.ready = consumer;
+            CallbackProcessor::prepare(48000, 2, 2, source, Arc::new(SharedObservation::new()))
+                .unwrap()
+        };
+        let mut float = prepare(f32::MAX);
+        let mut output = [0.0_f32; 4];
+        assert_eq!(float.process(&mut output), ProcessStatus::Rendered);
+        assert_eq!(output, [0.125, -0.125, f32::MAX * 0.5, -f32::MAX * 0.5]);
+        for (sample, high, low) in [(2.0, i16::MAX, i16::MIN), (-2.5, i16::MIN, i16::MAX)] {
+            let mut integer = prepare(sample);
+            let mut output = [123_i16; 4];
+            assert_eq!(integer.process(&mut output), ProcessStatus::Rendered);
+            assert_eq!(output, [4096, -4096, high, low]);
+            assert_eq!(integer.shared.snapshot().failure_code, 0);
+        }
+        let mut unsigned = prepare(f32::MAX);
+        let mut output = [123_u16; 4];
+        assert_eq!(unsigned.process(&mut output), ProcessStatus::Rendered);
+        assert_eq!(output, [36864, 28672, u16::MAX, 0]);
+        let mut i24 = prepare(f32::MAX);
+        let mut output = [cpal::I24::new_unchecked(0); 4];
+        assert_eq!(i24.process(&mut output), ProcessStatus::Rendered);
+        assert_eq!(
+            output.map(|sample| sample.inner()),
+            [1_048_576, -1_048_576, 8_388_607, -8_388_608]
+        );
+        let mut nonfinite = prepare(f32::NAN);
+        let mut output = [123_i16; 4];
+        assert_eq!(
+            nonfinite.process(&mut output),
+            ProcessStatus::Silent(FailureCode::OutputRange)
+        );
+        assert_eq!(output, [0; 4]);
+        assert_eq!(nonfinite.shared.snapshot().failure_code, 6);
     }
 
     #[test]
@@ -1779,7 +1847,7 @@ mod tests {
 
     #[test]
     fn local_wav_worker_short_exact_partial_tails_pause_resume_and_consumed_eos() {
-        for bits in [16, 24] {
+        for bits in [16, 24, 32] {
             for channels in [1, 2] {
                 for total in [1, 17, 1024, 1025, 4096, 5003] {
                     let (source, worker) = wav_source(bits, channels, total);
@@ -1854,7 +1922,7 @@ mod tests {
     #[test]
     fn converted_wav_native_worker_samples_pause_starvation_and_media_cursor() {
         for (source_rate, output_rate) in [(44100, 48000), (48000, 44100)] {
-            for bits in [16, 24] {
+            for bits in [16, 24, 32] {
                 for channels in [1, 2] {
                     for total in [1, 17, 1176, 1280, 1281, 10003] {
                         let input: Vec<Vec<f32>> = (0..channels as usize)
@@ -2526,6 +2594,9 @@ mod tests {
             (44100, 48000, 24, 2),
             (48000, 44100, 16, 1),
             (48000, 48000, 24, 2),
+            (44100, 48000, 32, 2),
+            (48000, 44100, 32, 1),
+            (48000, 48000, 32, 2),
         ] {
             for total in [1_usize, 17, 10003] {
                 let input: Vec<Vec<f32>> = (0..channels as usize)

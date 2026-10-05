@@ -1,4 +1,4 @@
-import { createRoot } from "react-dom/client";
+import { useAppearance } from "./appearance";
 import { startTransition, ViewTransition, useEffect, useReducer, useRef, useState } from "react";
 import { Popover } from "@base-ui/react/popover";
 import { Dialog } from "@base-ui/react/dialog";
@@ -9,15 +9,14 @@ import { PrototypeTimeline } from "./player-prototype-timeline";
 import { initialSession, sessionReducer, time, type Phase, type Track } from "./player-prototype-state";
 import { ArrowLeftIcon, GearSixIcon, PauseIcon, PlayIcon, QueueIcon, RepeatIcon, SkipBackIcon, SkipForwardIcon, SpeakerHighIcon, SpeakerSlashIcon, XIcon } from "./player-prototype-icons";
 
-const params = new URLSearchParams(location.search);
-const initialMode = params.get("mode") === "dark" ? "dark" : params.get("mode") === "light" ? "light" : "system";
 const phaseText: Record<Phase, string> = { empty: "No track loaded", loading: "Preparing track…", paused: "Paused", playing: "Playing", ended: "Ended", error: "Could not load" };
 
-function PlayerPrototype() {
+export function PlayerPrototype() {
+  const [params] = useState(() => new URLSearchParams(location.search));
   const [state, dispatch] = useReducer(sessionReducer, undefined, initialSession);
   const [libraryOpen, setLibraryOpen] = useState(params.get("view") === "library");
   const [editing, setEditing] = useState(params.get("loop") === "edit");
-  const [mode, setMode] = useState(initialMode);
+  const {mode, setMode} = useAppearance();
   const [volume, setVolume] = useState(15);
   const [muted, setMuted] = useState(false);
   const [staticVisual, setStaticVisual] = useState(false);
@@ -37,12 +36,6 @@ function PlayerPrototype() {
     query.addEventListener("change", change);
     return () => query.removeEventListener("change", change);
   }, []);
-  useEffect(() => {
-    const query = matchMedia("(prefers-color-scheme: dark)");
-    const apply = () => document.documentElement.classList.toggle("dark", mode === "dark" || (mode === "system" && query.matches));
-    apply(); query.addEventListener("change", apply);
-    return () => query.removeEventListener("change", apply);
-  }, [mode]);
   useEffect(() => {
     if (state.phase !== "playing") return;
     const timer = setInterval(() => dispatch({ type: "tick" }), 250);
@@ -179,5 +172,3 @@ function TrackRow({ track, selected, current, playing, onSelect, onPlay }: {
     <Button variant="ghost" size="icon" className="prototype-track-play" aria-label={`${playing ? "Pause" : "Play"} ${track.title}`} aria-describedby={`prototype-track-${track.id}-meta`} onClick={onPlay}>{playing ? PauseIcon : PlayIcon}</Button>
   </li>;
 }
-
-createRoot(document.getElementById("root")!).render(<PlayerPrototype />);
