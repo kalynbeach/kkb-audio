@@ -1,7 +1,9 @@
 import { prepareProof, type PreparedProof } from "../../web/src/prepared-playback";
 import { prepareWaveform } from "../../web/src/prepare-waveform";
+import type { RenderSnapshot } from "../../web/src/render-adapter";
+import { sampleRenderingOverlap } from "./rendering-overlap";
 
-type Fixture = { name: string; seconds: number; rate: number; channels: 1 | 2; bytes: number; sha256: string };
+type Fixture = { name: string; seconds: number | null; rate: number | null; bytes: number; sha256: string; rendering?: boolean };
 type Resources = { reads: number; readBytes: number; maxReadBytes: number; readWaitMs: number; yields: number; yieldWaitMs: number; wasmBytes: number | null };
 type WorkerRecord = { worker: Worker; url: string; terminated: boolean; resources?: Resources; onRead?: () => void; onArmed?: () => void };
 const workers: WorkerRecord[] = [];
@@ -71,29 +73,60 @@ async function measure(file: File, fixture: Fixture, repetition: number) {
     const preparation = await timed(() => prepare(file, waveformAbort.signal));
     proof = preparation.value;
     proof.setListeningGain(0);
-    check(proof.totalFrames === fixture.seconds * fixture.rate && proof.sourceRate === fixture.rate, "Incorrect decoded timeline");
+    if (!fixture.rendering) check(proof.totalFrames === fixture.seconds! * fixture.rate! && proof.sourceRate === fixture.rate, "Incorrect decoded timeline");
+    check(proof.totalFrames! / proof.sourceRate! >= 10 && proof.totalFrames! / proof.sourceRate! <= 300, "Use supported files between ten seconds and five minutes");
     const pcmWorker = workers[firstWorker]!;
     const preparationResources = resources(pcmWorker);
+    const renderSamples: { phase: string; atMs: number; analysing: boolean; snapshot: RenderSnapshot; signalPeak: number }[] = [];
+    const buffers = [new Float32Array(2048), new Float32Array(2048)] as const;
+    let analysing = false;
+    const sample = async (phase: string) => {
+      const snapshot = await deadline(proof!.status());
+      check(snapshot.ready && snapshot.failureCode === 0, `Invalid rendering transport: ${JSON.stringify(snapshot)}`);
+      const read = proof!.readOscilloscope(buffers);
+      const signalPeak = typeof read === "number" ? Math.max(...buffers.flatMap(channel => Array.from(channel, Math.abs))) : 0;
+      const row = { phase, atMs: performance.now() - openedAt, analysing, snapshot, signalPeak };
+      renderSamples.push(row);
+      return row;
+    };
+    if (fixture.rendering) { await deadline(proof.play()); await sample("playing"); }
     // Match PlaybackOwner: waveform starts once playback preparation completes.
+    analysing = true;
     const waveformTask = timed(() => prepareWaveform(file, proof!.totalFrames!, proof!.sourceRate!, waveformAbort.signal))
-      .then(result => ({ ...result, fromOpenMs: performance.now() - openedAt }));
-    void waveformTask.catch(() => {});
+      .then(result => { analysing = false; return { ...result, fromOpenMs: performance.now() - openedAt }; });
+    void waveformTask.catch(() => { analysing = false; });
+    const renderingOverlap = fixture.rendering
+      ? await sampleRenderingOverlap(waveformTask, renderSamples[0]!.snapshot.renderFrame, sample,
+        ms => deadline(new Promise(resolve => setTimeout(resolve, ms))))
+      : undefined;
     const target = Math.floor(proof.totalFrames! * 0.9);
     const seek = await timed(() => proof!.seek(target));
     check(seek.value.requestedFrame === target && Math.abs(seek.value.actualMediaFrame - target) <= 1, "Seek did not reach requested source frame");
     const seekResources = resources(pcmWorker);
-    const loop = await timed(() => proof!.setLoop(target, target + fixture.rate, true));
+    if (fixture.rendering) await sample("after-seek");
+    const loop = await timed(() => proof!.setLoop(target, target + proof!.sourceRate!, true));
     check(loop.value.loopEnabled === true, "Loop was not armed");
     const loopResources = resources(pcmWorker);
+    if (fixture.rendering) {
+      const until = performance.now() + 1500;
+      do {
+        await sample("loop");
+        await deadline(new Promise(resolve => setTimeout(resolve, 100)));
+      } while (analysing || performance.now() < until);
+      await sample("finished");
+    }
     const snapshot = await proof.status();
     check(snapshot.ready && snapshot.failureCode === 0 && snapshot.memoryBytes === 16777216 && snapshot.slotCount === 4, `Invalid prepared transport: ${JSON.stringify(snapshot)}`);
     const waveform = await waveformTask;
     check(waveform.value.totalFrames === proof.totalFrames && waveform.value.extrema.byteLength <= 32768 && waveform.value.extrema.every(Number.isFinite), "Invalid waveform summary");
     const waveformWorker = workers.slice(firstWorker).find(record => record.url.includes("waveform"))!;
+    const extremaSha256 = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new Float32Array(waveform.value.extrema))), byte => byte.toString(16).padStart(2, "0")).join("");
     rows.push({ fixture: fixture.name, repetition, preparationMs: preparation.ms, seekMs: seek.ms, loopArmMs: loop.ms,
       waveformAfterReadyMs: waveform.ms, waveformFromOpenMs: waveform.fromOpenMs,
       seekResult: seek.value, outputRate: proof.ready.sampleRate, preparationResources, seekResources, loopResources,
       waveformResources: resources(waveformWorker), waveformSummaryBytes: waveform.value.extrema.byteLength,
+      waveformIdentity: { totalFrames: waveform.value.totalFrames, sourceRate: waveform.value.sourceRate, framesPerBin: waveform.value.framesPerBin, extremaSha256 },
+      renderingOverlap, renderSamples: fixture.rendering ? renderSamples : undefined,
       workletMemoryBytes: snapshot.memoryBytes, slots: snapshot.slotCount, producer: proof.producerObservation });
   } finally { waveformAbort.abort(); await proof?.close(); }
   cleaned();
@@ -120,7 +153,7 @@ async function cancel(file: File, fixture: Fixture, operation: "preparation" | "
         pending = prepareWaveform(file, proof.totalFrames!, proof.sourceRate!, controller.signal);
       } else {
         await arm(workers.at(-1)!, cancelOnRead);
-        pending = operation === "seek" ? proof.seek(target) : proof.setLoop(target, target + fixture.rate, true);
+        pending = operation === "seek" ? proof.seek(target) : proof.setLoop(target, target + proof!.sourceRate!, true);
       }
     }
     const outcome = await deadline(pending.then(() => "resolved", () => "rejected"));

@@ -6,6 +6,11 @@ import { wavFixture } from "./local-wav-fixture";
 
 if (Bun.version !== "1.4.0") throw new Error("Use PATH=\"$PWD/node_modules/.bin:$PATH\" bun run measure:media");
 const destination = resolve(Bun.argv[2] ?? "local-media-measurements.json");
+const realPaths = Bun.argv.slice(3);
+if (realPaths.length !== 0 && (realPaths.length !== 3 || realPaths[0] !== "--render")) {
+  throw new Error("Optional rendering run requires --render PATH.wav PATH.mp3");
+}
+const rendering = realPaths.length > 0;
 if (await Bun.file(destination).exists()) throw new Error(`Refusing to replace ${destination}`);
 const root = process.cwd();
 const temporary = mkdtempSync(join(tmpdir(), "kkb-media-measure-"));
@@ -36,12 +41,13 @@ for (const name of ["pcm-worker.js", "waveform-worker.js"]) {
 }
 const fixturesDirectory = join(temporary, "fixtures");
 mkdirSync(fixturesDirectory);
-const fixtures: { name: string; seconds: number; rate: number; channels: 1 | 2; bits: number | null; bytes: number; sha256: string }[] = [];
-for (const [format, seconds, rate, channels, bits] of [
+const fixtures: { name: string; seconds: number | null; rate: number | null; channels: 1 | 2 | null; bits: number | null; bytes: number; sha256: string; rendering?: boolean }[] = [];
+const generated = [
   ["wav", 10, 44100, 1, 16], ["wav", 180, 48000, 2, 24],
   ["cbr", 10, 44100, 1, 16], ["vbr", 10, 48000, 2, 16],
   ["cbr", 180, 48000, 2, 16], ["vbr", 180, 44100, 2, 16],
-] as const) {
+] as const;
+for (const [format, seconds, rate, channels, bits] of rendering ? [] : generated) {
   const name = `${format}-${seconds}s-${rate}-${channels}.${format === "wav" ? "wav" : "mp3"}`;
   const source = join(fixturesDirectory, "source.wav");
   await Bun.write(source, wavFixture(bits, channels, rate, seconds * rate, true));
@@ -50,6 +56,18 @@ for (const [format, seconds, rate, channels, bits] of [
   else run(["lame", "--silent", ...(format === "cbr" ? ["-b", "128"] : ["-V", "2"]), source, path]);
   const bytes = await Bun.file(path).arrayBuffer();
   fixtures.push({ name, seconds, rate, channels, bits: format === "wav" ? bits : null, bytes: bytes.byteLength, sha256: new Bun.CryptoHasher("sha256").update(bytes).digest("hex") });
+}
+if (rendering) for (const [index, extension] of ["wav", "mp3"].entries()) {
+  const file = Bun.file(realPaths[index + 1]!);
+  if (!realPaths[index + 1]!.toLowerCase().endsWith(`.${extension}`) || file.size > 128 * 1024 * 1024) {
+    throw new Error("Use one WAV then one MP3, each at most 128 MiB");
+  }
+  const bytes = await file.arrayBuffer();
+  // Reports and loopback URLs use aliases, never private library paths or titles.
+  const name = `real-${index + 1}.${extension}`;
+  await Bun.write(join(fixturesDirectory, name), bytes);
+  fixtures.push({ name, seconds: null, rate: null, channels: null, bits: null, bytes: bytes.byteLength,
+    sha256: new Bun.CryptoHasher("sha256").update(bytes).digest("hex"), rendering: true });
 }
 const provenance = { baseCommit: run(["git", "rev-parse", "HEAD"], root), sourceDiff: run(["git", "diff", "--", "src", "web"], root),
   bun: Bun.version, rust: run(["rustc", "--version"]), lame: run(["lame", "--version"]).split("\n")[0],
@@ -70,7 +88,7 @@ const server = Bun.serve({ hostname: "127.0.0.1", port: 0, maxRequestBodySize: 1
       setTimeout(() => { server.stop(true); process.exit(succeeded ? 0 : 1); }, 1000);
       return new Response("Saved");
     }
-    if (path === "/") return new Response('<!doctype html><html lang="en"><meta charset="utf-8"><title>Local media measurements</title><h1>Local media measurements</h1><p>Six generated files, three repetitions each. Paused audio only. This run takes a few minutes.</p><button>Run measurements</button><pre>Ready</pre><script type="module" src="/browser.js"></script></html>', { headers: { "Content-Type": "text/html" } });
+    if (path === "/") return new Response(`<!doctype html><html lang="en"><meta charset="utf-8"><title>Local media measurements</title><h1>Local media measurements</h1><p>${rendering ? "Two real files with muted rendering" : "Six generated files with paused audio"}, three repetitions each. This run takes a few minutes.</p><button>Run measurements</button><pre>Ready</pre><script type="module" src="/browser.js"></script></html>`, { headers: { "Content-Type": "text/html" } });
     if (path === "/fixtures.json") return Response.json(fixtures);
     const fixture = fixtures.find(item => path === `/fixtures/${item.name}`);
     if (fixture) return new Response(Bun.file(join(fixturesDirectory, fixture.name)));

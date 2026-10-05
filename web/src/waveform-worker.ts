@@ -11,7 +11,8 @@ self.onmessage = async (event: MessageEvent) => {
     const started = performance.now();
     let steps = 0, sliceStarted = started, lastProgress = started;
     const yieldWork = async () => {
-      if (++steps >= 32 || performance.now() - sliceStarted >= 8) {
+      // Amortize timer waits; elapsed time still bounds each work slice.
+      if (++steps >= 256 || performance.now() - sliceStarted >= 8) {
         await new Promise(resolve => setTimeout(resolve, 4));
         steps = 0; sliceStarted = performance.now();
       }

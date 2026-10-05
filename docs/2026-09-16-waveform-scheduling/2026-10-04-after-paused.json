@@ -1,0 +1,1576 @@
+{
+  "provenance": {
+    "baseCommit": "ce04ba31d39f9e3e9cf04436d556641397f35662",
+    "sourceDiff": "",
+    "bun": "1.4.0",
+    "rust": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+    "lame": "LAME 64bits version 4.0 (https://lame.sourceforge.io)",
+    "os": "darwin 27.0.0",
+    "cpu": "Apple M4 Pro",
+    "fixtures": [
+      {
+        "name": "wav-10s-44100-1.wav",
+        "seconds": 10,
+        "rate": 44100,
+        "channels": 1,
+        "bits": 16,
+        "bytes": 882044,
+        "sha256": "e34d08b6a6a919ecba84eeb0203e300134d711ba3c755d484676e5a7aed3e009"
+      },
+      {
+        "name": "wav-180s-48000-2.wav",
+        "seconds": 180,
+        "rate": 48000,
+        "channels": 2,
+        "bits": 24,
+        "bytes": 51840044,
+        "sha256": "93897c9832207947fdf09c7e6f5cc42e3bebd8ff9c231f684445bb0a9d265127"
+      },
+      {
+        "name": "cbr-10s-44100-1.mp3",
+        "seconds": 10,
+        "rate": 44100,
+        "channels": 1,
+        "bits": null,
+        "bytes": 160913,
+        "sha256": "0f3578ba893117584f5fa50447a7809cfe175da5b6036171eef916752e1d2aa3"
+      },
+      {
+        "name": "vbr-10s-48000-2.mp3",
+        "seconds": 10,
+        "rate": 48000,
+        "channels": 2,
+        "bits": null,
+        "bytes": 62568,
+        "sha256": "f6b78befa03677f38d24cb3b3b4782080377c88d4ecba84dc4504a9f8839b073"
+      },
+      {
+        "name": "cbr-180s-48000-2.mp3",
+        "seconds": 180,
+        "rate": 48000,
+        "channels": 2,
+        "bits": null,
+        "bytes": 2880768,
+        "sha256": "513d5c5de5578c386ea46c603f78f3349dc43ba8b0a747c394b8eed4b43a7d03"
+      },
+      {
+        "name": "vbr-180s-44100-2.mp3",
+        "seconds": 180,
+        "rate": 44100,
+        "channels": 2,
+        "bits": null,
+        "bytes": 1085168,
+        "sha256": "37b6daf2074ca8da5472d5b1883ebbe95db90d9ddbc71a3fe7ee28704bbaa540"
+      }
+    ],
+    "wasmSha256": "09ea485a1fc0d03f22a86e164e3bc76018d18f84bce988ce67b88cdc9996e28c"
+  },
+  "measurement": {
+    "schema": 1,
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+    "hardwareConcurrency": 14,
+    "timeOrigin": 1791170382500.7,
+    "completedAt": "2026-10-05T03:20:03.996Z",
+    "visibility": [
+      {
+        "state": "visible",
+        "at": 5384.199999988079
+      }
+    ],
+    "error": null,
+    "rows": [
+      {
+        "fixture": "wav-10s-44100-1.wav",
+        "repetition": 1,
+        "preparationMs": 16.200000017881393,
+        "seekMs": 3,
+        "loopArmMs": 3,
+        "waveformAfterReadyMs": 28.599999994039536,
+        "waveformFromOpenMs": 44.900000005960464,
+        "seekResult": {
+          "epoch": 2,
+          "requestedFrame": 396900,
+          "pcmFrame": 432000,
+          "actualMediaFrame": 396900,
+          "result": "AnchorAndDiscard",
+          "loopEnabled": false
+        },
+        "outputRate": 48000,
+        "preparationResources": {
+          "type": "measurement-resources",
+          "reads": 13,
+          "readBytes": 9456,
+          "maxReadBytes": 2048,
+          "readWaitMs": 0.6000000536441803,
+          "yields": 0,
+          "yieldWaitMs": 0,
+          "wasmBytes": 16777216
+        },
+        "seekResources": {
+          "type": "measurement-resources",
+          "reads": 23,
+          "readBytes": 21216,
+          "maxReadBytes": 2048,
+          "readWaitMs": 1.7000000178813934,
+          "yields": 0,
+          "yieldWaitMs": 0,
+          "wasmBytes": 16777216
+        },
+        "loopResources": {
+          "type": "measurement-resources",
+          "reads": 33,
+          "readBytes": 32976,
+          "maxReadBytes": 2048,
+          "readWaitMs": 2.5999999940395355,
+          "yields": 0,
+          "yieldWaitMs": 0,
+          "wasmBytes": 16777216
+        },
+        "waveformResources": {
+          "type": "measurement-resources",
+          "reads": 15,
+          "readBytes": 884052,
+          "maxReadBytes": 65536,
+          "readWaitMs": 1.3999999463558197,
+          "yields": 3,
+          "yieldWaitMs": 14.600000023841858,
+          "wasmBytes": 16777216
+        },
+        "waveformSummaryBytes": 32672,
+        "waveformIdentity": {
+          "totalFrames": 441000,
+          "sourceRate": 44100,
+          "framesPerBin": 108,
+          "extremaSha256": "d30df82cd28011b47dd286df6c360641324ea28f3b5d622bca9881f956db3bb7"
+        },
+        "workletMemoryBytes": 16777216,
+        "slots": 4,
+        "producer": {
+          "type": "producer-status",
+          "epoch": 3,
+          "polls": 0,
+          "preparedPcmFrames": 436096,
+          "initialAdmittedBlocks": 4,
+          "admittedPcmFrames": 436096,
+          "rejections": 0,
+          "maxPollDelayMilliseconds": 0,
+          "loopRestorePackets": 0,
+          "sourceFramesRead": 396312
+        }
+      },
+      {
+        "fixture": "wav-10s-44100-1.wav",
+        "repetition": 2,
+        "preparationMs": 11.099999994039536,
+        "seekMs": 2.5,
+        "loopArmMs": 2.199999988079071,
+        "waveformAfterReadyMs": 26.80000001192093,
+        "waveformFromOpenMs": 37.900000005960464,
+        "seekResult": {
+          "epoch": 2,
+          "requestedFrame": 396900,
+          "pcmFrame": 432000,
+          "actualMediaFrame": 396900,
+          "result": "AnchorAndDiscard",
+          "loopEnabled": false
+        },
+        "outputRate": 48000,
+        "preparationResources": {
+          "type": "measurement-resources",
+          "reads": 13,
+          "readBytes": 9456,
+          "maxReadBytes": 2048,
+          "readWaitMs": 0.8999999761581421,
+          "yields": 0,
+          "yieldWaitMs": 0,
+          "wasmBytes": 16777216
+        },
+        "seekResources": {
+          "type": "measurement-resources",
+          "reads": 23,
+          "readBytes": 21216,
+          "maxReadBytes": 2048,
+          "readWaitMs": 1.4999999403953552,
+          "yields": 0,
+          "yieldWaitMs": 0,
+          "wasmBytes": 16777216
+        },
+        "loopResources": {
+          "type": "measurement-resources",
+          "reads": 33,
+          "readBytes": 32976,
+          "maxReadBytes": 2048,
+          "readWaitMs": 1.8999999165534973,
+          "yields": 0,
+          "yieldWaitMs": 0,
+          "wasmBytes": 16777216
+        },
+        "waveformResources": {
+          "type": "measurement-resources",
+          "reads": 15,
+          "readBytes": 884052,
+          "maxReadBytes": 65536,
+          "readWaitMs": 0.800000011920929,
+          "yields": 3,
+          "yieldWaitMs": 15,
+          "wasmBytes": 16777216
+        },
+        "waveformSummaryBytes": 32672,
+        "waveformIdentity": {
+          "totalFrames": 441000,
+          "sourceRate": 44100,
+          "framesPerBin": 108,
+          "extremaSha256": "d30df82cd28011b47dd286df6c360641324ea28f3b5d622bca9881f956db3bb7"
+        },
+        "workletMemoryBytes": 16777216,
+        "slots": 4,
+        "producer": {
+          "type": "producer-status",
+          "epoch": 3,
+          "polls": 0,
+          "preparedPcmFrames": 436096,
+          "initialAdmittedBlocks": 4,
+          "admittedPcmFrames": 436096,
+          "rejections": 0,
+          "maxPollDelayMilliseconds": 0,
+          "loopRestorePackets": 0,
+          "sourceFramesRead": 396312
+        }
+      },
+      {
+        "fixture": "wav-10s-44100-1.wav",
+        "repetition": 3,
+        "preparationMs": 11.199999988079071,
+        "seekMs": 1.800000011920929,
+        "loopArmMs": 1.699999988079071,
+        "waveformAfterReadyMs": 26.599999994039536,
+        "waveformFromOpenMs": 38,
+        "seekResult": {
+          "epoch": 2,
+          "requestedFrame": 396900,
+          "pcmFrame": 432000,
+          "actualMediaFrame": 396900,
+          "result": "AnchorAndDiscard",
+          "loopEnabled": false
+        },
+        "outputRate": 48000,
+        "preparationResources": {
+          "type": "measurement-resources",
+          "reads": 13,
+          "readBytes": 9456,
+          "maxReadBytes": 2048,
+          "readWaitMs": 0.9999999701976776,
+          "yields": 0,
+          "yieldWaitMs": 0,
+          "wasmBytes": 16777216
+        },
+        "seekResources": {
+          "type": "measurement-resources",
+          "reads": 23,
+          "readBytes": 21216,
+          "maxReadBytes": 2048,
+          "readWaitMs": 1.4999999701976776,
+          "yields": 0,
+          "yieldWaitMs": 0,
+          "wasmBytes": 16777216
+        },
+        "loopResources": {
+          "type": "measurement-resources",
+          "reads": 33,
+          "readBytes": 32976,
+          "maxReadBytes": 2048,
+          "readWaitMs": 1.899999976158142,
+          "yields": 0,
+          "yieldWaitMs": 0,
+          "wasmBytes": 16777216
+        },
+        "waveformResources": {
+          "type": "measurement-resources",
+          "reads": 15,
+          "readBytes": 884052,
+          "maxReadBytes": 65536,
+          "readWaitMs": 1.4000000059604645,
+          "yields": 3,
+          "yieldWaitMs": 15.199999988079071,
+          "wasmBytes": 16777216
+        },
+        "waveformSummaryBytes": 32672,
+        "waveformIdentity": {
+          "totalFrames": 441000,
+          "sourceRate": 44100,
+          "framesPerBin": 108,
+          "extremaSha256": "d30df82cd28011b47dd286df6c360641324ea28f3b5d622bca9881f956db3bb7"
+        },
+        "workletMemoryBytes": 16777216,
+        "slots": 4,
+        "producer": {
+          "type": "producer-status",
+          "epoch": 3,
+          "polls": 0,
+          "preparedPcmFrames": 436096,
+          "initialAdmittedBlocks": 4,
+          "admittedPcmFrames": 436096,
+          "rejections": 0,
+          "maxPollDelayMilliseconds": 0,
+          "loopRestorePackets": 0,
+          "sourceFramesRead": 396312
+        }
+      },
+      {
+        "fixture": "wav-180s-48000-2.wav",
+        "repetition": 1,
+        "preparationMs": 11.5,
+        "seekMs": 2.2999999821186066,
+        "loopArmMs": 1.9000000059604645,
+        "waveformAfterReadyMs": 627.0999999940395,
+        "waveformFromOpenMs": 638.5999999940395,
+        "seekResult": {
+          "epoch": 2,
+          "requestedFrame": 7776000,
+          "pcmFrame": 7776000,
+          "actualMediaFrame": 7776000,
+          "result": "Exact",
+          "loopEnabled": false
+        },
+        "outputRate": 48000,
+        "preparationResources": {
+          "type": "measurement-resources",
+          "reads": 9,
+          "readBytes": 24624,
+          "maxReadBytes": 6144,
+          "readWaitMs": 0.699999988079071,
+          "yields": 0,
+          "yieldWaitMs": 0,
+          "wasmBytes": 16777216
+        },
+        "seekResources": {
+          "type": "measurement-resources",
+          "reads": 13,
+          "readBytes": 49200,
+          "maxReadBytes": 6144,
+          "readWaitMs": 1.699999988079071,
+          "yields": 0,
+          "yieldWaitMs": 0,
+          "wasmBytes": 16777216
+        },
+        "loopResources": {
+          "type": "measurement-resources",
+          "reads": 17,
+          "readBytes": 73776,
+          "maxReadBytes": 6144,
+          "readWaitMs": 2.5999999940395355,
+          "yields": 0,
+          "yieldWaitMs": 0,
+          "wasmBytes": 16777216
+        },
+        "waveformResources": {
+          "type": "measurement-resources",
+          "reads": 845,
+          "readBytes": 55292932,
+          "maxReadBytes": 65536,
+          "readWaitMs": 139.4000000357628,
+          "yields": 66,
+          "yieldWaitMs": 326.30000001192093,
+          "wasmBytes": 16777216
+        },
+        "waveformSummaryBytes": 32760,
+        "waveformIdentity": {
+          "totalFrames": 8640000,
+          "sourceRate": 48000,
+          "framesPerBin": 2110,
+          "extremaSha256": "5983f939e1a97ac2ab94e97d620c6dc66dc80ae02d9a5e41da29d45077bff2fe"
+        },
+        "workletMemoryBytes": 16777216,
+        "slots": 4,
+        "producer": {
+          "type": "producer-status",
+          "epoch": 3,
+          "polls": 0,
+          "preparedPcmFrames": 7780096,
+          "initialAdmittedBlocks": 4,
+          "admittedPcmFrames": 7780096,
+          "rejections": 0,
+          "maxPollDelayMilliseconds": 0,
+          "loopRestorePackets": 0,
+          "sourceFramesRead": 7776000
+        }
+      },
+      {
+        "fixture": "wav-180s-48000-2.wav",
+        "repetition": 2,
+        "preparationMs": 11,
+        "seekMs": 1.399999976158142,
+        "loopArmMs": 1.4000000059604645,
+        "waveformAfterReadyMs": 608.2000000178814,
+        "waveformFromOpenMs": 619.2000000178814,
+        "seekResult": {
+          "epoch": 2,
+          "requestedFrame": 7776000,
+          "pcmFrame": 7776000,
+          "actualMediaFrame": 7776000,
+          "result": "Exact",
+          "loopEnabled": false
+        },
+        "outputRate": 48000,
+        "preparationResources": {
+          "type": "measurement-resources",
+          "reads": 9,
+          "readBytes": 24624,
+          "maxReadBytes": 6144,
+          "readWaitMs": 0.5999999642372131,
+          "yields": 0,
+          "yieldWaitMs": 0,
+          "wasmBytes": 16777216
+        },
+        "seekResources": {
+          "type": "measurement-resources",
+          "reads": 13,
+          "readBytes": 49200,
+          "maxReadBytes": 6144,
+          "readWaitMs": 1.1999999582767487,
+          "yields": 0,
+          "yieldWaitMs": 0,
+          "wasmBytes": 16777216
+        },
+        "loopResources": {
+          "type": "measurement-resources",
+          "reads": 17,
+          "readBytes": 73776,
+          "maxReadBytes": 6144,
+          "readWaitMs": 1.899999976158142,
+          "yields": 0,
+          "yieldWaitMs": 0,
+          "wasmBytes": 16777216
+        },
+        "waveformResources": {
+          "type": "measurement-resources",
+          "reads": 845,
+          "readBytes": 55292932,
+          "maxReadBytes": 65536,
+          "readWaitMs": 126.40000009536743,
+          "yields": 66,
+          "yieldWaitMs": 322.7000000476837,
+          "wasmBytes": 16777216
+        },
+        "waveformSummaryBytes": 32760,
+        "waveformIdentity": {
+          "totalFrames": 8640000,
+          "sourceRate": 48000,
+          "framesPerBin": 2110,
+          "extremaSha256": "5983f939e1a97ac2ab94e97d620c6dc66dc80ae02d9a5e41da29d45077bff2fe"
+        },
+        "workletMemoryBytes": 16777216,
+        "slots": 4,
+        "producer": {
+          "type": "producer-status",
+          "epoch": 3,
+          "polls": 0,
+          "preparedPcmFrames": 7780096,
+          "initialAdmittedBlocks": 4,
+          "admittedPcmFrames": 7780096,
+          "rejections": 0,
+          "maxPollDelayMilliseconds": 0,
+          "loopRestorePackets": 0,
+          "sourceFramesRead": 7776000
+        }
+      },
+      {
+        "fixture": "wav-180s-48000-2.wav",
+        "repetition": 3,
+        "preparationMs": 11.400000005960464,
+        "seekMs": 1.7000000178813934,
+        "loopArmMs": 1.5,
+        "waveformAfterReadyMs": 621.5999999940395,
+        "waveformFromOpenMs": 633,
+        "seekResult": {
+          "epoch": 2,
+          "requestedFrame": 7776000,
+          "pcmFrame": 7776000,
+          "actualMediaFrame": 7776000,
+          "result": "Exact",
+          "loopEnabled": false
+        },
+        "outputRate": 48000,
+        "preparationResources": {
+          "type": "measurement-resources",
+          "reads": 9,
+          "readBytes": 24624,
+          "maxReadBytes": 6144,
+          "readWaitMs": 0.5999999642372131,
+          "yields": 0,
+          "yieldWaitMs": 0,
+          "wasmBytes": 16777216
+        },
+        "seekResources": {
+          "type": "measurement-resources",
+          "reads": 13,
+          "readBytes": 49200,
+          "maxReadBytes": 6144,
+          "readWaitMs": 1.4999999403953552,
+          "yields": 0,
+          "yieldWaitMs": 0,
+          "wasmBytes": 16777216
+        },
+        "loopResources": {
+          "type": "measurement-resources",
+          "reads": 17,
+          "readBytes": 73776,
+          "maxReadBytes": 6144,
+          "readWaitMs": 1.899999976158142,
+          "yields": 0,
+          "yieldWaitMs": 0,
+          "wasmBytes": 16777216
+        },
+        "waveformResources": {
+          "type": "measurement-resources",
+          "reads": 845,
+          "readBytes": 55292932,
+          "maxReadBytes": 65536,
+          "readWaitMs": 132.49999970197678,
+          "yields": 66,
+          "yieldWaitMs": 322.6000000834465,
+          "wasmBytes": 16777216
+        },
+        "waveformSummaryBytes": 32760,
+        "waveformIdentity": {
+          "totalFrames": 8640000,
+          "sourceRate": 48000,
+          "framesPerBin": 2110,
+          "extremaSha256": "5983f939e1a97ac2ab94e97d620c6dc66dc80ae02d9a5e41da29d45077bff2fe"
+        },
+        "workletMemoryBytes": 16777216,
+        "slots": 4,
+        "producer": {
+          "type": "producer-status",
+          "epoch": 3,
+          "polls": 0,
+          "preparedPcmFrames": 7780096,
+          "initialAdmittedBlocks": 4,
+          "admittedPcmFrames": 7780096,
+          "rejections": 0,
+          "maxPollDelayMilliseconds": 0,
+          "loopRestorePackets": 0,
+          "sourceFramesRead": 7776000
+        }
+      },
+      {
+        "fixture": "cbr-10s-44100-1.mp3",
+        "repetition": 1,
+        "preparationMs": 17.900000005960464,
+        "seekMs": 6.300000011920929,
+        "loopArmMs": 12.099999994039536,
+        "waveformAfterReadyMs": 68.59999999403954,
+        "waveformFromOpenMs": 86.5,
+        "seekResult": {
+          "epoch": 2,
+          "requestedFrame": 396900,
+          "pcmFrame": 432000,
+          "actualMediaFrame": 396900,
+          "result": "AnchorAndDiscard",
+          "loopEnabled": false
+        },
+        "outputRate": 48000,
+        "preparationResources": {
+          "type": "measurement-resources",
+          "reads": 7,
+          "readBytes": 292787,
+          "maxReadBytes": 65536,
+          "readWaitMs": 0.6000000238418579,
+          "yields": 12,
+          "yieldWaitMs": 0,
+          "wasmBytes": 16777216
+        },
+        "seekResources": {
+          "type": "measurement-resources",
+          "reads": 9,
+          "readBytes": 388416,
+          "maxReadBytes": 65536,
+          "readWaitMs": 0.8000000417232513,
+          "yields": 23,
+          "yieldWaitMs": 0,
+          "wasmBytes": 16777216
+        },
+        "loopResources": {
+          "type": "measurement-resources",
+          "reads": 15,
+          "readBytes": 710746,
+          "maxReadBytes": 65536,
+          "readWaitMs": 1.4000000059604645,
+          "yields": 45,
+          "yieldWaitMs": 0.09999999403953552,
+          "wasmBytes": 16777216
+        },
+        "waveformResources": {
+          "type": "measurement-resources",
+          "reads": 9,
+          "readBytes": 388416,
+          "maxReadBytes": 65536,
+          "readWaitMs": 0.7999999821186066,
+          "yields": 9,
+          "yieldWaitMs": 45.099999994039536,
+          "wasmBytes": 16777216
+        },
+        "waveformSummaryBytes": 32672,
+        "waveformIdentity": {
+          "totalFrames": 441000,
+          "sourceRate": 44100,
+          "framesPerBin": 108,
+          "extremaSha256": "fb48bcf8caf2cef27aad3fb6d2eba0ac36176e4d895816cb104ae549256e1656"
+        },
+        "workletMemoryBytes": 16777216,
+        "slots": 4,
+        "producer": {
+          "type": "producer-status",
+          "epoch": 3,
+          "polls": 0,
+          "preparedPcmFrames": 436096,
+          "initialAdmittedBlocks": 4,
+          "admittedPcmFrames": 436096,
+          "rejections": 0,
+          "maxPollDelayMilliseconds": 0,
+          "loopRestorePackets": 0,
+          "sourceFramesRead": 396312
+        }
+      },
+      {
+        "fixture": "cbr-10s-44100-1.mp3",
+        "repetition": 2,
+        "preparationMs": 17.200000017881393,
+        "seekMs": 6.699999988079071,
+        "loopArmMs": 11.5,
+        "waveformAfterReadyMs": 69,
+        "waveformFromOpenMs": 86.2000000178814,
+        "seekResult": {
+          "epoch": 2,
+          "requestedFrame": 396900,
+          "pcmFrame": 432000,
+          "actualMediaFrame": 396900,
+          "result": "AnchorAndDiscard",
+          "loopEnabled": false
+        },
+        "outputRate": 48000,
+        "preparationResources": {
+          "type": "measurement-resources",
+          "reads": 7,
+          "readBytes": 292787,
+          "maxReadBytes": 65536,
+          "readWaitMs": 0.4999999701976776,
+          "yields": 12,
+          "yieldWaitMs": 0,
+          "wasmBytes": 16777216
+        },
+        "seekResources": {
+          "type": "measurement-resources",
+          "reads": 9,
+          "readBytes": 388416,
+          "maxReadBytes": 65536,
+          "readWaitMs": 0.699999988079071,
+          "yields": 23,
+          "yieldWaitMs": 0.09999999403953552,
+          "wasmBytes": 16777216
+        },
+        "loopResources": {
+          "type": "measurement-resources",
+          "reads": 15,
+          "readBytes": 710746,
+          "maxReadBytes": 65536,
+          "readWaitMs": 1.199999988079071,
+          "yields": 45,
+          "yieldWaitMs": 0.29999998211860657,
+          "wasmBytes": 16777216
+        },
+        "waveformResources": {
+          "type": "measurement-resources",
+          "reads": 9,
+          "readBytes": 388416,
+          "maxReadBytes": 65536,
+          "readWaitMs": 0.800000011920929,
+          "yields": 9,
+          "yieldWaitMs": 45.70000001788139,
+          "wasmBytes": 16777216
+        },
+        "waveformSummaryBytes": 32672,
+        "waveformIdentity": {
+          "totalFrames": 441000,
+          "sourceRate": 44100,
+          "framesPerBin": 108,
+          "extremaSha256": "fb48bcf8caf2cef27aad3fb6d2eba0ac36176e4d895816cb104ae549256e1656"
+        },
+        "workletMemoryBytes": 16777216,
+        "slots": 4,
+        "producer": {
+          "type": "producer-status",
+          "epoch": 3,
+          "polls": 0,
+          "preparedPcmFrames": 436096,
+          "initialAdmittedBlocks": 4,
+          "admittedPcmFrames": 436096,
+          "rejections": 0,
+          "maxPollDelayMilliseconds": 0,
+          "loopRestorePackets": 0,
+          "sourceFramesRead": 396312
+        }
+      },
+      {
+        "fixture": "cbr-10s-44100-1.mp3",
+        "repetition": 3,
+        "preparationMs": 18.400000005960464,
+        "seekMs": 6.5,
+        "loopArmMs": 11.599999994039536,
+        "waveformAfterReadyMs": 69.19999998807907,
+        "waveformFromOpenMs": 87.59999999403954,
+        "seekResult": {
+          "epoch": 2,
+          "requestedFrame": 396900,
+          "pcmFrame": 432000,
+          "actualMediaFrame": 396900,
+          "result": "AnchorAndDiscard",
+          "loopEnabled": false
+        },
+        "outputRate": 48000,
+        "preparationResources": {
+          "type": "measurement-resources",
+          "reads": 7,
+          "readBytes": 292787,
+          "maxReadBytes": 65536,
+          "readWaitMs": 0.5,
+          "yields": 12,
+          "yieldWaitMs": 0.09999999403953552,
+          "wasmBytes": 16777216
+        },
+        "seekResources": {
+          "type": "measurement-resources",
+          "reads": 9,
+          "readBytes": 388416,
+          "maxReadBytes": 65536,
+          "readWaitMs": 0.699999988079071,
+          "yields": 23,
+          "yieldWaitMs": 0.19999998807907104,
+          "wasmBytes": 16777216
+        },
+        "loopResources": {
+          "type": "measurement-resources",
+          "reads": 15,
+          "readBytes": 710746,
+          "maxReadBytes": 65536,
+          "readWaitMs": 1.0999999940395355,
+          "yields": 45,
+          "yieldWaitMs": 0.4000000059604645,
+          "wasmBytes": 16777216
+        },
+        "waveformResources": {
+          "type": "measurement-resources",
+          "reads": 9,
+          "readBytes": 388416,
+          "maxReadBytes": 65536,
+          "readWaitMs": 0.5999999940395355,
+          "yields": 9,
+          "yieldWaitMs": 45.400000005960464,
+          "wasmBytes": 16777216
+        },
+        "waveformSummaryBytes": 32672,
+        "waveformIdentity": {
+          "totalFrames": 441000,
+          "sourceRate": 44100,
+          "framesPerBin": 108,
+          "extremaSha256": "fb48bcf8caf2cef27aad3fb6d2eba0ac36176e4d895816cb104ae549256e1656"
+        },
+        "workletMemoryBytes": 16777216,
+        "slots": 4,
+        "producer": {
+          "type": "producer-status",
+          "epoch": 3,
+          "polls": 0,
+          "preparedPcmFrames": 436096,
+          "initialAdmittedBlocks": 4,
+          "admittedPcmFrames": 436096,
+          "rejections": 0,
+          "maxPollDelayMilliseconds": 0,
+          "loopRestorePackets": 0,
+          "sourceFramesRead": 396312
+        }
+      },
+      {
+        "fixture": "vbr-10s-48000-2.mp3",
+        "repetition": 1,
+        "preparationMs": 54.70000001788139,
+        "seekMs": 38.5,
+        "loopArmMs": 94.59999999403954,
+        "waveformAfterReadyMs": 75.5,
+        "waveformFromOpenMs": 130.2000000178814,
+        "seekResult": {
+          "epoch": 2,
+          "requestedFrame": 432000,
+          "pcmFrame": 432000,
+          "actualMediaFrame": 432000,
+          "result": "AnchorAndDiscard",
+          "loopEnabled": false
+        },
+        "outputRate": 48000,
+        "preparationResources": {
+          "type": "measurement-resources",
+          "reads": 2,
+          "readBytes": 62572,
+          "maxReadBytes": 62568,
+          "readWaitMs": 0.19999998807907104,
+          "yields": 13,
+          "yieldWaitMs": 34.099999994039536,
+          "wasmBytes": 16777216
+        },
+        "seekResources": {
+          "type": "measurement-resources",
+          "reads": 2,
+          "readBytes": 62572,
+          "maxReadBytes": 62568,
+          "readWaitMs": 0.19999998807907104,
+          "yields": 25,
+          "yieldWaitMs": 64.70000004768372,
+          "wasmBytes": 16777216
+        },
+        "loopResources": {
+          "type": "measurement-resources",
+          "reads": 2,
+          "readBytes": 62572,
+          "maxReadBytes": 62568,
+          "readWaitMs": 0.19999998807907104,
+          "yields": 48,
+          "yieldWaitMs": 145.50000008940697,
+          "wasmBytes": 16777216
+        },
+        "waveformResources": {
+          "type": "measurement-resources",
+          "reads": 2,
+          "readBytes": 62572,
+          "maxReadBytes": 62568,
+          "readWaitMs": 0.19999998807907104,
+          "yields": 9,
+          "yieldWaitMs": 45.29999998211861,
+          "wasmBytes": 16777216
+        },
+        "waveformSummaryBytes": 32544,
+        "waveformIdentity": {
+          "totalFrames": 480000,
+          "sourceRate": 48000,
+          "framesPerBin": 118,
+          "extremaSha256": "63f1e9b57e3724fb06e1607d0a8b0916fea38a8c6136fd6762b61b57c02db80a"
+        },
+        "workletMemoryBytes": 16777216,
+        "slots": 4,
+        "producer": {
+          "type": "producer-status",
+          "epoch": 3,
+          "polls": 0,
+          "preparedPcmFrames": 436096,
+          "initialAdmittedBlocks": 4,
+          "admittedPcmFrames": 436096,
+          "rejections": 0,
+          "maxPollDelayMilliseconds": 0,
+          "loopRestorePackets": 0,
+          "sourceFramesRead": 432000
+        }
+      },
+      {
+        "fixture": "vbr-10s-48000-2.mp3",
+        "repetition": 2,
+        "preparationMs": 52.599999994039536,
+        "seekMs": 38.20000001788139,
+        "loopArmMs": 99.69999998807907,
+        "waveformAfterReadyMs": 74.69999998807907,
+        "waveformFromOpenMs": 127.2999999821186,
+        "seekResult": {
+          "epoch": 2,
+          "requestedFrame": 432000,
+          "pcmFrame": 432000,
+          "actualMediaFrame": 432000,
+          "result": "AnchorAndDiscard",
+          "loopEnabled": false
+        },
+        "outputRate": 48000,
+        "preparationResources": {
+          "type": "measurement-resources",
+          "reads": 2,
+          "readBytes": 62572,
+          "maxReadBytes": 62568,
+          "readWaitMs": 0.19999998807907104,
+          "yields": 13,
+          "yieldWaitMs": 34.000000059604645,
+          "wasmBytes": 16777216
+        },
+        "seekResources": {
+          "type": "measurement-resources",
+          "reads": 2,
+          "readBytes": 62572,
+          "maxReadBytes": 62568,
+          "readWaitMs": 0.19999998807907104,
+          "yields": 25,
+          "yieldWaitMs": 64.20000004768372,
+          "wasmBytes": 16777216
+        },
+        "loopResources": {
+          "type": "measurement-resources",
+          "reads": 2,
+          "readBytes": 62572,
+          "maxReadBytes": 62568,
+          "readWaitMs": 0.19999998807907104,
+          "yields": 48,
+          "yieldWaitMs": 147.70000010728836,
+          "wasmBytes": 16777216
+        },
+        "waveformResources": {
+          "type": "measurement-resources",
+          "reads": 2,
+          "readBytes": 62572,
+          "maxReadBytes": 62568,
+          "readWaitMs": 0,
+          "yields": 9,
+          "yieldWaitMs": 45.49999997019768,
+          "wasmBytes": 16777216
+        },
+        "waveformSummaryBytes": 32544,
+        "waveformIdentity": {
+          "totalFrames": 480000,
+          "sourceRate": 48000,
+          "framesPerBin": 118,
+          "extremaSha256": "63f1e9b57e3724fb06e1607d0a8b0916fea38a8c6136fd6762b61b57c02db80a"
+        },
+        "workletMemoryBytes": 16777216,
+        "slots": 4,
+        "producer": {
+          "type": "producer-status",
+          "epoch": 3,
+          "polls": 0,
+          "preparedPcmFrames": 436096,
+          "initialAdmittedBlocks": 4,
+          "admittedPcmFrames": 436096,
+          "rejections": 0,
+          "maxPollDelayMilliseconds": 0,
+          "loopRestorePackets": 0,
+          "sourceFramesRead": 432000
+        }
+      },
+      {
+        "fixture": "vbr-10s-48000-2.mp3",
+        "repetition": 3,
+        "preparationMs": 57.599999994039536,
+        "seekMs": 38.5,
+        "loopArmMs": 100.2999999821186,
+        "waveformAfterReadyMs": 75.80000001192093,
+        "waveformFromOpenMs": 133.40000000596046,
+        "seekResult": {
+          "epoch": 2,
+          "requestedFrame": 432000,
+          "pcmFrame": 432000,
+          "actualMediaFrame": 432000,
+          "result": "AnchorAndDiscard",
+          "loopEnabled": false
+        },
+        "outputRate": 48000,
+        "preparationResources": {
+          "type": "measurement-resources",
+          "reads": 2,
+          "readBytes": 62572,
+          "maxReadBytes": 62568,
+          "readWaitMs": 0.19999998807907104,
+          "yields": 13,
+          "yieldWaitMs": 34.79999998211861,
+          "wasmBytes": 16777216
+        },
+        "seekResources": {
+          "type": "measurement-resources",
+          "reads": 2,
+          "readBytes": 62572,
+          "maxReadBytes": 62568,
+          "readWaitMs": 0.19999998807907104,
+          "yields": 25,
+          "yieldWaitMs": 64.99999997019768,
+          "wasmBytes": 16777216
+        },
+        "loopResources": {
+          "type": "measurement-resources",
+          "reads": 2,
+          "readBytes": 62572,
+          "maxReadBytes": 62568,
+          "readWaitMs": 0.19999998807907104,
+          "yields": 48,
+          "yieldWaitMs": 148.79999992251396,
+          "wasmBytes": 16777216
+        },
+        "waveformResources": {
+          "type": "measurement-resources",
+          "reads": 2,
+          "readBytes": 62572,
+          "maxReadBytes": 62568,
+          "readWaitMs": 0.20000001788139343,
+          "yields": 9,
+          "yieldWaitMs": 44.50000002980232,
+          "wasmBytes": 16777216
+        },
+        "waveformSummaryBytes": 32544,
+        "waveformIdentity": {
+          "totalFrames": 480000,
+          "sourceRate": 48000,
+          "framesPerBin": 118,
+          "extremaSha256": "63f1e9b57e3724fb06e1607d0a8b0916fea38a8c6136fd6762b61b57c02db80a"
+        },
+        "workletMemoryBytes": 16777216,
+        "slots": 4,
+        "producer": {
+          "type": "producer-status",
+          "epoch": 3,
+          "polls": 0,
+          "preparedPcmFrames": 436096,
+          "initialAdmittedBlocks": 4,
+          "admittedPcmFrames": 436096,
+          "rejections": 0,
+          "maxPollDelayMilliseconds": 0,
+          "loopRestorePackets": 0,
+          "sourceFramesRead": 432000
+        }
+      },
+      {
+        "fixture": "cbr-180s-48000-2.mp3",
+        "repetition": 1,
+        "preparationMs": 181.09999999403954,
+        "seekMs": 146.2000000178814,
+        "loopArmMs": 291.09999999403954,
+        "waveformAfterReadyMs": 1333.9000000059605,
+        "waveformFromOpenMs": 1515,
+        "seekResult": {
+          "epoch": 2,
+          "requestedFrame": 7776000,
+          "pcmFrame": 7776000,
+          "actualMediaFrame": 7776000,
+          "result": "AnchorAndDiscard",
+          "loopEnabled": false
+        },
+        "outputRate": 48000,
+        "preparationResources": {
+          "type": "measurement-resources",
+          "reads": 49,
+          "readBytes": 3023236,
+          "maxReadBytes": 65536,
+          "readWaitMs": 4.800000011920929,
+          "yields": 234,
+          "yieldWaitMs": 0.7999999821186066,
+          "wasmBytes": 16777216
+        },
+        "seekResources": {
+          "type": "measurement-resources",
+          "reads": 88,
+          "readBytes": 5579140,
+          "maxReadBytes": 65536,
+          "readWaitMs": 8.39999994635582,
+          "yields": 445,
+          "yieldWaitMs": 1.7999999821186066,
+          "wasmBytes": 16777216
+        },
+        "loopResources": {
+          "type": "measurement-resources",
+          "reads": 168,
+          "readBytes": 10822020,
+          "maxReadBytes": 65536,
+          "readWaitMs": 16.499999940395355,
+          "yields": 867,
+          "yieldWaitMs": 3.7999999821186066,
+          "wasmBytes": 16777216
+        },
+        "waveformResources": {
+          "type": "measurement-resources",
+          "reads": 93,
+          "readBytes": 5849348,
+          "maxReadBytes": 65536,
+          "readWaitMs": 11.299999952316284,
+          "yields": 175,
+          "yieldWaitMs": 872.5999999344349,
+          "wasmBytes": 16777216
+        },
+        "waveformSummaryBytes": 32760,
+        "waveformIdentity": {
+          "totalFrames": 8640000,
+          "sourceRate": 48000,
+          "framesPerBin": 2110,
+          "extremaSha256": "5196296aa429758c7e0afe2d269e65d714451f6ca8b23e9b8af1aede7a7fb1c7"
+        },
+        "workletMemoryBytes": 16777216,
+        "slots": 4,
+        "producer": {
+          "type": "producer-status",
+          "epoch": 3,
+          "polls": 0,
+          "preparedPcmFrames": 7780096,
+          "initialAdmittedBlocks": 4,
+          "admittedPcmFrames": 7780096,
+          "rejections": 0,
+          "maxPollDelayMilliseconds": 0,
+          "loopRestorePackets": 0,
+          "sourceFramesRead": 7776000
+        }
+      },
+      {
+        "fixture": "cbr-180s-48000-2.mp3",
+        "repetition": 2,
+        "preparationMs": 175.30000001192093,
+        "seekMs": 142.40000000596046,
+        "loopArmMs": 283.5,
+        "waveformAfterReadyMs": 1325,
+        "waveformFromOpenMs": 1500.300000011921,
+        "seekResult": {
+          "epoch": 2,
+          "requestedFrame": 7776000,
+          "pcmFrame": 7776000,
+          "actualMediaFrame": 7776000,
+          "result": "AnchorAndDiscard",
+          "loopEnabled": false
+        },
+        "outputRate": 48000,
+        "preparationResources": {
+          "type": "measurement-resources",
+          "reads": 49,
+          "readBytes": 3023236,
+          "maxReadBytes": 65536,
+          "readWaitMs": 4.1999998688697815,
+          "yields": 234,
+          "yieldWaitMs": 1,
+          "wasmBytes": 16777216
+        },
+        "seekResources": {
+          "type": "measurement-resources",
+          "reads": 88,
+          "readBytes": 5579140,
+          "maxReadBytes": 65536,
+          "readWaitMs": 6.999999970197678,
+          "yields": 445,
+          "yieldWaitMs": 1.9000000357627869,
+          "wasmBytes": 16777216
+        },
+        "loopResources": {
+          "type": "measurement-resources",
+          "reads": 168,
+          "readBytes": 10822020,
+          "maxReadBytes": 65536,
+          "readWaitMs": 13.299999952316284,
+          "yields": 867,
+          "yieldWaitMs": 3.600000023841858,
+          "wasmBytes": 16777216
+        },
+        "waveformResources": {
+          "type": "measurement-resources",
+          "reads": 93,
+          "readBytes": 5849348,
+          "maxReadBytes": 65536,
+          "readWaitMs": 10.300000071525574,
+          "yields": 175,
+          "yieldWaitMs": 861.8000001013279,
+          "wasmBytes": 16777216
+        },
+        "waveformSummaryBytes": 32760,
+        "waveformIdentity": {
+          "totalFrames": 8640000,
+          "sourceRate": 48000,
+          "framesPerBin": 2110,
+          "extremaSha256": "5196296aa429758c7e0afe2d269e65d714451f6ca8b23e9b8af1aede7a7fb1c7"
+        },
+        "workletMemoryBytes": 16777216,
+        "slots": 4,
+        "producer": {
+          "type": "producer-status",
+          "epoch": 3,
+          "polls": 0,
+          "preparedPcmFrames": 7780096,
+          "initialAdmittedBlocks": 4,
+          "admittedPcmFrames": 7780096,
+          "rejections": 0,
+          "maxPollDelayMilliseconds": 0,
+          "loopRestorePackets": 0,
+          "sourceFramesRead": 7776000
+        }
+      },
+      {
+        "fixture": "cbr-180s-48000-2.mp3",
+        "repetition": 3,
+        "preparationMs": 170.5,
+        "seekMs": 141.5,
+        "loopArmMs": 288.40000000596046,
+        "waveformAfterReadyMs": 1360.4000000059605,
+        "waveformFromOpenMs": 1531,
+        "seekResult": {
+          "epoch": 2,
+          "requestedFrame": 7776000,
+          "pcmFrame": 7776000,
+          "actualMediaFrame": 7776000,
+          "result": "AnchorAndDiscard",
+          "loopEnabled": false
+        },
+        "outputRate": 48000,
+        "preparationResources": {
+          "type": "measurement-resources",
+          "reads": 49,
+          "readBytes": 3023236,
+          "maxReadBytes": 65536,
+          "readWaitMs": 4.199999898672104,
+          "yields": 234,
+          "yieldWaitMs": 0.800000011920929,
+          "wasmBytes": 16777216
+        },
+        "seekResources": {
+          "type": "measurement-resources",
+          "reads": 88,
+          "readBytes": 5579140,
+          "maxReadBytes": 65536,
+          "readWaitMs": 8.800000041723251,
+          "yields": 445,
+          "yieldWaitMs": 1.8000000417232513,
+          "wasmBytes": 16777216
+        },
+        "loopResources": {
+          "type": "measurement-resources",
+          "reads": 168,
+          "readBytes": 10822020,
+          "maxReadBytes": 65536,
+          "readWaitMs": 14.60000005364418,
+          "yields": 867,
+          "yieldWaitMs": 3.6000000834465027,
+          "wasmBytes": 16777216
+        },
+        "waveformResources": {
+          "type": "measurement-resources",
+          "reads": 93,
+          "readBytes": 5849348,
+          "maxReadBytes": 65536,
+          "readWaitMs": 11.100000023841858,
+          "yields": 175,
+          "yieldWaitMs": 867.1999999582767,
+          "wasmBytes": 16777216
+        },
+        "waveformSummaryBytes": 32760,
+        "waveformIdentity": {
+          "totalFrames": 8640000,
+          "sourceRate": 48000,
+          "framesPerBin": 2110,
+          "extremaSha256": "5196296aa429758c7e0afe2d269e65d714451f6ca8b23e9b8af1aede7a7fb1c7"
+        },
+        "workletMemoryBytes": 16777216,
+        "slots": 4,
+        "producer": {
+          "type": "producer-status",
+          "epoch": 3,
+          "polls": 0,
+          "preparedPcmFrames": 7780096,
+          "initialAdmittedBlocks": 4,
+          "admittedPcmFrames": 7780096,
+          "rejections": 0,
+          "maxPollDelayMilliseconds": 0,
+          "loopRestorePackets": 0,
+          "sourceFramesRead": 7776000
+        }
+      },
+      {
+        "fixture": "vbr-180s-44100-2.mp3",
+        "repetition": 1,
+        "preparationMs": 712.4000000059605,
+        "seekMs": 621,
+        "loopArmMs": 1268.300000011921,
+        "waveformAfterReadyMs": 1149,
+        "waveformFromOpenMs": 1861.4000000059605,
+        "seekResult": {
+          "epoch": 2,
+          "requestedFrame": 7144200,
+          "pcmFrame": 7776000,
+          "actualMediaFrame": 7144200,
+          "result": "AnchorAndDiscard",
+          "loopEnabled": false
+        },
+        "outputRate": 48000,
+        "preparationResources": {
+          "type": "measurement-resources",
+          "reads": 21,
+          "readBytes": 1217924,
+          "maxReadBytes": 65536,
+          "readWaitMs": 2.600000023841858,
+          "yields": 215,
+          "yieldWaitMs": 559.4999999701977,
+          "wasmBytes": 16777216
+        },
+        "seekResources": {
+          "type": "measurement-resources",
+          "reads": 35,
+          "readBytes": 2135428,
+          "maxReadBytes": 65536,
+          "readWaitMs": 3.9000000059604645,
+          "yields": 409,
+          "yieldWaitMs": 1065.2000000178814,
+          "wasmBytes": 16777216
+        },
+        "loopResources": {
+          "type": "measurement-resources",
+          "reads": 65,
+          "readBytes": 4101508,
+          "maxReadBytes": 65536,
+          "readWaitMs": 7.700000047683716,
+          "yields": 797,
+          "yieldWaitMs": 2089.000000178814,
+          "wasmBytes": 16777216
+        },
+        "waveformResources": {
+          "type": "measurement-resources",
+          "reads": 37,
+          "readBytes": 2238926,
+          "maxReadBytes": 65536,
+          "readWaitMs": 4.5999999940395355,
+          "yields": 161,
+          "yieldWaitMs": 795.2999999523163,
+          "wasmBytes": 16777216
+        },
+        "waveformSummaryBytes": 32768,
+        "waveformIdentity": {
+          "totalFrames": 7938000,
+          "sourceRate": 44100,
+          "framesPerBin": 1938,
+          "extremaSha256": "cf3015542872360aada77ad0a2fc2ecea84a536e340c24dadac41663f27cb6f2"
+        },
+        "workletMemoryBytes": 16777216,
+        "slots": 4,
+        "producer": {
+          "type": "producer-status",
+          "epoch": 3,
+          "polls": 0,
+          "preparedPcmFrames": 7780096,
+          "initialAdmittedBlocks": 4,
+          "admittedPcmFrames": 7780096,
+          "rejections": 0,
+          "maxPollDelayMilliseconds": 0,
+          "loopRestorePackets": 0,
+          "sourceFramesRead": 7143024
+        }
+      },
+      {
+        "fixture": "vbr-180s-44100-2.mp3",
+        "repetition": 2,
+        "preparationMs": 696.8999999761581,
+        "seekMs": 633.0999999940395,
+        "loopArmMs": 1297.9000000059605,
+        "waveformAfterReadyMs": 1143.300000011921,
+        "waveformFromOpenMs": 1840.199999988079,
+        "seekResult": {
+          "epoch": 2,
+          "requestedFrame": 7144200,
+          "pcmFrame": 7776000,
+          "actualMediaFrame": 7144200,
+          "result": "AnchorAndDiscard",
+          "loopEnabled": false
+        },
+        "outputRate": 48000,
+        "preparationResources": {
+          "type": "measurement-resources",
+          "reads": 21,
+          "readBytes": 1217924,
+          "maxReadBytes": 65536,
+          "readWaitMs": 2.1000000536441803,
+          "yields": 215,
+          "yieldWaitMs": 560,
+          "wasmBytes": 16777216
+        },
+        "seekResources": {
+          "type": "measurement-resources",
+          "reads": 35,
+          "readBytes": 2135428,
+          "maxReadBytes": 65536,
+          "readWaitMs": 3.600000113248825,
+          "yields": 409,
+          "yieldWaitMs": 1076.9999999701977,
+          "wasmBytes": 16777216
+        },
+        "loopResources": {
+          "type": "measurement-resources",
+          "reads": 65,
+          "readBytes": 4101508,
+          "maxReadBytes": 65536,
+          "readWaitMs": 7.600000083446503,
+          "yields": 797,
+          "yieldWaitMs": 2109.499999821186,
+          "wasmBytes": 16777216
+        },
+        "waveformResources": {
+          "type": "measurement-resources",
+          "reads": 37,
+          "readBytes": 2238926,
+          "maxReadBytes": 65536,
+          "readWaitMs": 4.600000023841858,
+          "yields": 161,
+          "yieldWaitMs": 803.4000000357628,
+          "wasmBytes": 16777216
+        },
+        "waveformSummaryBytes": 32768,
+        "waveformIdentity": {
+          "totalFrames": 7938000,
+          "sourceRate": 44100,
+          "framesPerBin": 1938,
+          "extremaSha256": "cf3015542872360aada77ad0a2fc2ecea84a536e340c24dadac41663f27cb6f2"
+        },
+        "workletMemoryBytes": 16777216,
+        "slots": 4,
+        "producer": {
+          "type": "producer-status",
+          "epoch": 3,
+          "polls": 0,
+          "preparedPcmFrames": 7780096,
+          "initialAdmittedBlocks": 4,
+          "admittedPcmFrames": 7780096,
+          "rejections": 0,
+          "maxPollDelayMilliseconds": 0,
+          "loopRestorePackets": 0,
+          "sourceFramesRead": 7143024
+        }
+      },
+      {
+        "fixture": "vbr-180s-44100-2.mp3",
+        "repetition": 3,
+        "preparationMs": 768.5999999940395,
+        "seekMs": 640.5,
+        "loopArmMs": 1342,
+        "waveformAfterReadyMs": 1171.4000000059605,
+        "waveformFromOpenMs": 1940.0999999940395,
+        "seekResult": {
+          "epoch": 2,
+          "requestedFrame": 7144200,
+          "pcmFrame": 7776000,
+          "actualMediaFrame": 7144200,
+          "result": "AnchorAndDiscard",
+          "loopEnabled": false
+        },
+        "outputRate": 48000,
+        "preparationResources": {
+          "type": "measurement-resources",
+          "reads": 21,
+          "readBytes": 1217924,
+          "maxReadBytes": 65536,
+          "readWaitMs": 3.600000113248825,
+          "yields": 215,
+          "yieldWaitMs": 565.0000000596046,
+          "wasmBytes": 16777216
+        },
+        "seekResources": {
+          "type": "measurement-resources",
+          "reads": 35,
+          "readBytes": 2135428,
+          "maxReadBytes": 65536,
+          "readWaitMs": 5.200000196695328,
+          "yields": 409,
+          "yieldWaitMs": 1081.0999999940395,
+          "wasmBytes": 16777216
+        },
+        "loopResources": {
+          "type": "measurement-resources",
+          "reads": 65,
+          "readBytes": 4101508,
+          "maxReadBytes": 65536,
+          "readWaitMs": 9.500000149011612,
+          "yields": 797,
+          "yieldWaitMs": 2108.800000011921,
+          "wasmBytes": 16777216
+        },
+        "waveformResources": {
+          "type": "measurement-resources",
+          "reads": 37,
+          "readBytes": 2238926,
+          "maxReadBytes": 65536,
+          "readWaitMs": 4.899999886751175,
+          "yields": 161,
+          "yieldWaitMs": 794,
+          "wasmBytes": 16777216
+        },
+        "waveformSummaryBytes": 32768,
+        "waveformIdentity": {
+          "totalFrames": 7938000,
+          "sourceRate": 44100,
+          "framesPerBin": 1938,
+          "extremaSha256": "cf3015542872360aada77ad0a2fc2ecea84a536e340c24dadac41663f27cb6f2"
+        },
+        "workletMemoryBytes": 16777216,
+        "slots": 4,
+        "producer": {
+          "type": "producer-status",
+          "epoch": 3,
+          "polls": 0,
+          "preparedPcmFrames": 7780096,
+          "initialAdmittedBlocks": 4,
+          "admittedPcmFrames": 7780096,
+          "rejections": 0,
+          "maxPollDelayMilliseconds": 0,
+          "loopRestorePackets": 0,
+          "sourceFramesRead": 7143024
+        }
+      }
+    ],
+    "cancellations": [
+      {
+        "fixture": "wav-180s-48000-2.wav",
+        "operation": "preparation",
+        "trigger": "first worker Blob read in operation",
+        "outcome": "rejected",
+        "rejectMs": 0.19999998807907104,
+        "cleanupMs": 0.19999998807907104
+      },
+      {
+        "fixture": "wav-180s-48000-2.wav",
+        "operation": "seek",
+        "trigger": "first worker Blob read in operation",
+        "outcome": "rejected",
+        "rejectMs": 0.09999999403953552,
+        "cleanupMs": 0.09999999403953552
+      },
+      {
+        "fixture": "wav-180s-48000-2.wav",
+        "operation": "loop",
+        "trigger": "first worker Blob read in operation",
+        "outcome": "rejected",
+        "rejectMs": 0,
+        "cleanupMs": 0
+      },
+      {
+        "fixture": "wav-180s-48000-2.wav",
+        "operation": "waveform",
+        "trigger": "first worker Blob read in operation",
+        "outcome": "rejected",
+        "rejectMs": 0.09999999403953552,
+        "cleanupMs": 0.09999999403953552
+      },
+      {
+        "fixture": "cbr-180s-48000-2.mp3",
+        "operation": "preparation",
+        "trigger": "first worker Blob read in operation",
+        "outcome": "rejected",
+        "rejectMs": 0.10000002384185791,
+        "cleanupMs": 0.10000002384185791
+      },
+      {
+        "fixture": "cbr-180s-48000-2.mp3",
+        "operation": "seek",
+        "trigger": "first worker Blob read in operation",
+        "outcome": "rejected",
+        "rejectMs": 0.09999999403953552,
+        "cleanupMs": 0.09999999403953552
+      },
+      {
+        "fixture": "cbr-180s-48000-2.mp3",
+        "operation": "loop",
+        "trigger": "first worker Blob read in operation",
+        "outcome": "rejected",
+        "rejectMs": 0.09999999403953552,
+        "cleanupMs": 0.09999999403953552
+      },
+      {
+        "fixture": "cbr-180s-48000-2.mp3",
+        "operation": "waveform",
+        "trigger": "first worker Blob read in operation",
+        "outcome": "rejected",
+        "rejectMs": 0,
+        "cleanupMs": 0
+      }
+    ],
+    "longTasks": [],
+    "workersCreated": 46,
+    "workersTerminated": 46,
+    "contextsClosed": 26
+  }
+}
