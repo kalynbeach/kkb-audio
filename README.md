@@ -2,6 +2,14 @@
 
 A Rust foundation for KKB sound, audio, and music software. The long-term system will share a portable render engine across web, native, and offline hosts while keeping host-specific lifecycle, media, and device concerns outside the real-time core.
 
+## Project direction
+
+Kalyn confirmed on October 4, 2026 that `kkb-audio` is the current focus for audio/music work and the planned home of the actual WavePlayer product.
+
+[`wave-player-next`](https://github.com/kalynbeach/wave-player-next) is an older experiment and a historical reference for future development. Use its code and design records as prior work; prioritize current audio/music and WavePlayer development here.
+
+The current player and local catalog remain experimental. This direction does not establish a completed product or production readiness. See [PRODUCT.md](PRODUCT.md) for implemented behavior and limits, and the [canonical architecture](docs/2026-08-28-kkb-audio-system-architecture.md) for accepted decisions and deferred work.
+
 ## Status
 
 The project is in focused render-engine validation. Milestone 1 implements a private offline kernel:
