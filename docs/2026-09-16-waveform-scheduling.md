@@ -1,8 +1,55 @@
-# Bounded waveform scheduling experiment
+# kkb-audio bounded waveform scheduling experiment
 
 Issue [#32](https://github.com/kalynbeach/kkb-audio/issues/32), based on merged measurement baseline `f38691dbe689fc1ac16379c1b1b1c92203ec8977` from [PR #33](https://github.com/kalynbeach/kkb-audio/pull/33).
 
 Keep the candidate. Raising the waveform worker's finite work-check cap from 32 to 256 reduced waveform completion by about 79-81% across the generated matrix. All output hashes and resource bounds matched. The eight-millisecond elapsed-time check and four-millisecond requested yield delay are unchanged. Each individual synchronous work unit can still overshoot the elapsed-time budget before the next check, as before.
+
+## October 4 validation against the current app
+
+Current main `cc34ecd7f4529058db39b00266ff28fb7d28ac64` was merged into the existing PR branch, preserving its history. The measured merge commit is `ce04ba31d39f9e3e9cf04436d556641397f35662`. The later merge of main `e0423ec579e6896692f95ab2668ae67acaddbddb` adds only the confirmed project-direction documentation; runtime and measurement sources remain identical. The production change remains the same worker cap and comment. The measurement runner now builds and serves the current `public/audio-runtime` assets after the Next.js migration. PR #34 remains open for review.
+
+The new paused pair ran on Apple M4 Pro, Darwin 27.0.0, Chromium 154 in Codex's built-in Browser, Bun 1.4.0, Rust 1.98.0, LAME 4.0 and 48 kHz output. The six generated fixtures and three repetitions per fixture are unchanged. Both runs kept the document visible, used fresh contexts and workers, retained every repetition and discarded no warmup. Background host activity was not controlled. The original policy was measured first and the candidate second.
+
+Waveform milliseconds from analysis invocation, median [minimum-maximum]:
+
+| Generated fixture | Original cap 32 | Candidate cap 256 | Reduction |
+| --- | ---: | ---: | ---: |
+| WAV, 10 s, mono, 44.1 kHz | 146.2 [145.8-148.8] | 26.8 [26.6-28.6] | 81.7% |
+| WAV, 180 s, stereo, 48 kHz | 3081.8 [3021.4-3231.3] | 621.6 [608.2-627.1] | 79.8% |
+| CBR MP3, 10 s, mono, 44.1 kHz | 394.6 [391.0-400.2] | 69.0 [68.6-69.2] | 82.5% |
+| VBR MP3, 10 s, stereo, 48 kHz | 442.3 [439.6-460.2] | 75.5 [74.7-75.8] | 82.9% |
+| CBR MP3, 180 s, stereo, 48 kHz | 7742.6 [7565.1-8008.7] | 1333.9 [1325.0-1360.4] | 82.8% |
+| VBR MP3, 180 s, stereo, 44.1 kHz | 6916.6 [6842.2-7011.5] | 1149.0 [1143.3-1171.4] | 83.4% |
+
+All fixture and Wasm hashes, waveform identities and waveform read counts matched across policies and repetitions. The long CBR waveform retained 1406 versus 175 yields, with median yield waiting of 6942.1 versus 867.2 ms. Every sampled Wasm instance remained at 16 MiB, each worklet used four slots, reads stayed within 65536 bytes and each waveform summary stayed within 32 KiB.
+
+Both paused runs passed all eight active-read cancellations and each terminated 46 workers and closed 26 contexts. Cancellation rejection and cleanup each took at most 0.21 ms in these samples. Neither run observed a main-thread long task. These counters establish the measured API cleanup and allocation capacities, not total browser memory or OS thread reclamation.
+
+The paused long CBR seek median increased from 137.4 to 142.4 ms, and loop arming from 269.8 to 288.4 ms. The muted rendering comparison below moved in the opposite direction for both operations. Other interaction comparisons also varied. Three repetitions in one ordered pair do not establish timing equivalence or isolate policy effects from host drift. The report retains those slower interaction results alongside the much larger waveform reduction.
+
+The muted pair reused the generated 180-second stereo WAV and CBR MP3 from the paused matrix, with matching input hashes. The runner retains the historical aliases `real-1.wav` and `real-2.mp3`; both files in this refresh are synthetic tones. No private recording was read. Each ran three times per policy with listening gain set to zero before `play()`.
+
+Muted rendering milliseconds, median [minimum-maximum]:
+
+| Operation | WAV original | WAV candidate | CBR MP3 original | CBR MP3 candidate |
+| --- | ---: | ---: | ---: | ---: |
+| Preparation | 14.8 [12.3-27.7] | 19.6 [11.5-19.8] | 186.6 [180.7-188.9] | 179.7 [167.4-181.7] |
+| Seek | 4.2 [1.9-4.7] | 1.8 [1.8-2.0] | 149.3 [144.2-149.6] | 136.8 [135.6-139.9] |
+| Loop arm | 2.2 [1.8-3.0] | 1.6 [1.4-1.6] | 276.0 [268.6-282.4] | 267.5 [267.2-274.3] |
+| Waveform | 3291.9 [2996.7-3351.0] | 619.6 [602.0-627.9] | 8063.1 [7911.0-8168.1] | 1341.4 [1304.7-1363.2] |
+
+All 12 rendering rows observed advancing render frames and nonzero pre-gain signal while analysis remained pending. Every row completed a loop wrap. Across the original policy's 392 snapshots and candidate's 169 snapshots, starvation, loop-underrun, lost-frame, invalid-block and failure counters remained zero, with no recovery state. Both runs preserved matching waveform identities and read counters, retained the same capacities, terminated all 12 workers and closed all six contexts. No main-thread long tasks were observed. These unequal, short windows cover each analysis interval and at least 1.5 seconds after loop arming. They do not establish audible seam quality, uninterrupted playback or background behavior.
+
+Raw reports retain every repetition and snapshot:
+
+- [Current original policy, paused](2026-09-16-waveform-scheduling/2026-10-04-before-paused.json) and [current candidate, paused](2026-09-16-waveform-scheduling/2026-10-04-after-paused.json).
+- [Current original policy, synthetic muted rendering](2026-09-16-waveform-scheduling/2026-10-04-before-render.json) and [current candidate, synthetic muted rendering](2026-09-16-waveform-scheduling/2026-10-04-after-render.json).
+
+Each original-policy report records the deliberate `256` to `32` source diff from the measured commit; each candidate records a clean runtime source. All four share the same Wasm hash. Their measurement servers exited after saving and all four ports were verified closed.
+
+Current app checks passed at the measured commit: `bun run check` ran 198 tests plus TypeScript, Wasm, worklet and callback audits; the separate rendering-overlap suite passed 11 tests; and `bun run build` produced the Next.js app successfully. These commands used `PATH="$PWD/node_modules/.bin:$PATH"` to select Bun 1.4.0.
+
+The September 16 results below remain historical evidence on M1 Max and Chromium 152. They have not been relabeled as results from this refresh.
 
 ## Configuration and evidence
 
