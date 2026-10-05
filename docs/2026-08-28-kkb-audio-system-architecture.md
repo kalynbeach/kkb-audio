@@ -1042,8 +1042,12 @@ not a public seek with a stale source cursor. Enabling after acknowledgment-time
 new PCM can become consumable. Browser preparation waits for main-thread context-suspension
 acknowledgment before head/supply/finish, including across superseded begins. Native acknowledgment
 uses a bounded pause-command update without overwriting a newer explicit transport command.
-Disabled native region edits use acknowledged effective enable or latest pending intent, never mere
-presence of requested bounds. Owner requests waiting for a status poll still retain latest loop
+Native seeks and disabled region edits use acknowledged effective enable or latest pending intent,
+never mere presence of requested bounds. A seek submitted before callback acknowledgment retains a
+pending disable, enable or region edit, then applies the inside/outside rule to those bounds.
+A seek retaining pending enable also retains its acknowledgment-time EOS pause, while the explicit
+seek target remains authoritative. Repeated seeks before acknowledgment preserve that pause intent.
+Owner requests waiting for a status poll still retain latest loop
 intent/revision; superseding preparation discards obsolete pending work. Explicit control changes may prepare silence while preserving render time;
 that is distinct from normal wrap behavior. Invalid/unsupported/too-short requests are rejected with
 feedback, retaining the previous accepted region and playback. Media I/O, decoder or worker/runtime
