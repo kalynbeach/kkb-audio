@@ -8,7 +8,7 @@ import {
 import { join } from "node:path";
 
 const EXPECTED_RUST = "rustc 1.98.0";
-const EXPECTED_BUN = "1.4.0";
+const EXPECTED_BUN = "1.4.3";
 const EXPECTED_BINDGEN = "wasm-bindgen 0.2.127";
 const WASM_TARGET = "wasm32-unknown-unknown";
 const generatedDirectory = "web/src/generated";

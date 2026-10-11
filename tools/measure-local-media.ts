@@ -4,7 +4,7 @@ import { tmpdir, cpus, platform, release } from "node:os";
 import { join, resolve } from "node:path";
 import { wavFixture } from "./local-wav-fixture";
 
-if (Bun.version !== "1.4.0") throw new Error("Use PATH=\"$PWD/node_modules/.bin:$PATH\" bun run measure:media");
+if (Bun.version !== "1.4.3") throw new Error("Use PATH=\"$PWD/node_modules/.bin:$PATH\" bun run measure:media");
 const destination = resolve(Bun.argv[2] ?? "local-media-measurements.json");
 if (await Bun.file(destination).exists()) throw new Error(`Refusing to replace ${destination}`);
 const root = process.cwd();

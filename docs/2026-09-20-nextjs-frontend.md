@@ -2,7 +2,7 @@
 
 Date: 2026-09-20
 
-Next.js 16.3.5 App Router owns the web application. Bun 1.4.0 remains the package manager and
+Next.js 16.4.0 App Router owns the web application. Bun 1.4.3 remains the package manager and
 runtime tooling; Cargo and wasm-bindgen 0.2.127 remain the Rust/Wasm toolchain.
 
 ## Routes
@@ -108,3 +108,49 @@ browser/device acceptance. These migration checks predate the float32 WAV suppor
 [PR #37](https://github.com/kalynbeach/kkb-audio/pull/37), now above WaveCatalog in Stack #39.
 This migration does not change the P31 preset's pending visual acceptance. No merge, deployment
 or daily-preview update is included.
+
+## Dependency validation, 2026-10-10
+
+The initial dependency update used Bun 1.4.3 and Next.js 16.3.8. Happy DOM, shadcn, Bun types,
+and tailwind-merge were updated with exact pins. Seven vulnerable transitive packages were
+updated within their existing dependency ranges, without overrides or new direct dependencies.
+Base UI, Lucide, and Next.js 16.4 were deferred in this first pass. Earlier evidence above retains
+its original versions and does not establish behavior under these updates.
+
+Validation used an isolated source copy with its own frozen-lockfile dependency installation:
+
+- `bun run check` passed 198 tests, type generation, TypeScript, actual-Wasm media checks,
+  fixed-memory checks, and both worklet audits.
+- `bun run build` passed and statically generated all nine app routes.
+- Production HTTP checks passed for the nine routes and their titles, six JavaScript runtime
+  assets, the Wasm MIME type, and missing-route 404 handling.
+- Next's development MCP reported no compilation issues across the routes.
+- The measurement runner accepted Bun 1.4.3 and refused to overwrite an existing report.
+  The complete measurement workload was not rerun.
+
+`bun audit` still reports the high-severity
+[`braces` advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm) in shadcn's development-tooling
+chain. Version 3.0.3 remains the latest published release; no patched release was available.
+The audit is not clean, and exploitability was not demonstrated.
+
+Browser interaction verification was blocked before page navigation because agent-browser rejected
+the headless launch arguments. The task session was closed without retrying or opening a visible
+browser. No new browser, visual, listening, or device-support claim follows from these checks.
+Both task-owned servers exited and ports 4328 and 4329 stopped listening. The repository's
+existing build outputs were not rebuilt.
+
+### Latest-release follow-up, 2026-10-10
+
+Kalyn requested the latest Next.js, Base UI, Lucide, and Bun types as well. The exact pins are
+Next.js 16.4.0, Base UI 1.9.0, Lucide 1.55.0, and Bun types 1.4.2. Bun types was already at the
+latest published version. Both `bun outdated` and `bun outdated --filter="*"` report no outdated
+dependencies. No caching-model migration or experimental framework features were added.
+
+The isolated copy's frozen install, full 198-test `bun run check`, and production build passed
+again. Production HTTP checks passed for all nine routes, their titles, all seven runtime assets,
+and 404 handling. The remaining `braces` advisory is unchanged.
+
+A fresh headless browser opened `/player`, but the subsequent wait for the hidden file input
+timed out. The session was closed without retrying. Browser interactions and visual appearance
+remain unverified for these updates. Both temporary servers exited and ports 4328 and 4329
+stopped listening.
