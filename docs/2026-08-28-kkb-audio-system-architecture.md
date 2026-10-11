@@ -28,7 +28,7 @@ The first product will be a new version of `wave-player`. It will eventually hav
   Rust render engine compiled to WebAssembly
 - a native application using Rust and a native UI such as GPUI
 
-The current web frontend uses Next.js 16.3.5 App Router for pages and navigation. Bun separately
+The current web frontend uses Next.js 16.4.0 App Router for pages and navigation. Bun separately
 bundles the audio runtime into `public/audio-runtime`; Cargo and the pinned wasm-bindgen build
 retain the worklet glue audit and fixed-memory contract. React owns route-scoped sessions, and
 leaving an audio page closes its resources. See the [frontend migration](2026-09-20-nextjs-frontend.md).
