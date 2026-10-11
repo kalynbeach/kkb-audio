@@ -407,6 +407,8 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
   let worker: Worker | undefined;
   let prepared: PreparedProof | undefined;
   let startupRuntimeFailure: number | undefined;
+  let workerReadyTimeout: ReturnType<typeof setTimeout> | undefined;
+  let workletReadyTimeout: ReturnType<typeof setTimeout> | undefined;
 
   try {
     if (context.state !== "suspended") await wait(context.suspend());
@@ -462,7 +464,7 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
     } as const;
     const channel = new MessageChannel();
     const workerReady = new Promise<number>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new InitializationError(InitializationFailure.Timeout)), timeoutMilliseconds);
+      const timeout = workerReadyTimeout = setTimeout(() => reject(new InitializationError(InitializationFailure.Timeout)), timeoutMilliseconds);
       const failWorker = (code: number) => {
         clearTimeout(timeout);
         if (prepared === undefined) {
@@ -503,7 +505,7 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
       },
     });
     const workletReady = new Promise<ReadyMessage>((resolve, reject) => {
-      const timeout = setTimeout(() => {
+      const timeout = workletReadyTimeout = setTimeout(() => {
         const result = gate.fail(InitializationFailure.Timeout);
         reject(new InitializationError(result.type === "failed" ? result.code : InitializationFailure.Timeout));
       }, timeoutMilliseconds);
@@ -539,6 +541,9 @@ export async function prepareProof(options: ProofOptions): Promise<PreparedProof
     prepared = new PreparedProof(context, node, gate, ready, worker, workerInitialAdmittedBlocks, totalFrames, sourceRate, anchorAndDiscard);
     return prepared;
   } catch (error) {
+    // Construction, transfers or cancellation can fail before both readiness waits settle.
+    clearTimeout(workerReadyTimeout);
+    clearTimeout(workletReadyTimeout);
     worker?.terminate();
     await context.close();
     throw error;
