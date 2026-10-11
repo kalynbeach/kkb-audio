@@ -2,7 +2,7 @@
 
 See the [September 16 measured report](../../docs/2026-09-16-local-media-measurements.md) for the initial results and one proposed follow-up.
 
-Run from the repository root with the installed Bun 1.4.0 and LAME encoder:
+Run from the repository root with the installed Bun 1.4.3 and LAME encoder:
 
 ```sh
 PATH="$PWD/node_modules/.bin:$PATH" bun run measure:media /tmp/local-media-measurements.json

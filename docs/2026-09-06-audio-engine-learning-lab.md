@@ -12,7 +12,7 @@ The [canonical architecture](2026-08-28-kkb-audio-system-architecture.md) and
 
 ## Run
 
-Use the repository's pinned Bun 1.4.0, Rust 1.98.0 and wasm-bindgen CLI 0.2.127.
+Use the repository's pinned Bun 1.4.3, Rust 1.98.0 and wasm-bindgen CLI 0.2.127.
 
 ```sh
 bun install --frozen-lockfile
@@ -170,7 +170,7 @@ parser dependencies were absent; current review uses rendered screenshots and a 
 
 ## Frontend and assets
 
-The frontend uses Bun 1.4.0, React 19 and shadcn/ui backed by Base UI. React owns component state
+The frontend uses Bun 1.4.3, React 19 and shadcn/ui backed by Base UI. React owns component state
 and DOM updates. The session hook owns worker revisions, debounce cancellation, audio resources
 and page lifecycle. Canvas drawing reads the same state and the theme tokens. Engine DSP remains
 in Rust/Wasm; JavaScript does not synthesize the displayed traces.

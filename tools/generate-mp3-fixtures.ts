@@ -1,4 +1,4 @@
-// Device-free authored signals. Run with Bun 1.4.0, FFmpeg 9.0.1, LAME 4.0.
+// Device-free authored signals. Run with the repository-pinned Bun, FFmpeg 9.0.1, LAME 4.0.
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 const out = "tools/fixtures/mp3";

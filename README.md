@@ -58,7 +58,7 @@ See the canonical [system architecture](docs/2026-08-28-kkb-audio-system-archite
 
 ## Development
 
-The repository pins stable Rust 1.98 and Bun 1.4.0. `rust-toolchain.toml` pins the toolchain and the `wasm32-unknown-unknown` target, and rustup installs both on first use. The worklet build also requires the matching pinned `wasm-bindgen` CLI.
+The repository pins stable Rust 1.98 and Bun 1.4.3. `rust-toolchain.toml` pins the toolchain and the `wasm32-unknown-unknown` target, and rustup installs both on first use. The worklet build also requires the matching pinned `wasm-bindgen` CLI.
 
 ```sh
 cargo install wasm-bindgen-cli --version 0.2.127 --locked
@@ -72,7 +72,7 @@ cargo clippy --target wasm32-unknown-unknown --all-targets --all-features -- -D 
 bun run check
 ```
 
-Run the Next.js 16.3.5 app with the pinned Bun runtime:
+Run the Next.js 16.4.0 app with the pinned Bun runtime:
 
 ```sh
 export PATH="$PWD/node_modules/.bin:$PATH"
@@ -111,7 +111,7 @@ See the [measurement guide](tools/measure-local-media/README.md). It builds and 
 ## Local WAV/MP3 player
 
 Run `bun run dev`, then open `/player`. The development server supports React hot reload. When the global Bun
-version differs, first run `export PATH="$PWD/node_modules/.bin:$PATH"` to use the pinned Bun 1.4.0.
+version differs, first run `export PATH="$PWD/node_modules/.bin:$PATH"` to use the pinned Bun 1.4.3.
 
 The compact #22 player follows the [approved interactive prototype](docs/2026-09-13-wave-player-prototype.md).
 Use **Open files** in the empty player or **Settings → Add files** to select several WAV/MP3 files.

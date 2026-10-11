@@ -4,7 +4,7 @@ Before prioritizing audio/music or WavePlayer work, read [the project direction]
 
 ## TypeScript and Wasm tooling
 
-Use Bun 1.4.0 for TypeScript package management, bundling, testing, and runtime tooling where supported. Cargo compiles Rust and Wasm; browser JavaScript and WebAssembly engines execute `AudioWorklet` code. Use Node-only tooling only when a required step cannot run under Bun.
+Use Bun 1.4.3 for TypeScript package management, bundling, testing, and runtime tooling where supported. Cargo compiles Rust and Wasm; browser JavaScript and WebAssembly engines execute `AudioWorklet` code. Use Node-only tooling only when a required step cannot run under Bun.
 
 ## Agent skills
 
