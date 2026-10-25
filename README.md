@@ -72,7 +72,7 @@ cargo clippy --target wasm32-unknown-unknown --all-targets --all-features -- -D 
 bun run check
 ```
 
-Run the Next.js 16.4.0 app with the pinned Bun runtime:
+Run the Next.js 16.4.3 app with the pinned Bun runtime:
 
 ```sh
 export PATH="$PWD/node_modules/.bin:$PATH"

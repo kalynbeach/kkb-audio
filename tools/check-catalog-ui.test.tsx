@@ -4,10 +4,14 @@ import { addCatalogFiles, CATALOG_STORAGE_KEY, emptyCatalog, exportManifest } fr
 
 const LocalFile = File;
 GlobalRegistrator.register({ url: "http://localhost/catalog" });
-const { cleanup, fireEvent, render, waitFor } = await import("@testing-library/react");
+const { act, cleanup, fireEvent, render, waitFor } = await import("@testing-library/react");
 const { default: userEvent } = await import("@testing-library/user-event");
 const { CatalogApp } = await import("../web/src/catalog-app");
-afterEach(() => { cleanup(); sessionStorage.clear(); });
+afterEach(async () => {
+  // Flush queued React effects before unregistering the DOM globals.
+  await act(async () => { cleanup(); });
+  sessionStorage.clear();
+});
 afterAll(() => GlobalRegistrator.unregister());
 
 test("selection supports label clicks and keyboard input, and stays disabled during admission", async () => {

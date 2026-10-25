@@ -132,7 +132,7 @@ engine code and its limits.
 
 ## Operating context
 
-The frontend uses Next.js 16.4.0 App Router, React, shadcn/ui, and Bun 1.4.3 tooling.
+The frontend uses Next.js 16.4.3 App Router, React, shadcn/ui, and Bun 1.4.3 tooling.
 The overview at `/` leads to Wave Player at `/player`, WaveCatalog at `/catalog`, the engine lab at `/lab`, and developer
 proofs at `/developer`. PCM transport and compiled-plan proofs have dedicated nested routes.
 The historical player study is explicitly simulated. Every route has a distinct title and shares

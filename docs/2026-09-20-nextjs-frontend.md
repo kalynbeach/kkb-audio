@@ -2,7 +2,7 @@
 
 Date: 2026-09-20
 
-Next.js 16.4.0 App Router owns the web application. Bun 1.4.3 remains the package manager and
+Next.js 16.4.3 App Router owns the web application. Bun 1.4.3 remains the package manager and
 runtime tooling; Cargo and wasm-bindgen 0.2.127 remain the Rust/Wasm toolchain.
 
 ## Routes
@@ -154,3 +154,33 @@ A fresh headless browser opened `/player`, but the subsequent wait for the hidde
 timed out. The session was closed without retrying. Browser interactions and visual appearance
 remain unverified for these updates. Both temporary servers exited and ports 4328 and 4329
 stopped listening.
+
+## Security and maintenance update, 2026-10-24
+
+Exact pins now use Next.js 16.4.3, React and React DOM 19.3.1, Lucide 1.61.0,
+Happy DOM global registrator 21.0.4, shadcn 4.22.1, user-event 14.6.8, and Bun types 1.4.4.
+Bun remains pinned to 1.4.3. Vulnerable transitive packages were updated within their existing
+ranges, without overrides or new direct dependencies. The full `bun audit` reports no
+vulnerabilities across 430 packages. This supersedes the earlier audit findings above.
+
+Validation ran in the current checkout:
+
+- `bun install --frozen-lockfile` completed without changes.
+- `bun run check` passed all 203 tests, type generation, TypeScript, actual-Wasm media checks,
+  fixed-memory checks, and both worklet audits.
+- The catalog suite exposed a React teardown race after the updates. Awaiting React `act` during
+  cleanup lets queued effects settle before Happy DOM removes `window`. The targeted suite failed
+  in 7 of 40 runs before the fix and passed all 40 runs after it.
+- `bun run build` passed and statically generated all nine app routes.
+- Production HTTP checks passed for the nine routes and their titles, all seven runtime assets,
+  JavaScript and Wasm MIME types, and missing-route 404 handling.
+- Next's development MCP reported no compilation or runtime errors. React introspection confirmed
+  the mounted player and loop editor.
+- Headless development-browser checks exercised muted synthetic playback, pause, keyboard seek,
+  loop enablement, theme changes, track closing, and an MP3 catalog-to-player handoff that remained
+  paused. Production-browser checks confirmed muted synthetic playback and pause with no browser
+  errors or console messages.
+
+The browser checks do not establish audible quality, broad device support, or visual acceptance.
+Task-owned servers exited and ports 4338 and 4339 stopped listening. No deployed environment
+or daily-preview channel was touched.
